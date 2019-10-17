@@ -172,7 +172,7 @@
 										"type": "SqlServerStoredProcedure",
 										"dependsOn": [
 											{
-												"activity": "CopyScrubbedToDataLake",
+												"activity": "CopyOriginalToArchive",
 												"dependencyConditions": [
 													"Succeeded"
 												]
@@ -318,6 +318,99 @@
 												}
 											}
 										}
+									},
+									{
+										"name": "UpdateSourceRegisterFailed",
+										"type": "SqlServerStoredProcedure",
+										"dependsOn": [
+											{
+												"activity": "LoadStagingDBtoRelationDB_df",
+												"dependencyConditions": [
+													"Failed"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "7.00:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"storedProcedureName": "[log].[UpdateSourceRegisterFailed]",
+											"storedProcedureParameters": {
+												"FileName": {
+													"value": {
+														"value": "@{item().ORIGINAL_BLOB_NAME}",
+														"type": "Expression"
+													},
+													"type": "String"
+												}
+											}
+										},
+										"linkedServiceName": {
+											"referenceName": "SQLdbConnection",
+											"type": "LinkedServiceReference"
+										}
+									},
+									{
+										"name": "CopyOriginalToArchive",
+										"type": "Copy",
+										"dependsOn": [
+											{
+												"activity": "CopyScrubbedToDataLake",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "7.00:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "DelimitedTextSource",
+												"storeSettings": {
+													"type": "AzureBlobStorageReadSettings",
+													"recursive": false,
+													"enablePartitionDiscovery": false
+												},
+												"formatSettings": {
+													"type": "DelimitedTextReadSettings"
+												}
+											},
+											"sink": {
+												"type": "DelimitedTextSink",
+												"storeSettings": {
+													"type": "AzureBlobStorageWriteSettings"
+												},
+												"formatSettings": {
+													"type": "DelimitedTextWriteSettings",
+													"quoteAllText": true,
+													"fileExtension": ""
+												}
+											},
+											"enableStaging": false
+										},
+										"inputs": [
+											{
+												"referenceName": "DelimitedText_sourcelandingraw_ds",
+												"type": "DatasetReference"
+											}
+										],
+										"outputs": [
+											{
+												"referenceName": "DelimitedText_sourcearchive_ds",
+												"type": "DatasetReference"
+											}
+										]
 									}
 								]
 							}
