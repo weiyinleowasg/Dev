@@ -513,8 +513,9 @@
 										"typeProperties": {
 											"storedProcedureName": "sp_executesql",
 											"storedProcedureParameters": {
-												"ErrorString": {
-													"value": "Declare @err_msg NVARCHAR(150)SET @err_msg=N'Error occurred in this pipeline.'RAISERROR(@err_msg,15,1)"
+												"stmt": {
+													"value": "Declare @err_msg NVARCHAR(150)SET @err_msg=N'Error occurred in this pipeline.'RAISERROR(@err_msg,15,1)",
+													"type": "string"
 												}
 											}
 										},
@@ -527,6 +528,38 @@
 							}
 						}
 					]
+				}
+			},
+			{
+				"name": "SendMailSuccess",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "CheckAndProcessBlobUpdateRegister",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"url": "https://prod-30.australiaeast.logic.azure.com:443/workflows/04cdaf6977c6472dac485357b27db60d/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=XOzioTqMxyNocFtEAVKRmBAMWs-ujLBYfgozTmsiaqQ",
+					"method": "POST",
+					"headers": {
+						"Content-Type": "application/json"
+					},
+					"body": {
+						"message": "@{activity('Copy1').output.dataWritten}",
+						"dataFactoryName": "@{pipeline().DataFactory}",
+						"pipelineName": "@{pipeline().Pipeline}"
+					}
 				}
 			}
 		],
