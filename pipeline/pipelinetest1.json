@@ -1,0 +1,49 @@
+{
+	"name": "pipelinetest1",
+	"properties": {
+		"activities": [
+			{
+				"name": "GetProcessedFiles",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "SELECT 'Processed:'+\n       stuff( (SELECT ', '+original_blob_name \n               FROM log.source_register_table\n\t\t\t   where etl_is_processed = 'Y'\n\t\t\t   order by original_blob_name\n               FOR XML PATH(''), TYPE).value('.', 'varchar(max)')\n            ,1,1,'') as Processed_Files\n ;"
+					},
+					"dataset": {
+						"referenceName": "SQLsourceRegisterTable_ds",
+						"type": "DatasetReference"
+					}
+				}
+			},
+			{
+				"name": "Append variable1",
+				"type": "AppendVariable",
+				"dependsOn": [
+					{
+						"activity": "GetProcessedFiles",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": []
+			}
+		],
+		"variables": {
+			"Processed_Files": {
+				"type": "String"
+			}
+		},
+		"annotations": []
+	}
+}
