@@ -7,7 +7,7 @@
 				"type": "WebActivity",
 				"dependsOn": [
 					{
-						"activity": "GetNotProcessedFiles",
+						"activity": "GetErrorDuringProcessFiles",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -22,7 +22,7 @@
 				},
 				"userProperties": [],
 				"typeProperties": {
-					"url": "https://prod-23.australiaeast.logic.azure.com:443/workflows/18f00934d94d4287824e861d185c4281/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=vCMzfxqaAbZYBHyd2rUqwaeTfjvgnPwgalUZtBqfdts",
+					"url": "https://prod-24.australiaeast.logic.azure.com:443/workflows/e28a90add06c495bbc9362b5109fb4c0/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=j2wEDAKOpnQ83iKkUa84aeGE6Nfb5604lp-z1-W4ek0",
 					"method": "POST",
 					"headers": {
 						"Content-Type": "application/json"
@@ -32,7 +32,8 @@
 						"pipelineName": "@pipeline().parameters.Parent_Pipeline",
 						"messageHeader": "@pipeline().parameters.Success_Fail_Header",
 						"messageProcessed": "@activity('GetProcessedFiles').output.firstRow",
-						"messageNotProcessed": "@activity('GetNotProcessedFiles').output.firstRow"
+						"messageNotProcessed": "@activity('GetNotProcessedFiles').output.firstRow",
+						"messageErrorDuringProcess": "@activity('GetErrorDuringProcessFiles').output.firstRow"
 					}
 				}
 			},
@@ -82,6 +83,36 @@
 					"source": {
 						"type": "AzureSqlSource",
 						"sqlReaderQuery": "SELECT \n       stuff( (SELECT ', '+original_blob_name \n               FROM log.source_register_table\n\t\t\t   where etl_is_processed = 'N'\n\t\t\t   order by original_blob_name\n               FOR XML PATH(''), TYPE).value('.', 'varchar(max)'),1,1,'') as Not_Processed_Files\n;"
+					},
+					"dataset": {
+						"referenceName": "SQLsourceRegisterTable_ds",
+						"type": "DatasetReference"
+					}
+				}
+			},
+			{
+				"name": "GetErrorDuringProcessFiles",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "GetNotProcessedFiles",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "SELECT \n       stuff( (SELECT ', '+original_blob_name \n               FROM log.source_register_table\n\t\t\t   where etl_is_processed = 'N'\n\t\t\t   and elt_run_status like 'FAIL%'\n\t\t\t   and etl_utc_tag = '@{pipeline().parameters.Etl_Utc_Tag}'\n\t\t\t   order by original_blob_name\n               FOR XML PATH(''), TYPE).value('.', 'varchar(max)'),1,1,'') as ErrorDuringProcess_Files\n;"
 					},
 					"dataset": {
 						"referenceName": "SQLsourceRegisterTable_ds",
