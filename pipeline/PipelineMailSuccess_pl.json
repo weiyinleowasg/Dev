@@ -27,7 +27,13 @@
 					"headers": {
 						"Content-Type": "application/json"
 					},
-					"body": "{\"dataFactoryName\":\"@pipeline().DataFactory\",\"pipelineName\":\"@pipeline().Pipeline\",\"messageHeader\":\"@variables('Success_Fail_Header'),\"messageProcessed\":\"@activity('GetProcessedFiles').output.firstRow\",\"messageNotProcessed\":\"@activity('GetNotProcessedFiles').output.firstRow\"}"
+					"body": {
+						"dataFactoryName": "@pipeline().parameters.Parent_DataFactory",
+						"pipelineName": "@pipeline().parameters.Parent_Pipeline",
+						"messageHeader": "@pipeline().parameters.Success_Fail_Header",
+						"messageProcessed": "@activity('GetProcessedFiles').output.firstRow",
+						"messageNotProcessed": "@activity('GetNotProcessedFiles').output.firstRow"
+					}
 				}
 			},
 			{
@@ -45,7 +51,7 @@
 				"typeProperties": {
 					"source": {
 						"type": "AzureSqlSource",
-						"sqlReaderQuery": "SELECT \n       stuff( (SELECT ', '+original_blob_name \n               FROM log.source_register_table\n\t\t\t   where etl_is_processed = 'Y'\n\t\t\t   and etl_utc_tag = '@{variables('Etl_Utc_Tag')}'\n\t\t\t   order by original_blob_name\n               FOR XML PATH(''), TYPE).value('.', 'varchar(max)'),1,1,'') as Processed_Files\n;"
+						"sqlReaderQuery": "SELECT \n       stuff( (SELECT ', '+original_blob_name \n               FROM log.source_register_table\n\t\t\t   where etl_is_processed = 'Y'\n\t\t\t   and etl_utc_tag = '@{pipeline().parameters.Etl_Utc_Tag}'\n\t\t\t   order by original_blob_name\n               FOR XML PATH(''), TYPE).value('.', 'varchar(max)'),1,1,'') as Processed_Files\n;"
 					},
 					"dataset": {
 						"referenceName": "SQLsourceRegisterTable_ds",
