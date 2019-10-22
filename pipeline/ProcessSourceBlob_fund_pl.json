@@ -5,7 +5,14 @@
 			{
 				"name": "GetUnprocessedBlobFromRegister",
 				"type": "Lookup",
-				"dependsOn": [],
+				"dependsOn": [
+					{
+						"activity": "SetEtlUtcTag",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
 				"policy": {
 					"timeout": "7.00:00:00",
 					"retry": 0,
@@ -226,6 +233,13 @@
 														"type": "Expression"
 													},
 													"type": "String"
+												},
+												"EtlUtcTag": {
+													"value": {
+														"value": "@variables('Etl_Utc_Tag')",
+														"type": "Expression"
+													},
+													"type": "String"
 												}
 											}
 										},
@@ -349,8 +363,8 @@
 														"value": "'@{item().ORIGINAL_BLOB_NAME}'",
 														"type": "Expression"
 													},
-													"Date_Tag": {
-														"value": "'@{variables('Date_Tag')}'",
+													"Etl_Utc_Tag": {
+														"value": "'@{variables('Etl_Utc_Tag')}'",
 														"type": "Expression"
 													}
 												}
@@ -595,6 +609,19 @@
 						}
 					}
 				}
+			},
+			{
+				"name": "SetEtlUtcTag",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "Etl_Utc_Tag",
+					"value": {
+						"value": "@substring(utcnow(),0,10)",
+						"type": "Expression"
+					}
+				}
 			}
 		],
 		"variables": {
@@ -602,7 +629,7 @@
 				"type": "String",
 				"defaultValue": "SUCCESS"
 			},
-			"Date_Tag": {
+			"Etl_Utc_Tag": {
 				"type": "String",
 				"defaultValue": "2999-12-31"
 			}
