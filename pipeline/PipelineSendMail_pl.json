@@ -34,7 +34,9 @@
 						"messageProcessed": "@activity('GetProcessedFiles').output.firstRow",
 						"messageNotProcessed": "@activity('GetNotProcessedFiles').output.firstRow",
 						"messageErrorDuringProcess": "@activity('GetErrorDuringProcessFiles').output.firstRow"
-					}
+					},
+					"linkedServices": [],
+					"datasets": []
 				}
 			},
 			{
@@ -52,7 +54,10 @@
 				"typeProperties": {
 					"source": {
 						"type": "AzureSqlSource",
-						"sqlReaderQuery": "SELECT \n       stuff( (SELECT ', '+original_blob_name \n               FROM log.source_register_table\n\t\t\t   where etl_is_processed = 'Y'\n\t\t\t   and etl_utc_tag = '@{pipeline().parameters.Etl_Utc_Tag}'\n\t\t\t   order by original_blob_name\n               FOR XML PATH(''), TYPE).value('.', 'varchar(max)'),1,1,'') as Processed_Files\n;"
+						"sqlReaderQuery": {
+							"value": "SELECT \n       stuff( (SELECT ', '+original_blob_name \n               FROM log.source_register_table\n\t\t\t   where etl_is_processed = 'Y'\n\t\t\t   and etl_utc_tag = '@{pipeline().parameters.Etl_Utc_Tag}'\n\t\t\t   order by original_blob_name\n               FOR XML PATH(''), TYPE).value('.', 'varchar(max)'),1,1,'') as Processed_Files\n;",
+							"type": "Expression"
+						}
 					},
 					"dataset": {
 						"referenceName": "SQLsourceRegisterTable_ds",
@@ -112,7 +117,10 @@
 				"typeProperties": {
 					"source": {
 						"type": "AzureSqlSource",
-						"sqlReaderQuery": "SELECT \n       stuff( (SELECT ', '+original_blob_name \n               FROM log.source_register_table\n\t\t\t   where etl_is_processed = 'N'\n\t\t\t   and etl_run_status like 'FAIL%'\n\t\t\t   and etl_utc_tag = '@{pipeline().parameters.Etl_Utc_Tag}'\n\t\t\t   order by original_blob_name\n               FOR XML PATH(''), TYPE).value('.', 'varchar(max)'),1,1,'') as ErrorDuringProcess_Files\n;"
+						"sqlReaderQuery": {
+							"value": "SELECT \n       stuff( (SELECT ', '+original_blob_name \n               FROM log.source_register_table\n\t\t\t   where etl_is_processed = 'N'\n\t\t\t   and etl_run_status like 'FAIL%'\n\t\t\t   and etl_utc_tag = '@{pipeline().parameters.Etl_Utc_Tag}'\n\t\t\t   order by original_blob_name\n               FOR XML PATH(''), TYPE).value('.', 'varchar(max)'),1,1,'') as ErrorDuringProcess_Files\n;",
+							"type": "Expression"
+						}
 					},
 					"dataset": {
 						"referenceName": "SQLsourceRegisterTable_ds",
@@ -121,6 +129,20 @@
 				}
 			}
 		],
+		"parameters": {
+			"Parent_DataFactory": {
+				"type": "string"
+			},
+			"Parent_Pipeline": {
+				"type": "string"
+			},
+			"Success_Fail_Header": {
+				"type": "string"
+			},
+			"Etl_Utc_Tag": {
+				"type": "string"
+			}
+		},
 		"annotations": []
 	}
 }
