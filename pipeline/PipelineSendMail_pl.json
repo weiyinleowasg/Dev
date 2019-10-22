@@ -1,0 +1,95 @@
+{
+	"name": "PipelineSendMail_pl",
+	"properties": {
+		"activities": [
+			{
+				"name": "SuccessOrFailMail",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "GetNotProcessedFiles",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"url": "https://prod-23.australiaeast.logic.azure.com:443/workflows/18f00934d94d4287824e861d185c4281/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=vCMzfxqaAbZYBHyd2rUqwaeTfjvgnPwgalUZtBqfdts",
+					"method": "POST",
+					"headers": {
+						"Content-Type": "application/json"
+					},
+					"body": {
+						"dataFactoryName": "@pipeline().parameters.Parent_DataFactory",
+						"pipelineName": "@pipeline().parameters.Parent_Pipeline",
+						"messageHeader": "@pipeline().parameters.Success_Fail_Header",
+						"messageProcessed": "@activity('GetProcessedFiles').output.firstRow",
+						"messageNotProcessed": "@activity('GetNotProcessedFiles').output.firstRow"
+					}
+				}
+			},
+			{
+				"name": "GetProcessedFiles",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "SELECT \n       stuff( (SELECT ', '+original_blob_name \n               FROM log.source_register_table\n\t\t\t   where etl_is_processed = 'Y'\n\t\t\t   and etl_utc_tag = '@{pipeline().parameters.Etl_Utc_Tag}'\n\t\t\t   order by original_blob_name\n               FOR XML PATH(''), TYPE).value('.', 'varchar(max)'),1,1,'') as Processed_Files\n;"
+					},
+					"dataset": {
+						"referenceName": "SQLsourceRegisterTable_ds",
+						"type": "DatasetReference"
+					}
+				}
+			},
+			{
+				"name": "GetNotProcessedFiles",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "GetProcessedFiles",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "SELECT \n       stuff( (SELECT ', '+original_blob_name \n               FROM log.source_register_table\n\t\t\t   where etl_is_processed = 'N'\n\t\t\t   order by original_blob_name\n               FOR XML PATH(''), TYPE).value('.', 'varchar(max)'),1,1,'') as Not_Processed_Files\n;"
+					},
+					"dataset": {
+						"referenceName": "SQLsourceRegisterTable_ds",
+						"type": "DatasetReference"
+					}
+				}
+			}
+		],
+		"annotations": []
+	}
+}
