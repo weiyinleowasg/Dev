@@ -5,7 +5,14 @@
 			{
 				"name": "GetUnprocessedBlobFromRegister",
 				"type": "Lookup",
-				"dependsOn": [],
+				"dependsOn": [
+					{
+						"activity": "SetEtlUtcTag",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
 				"policy": {
 					"timeout": "7.00:00:00",
 					"retry": 0,
@@ -533,7 +540,20 @@
 				}
 			},
 			{
-				"name": "SendPipelineSuccessMail",
+				"name": "SetEtlUtcTag",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "Etl_Utc_Tag",
+					"value": {
+						"value": "@utcnow()",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "SendPipelineMailSuccess",
 				"type": "ExecutePipeline",
 				"dependsOn": [
 					{
@@ -546,24 +566,20 @@
 				"userProperties": [],
 				"typeProperties": {
 					"pipeline": {
-						"referenceName": "PipelineMailSuccess_pl",
+						"referenceName": "PipelineSendMail_pl",
 						"type": "PipelineReference"
 					},
 					"waitOnCompletion": true,
 					"parameters": {
-						"Parent_DataFactory": {
-							"value": "@pipeline().DataFactory",
-							"type": "Expression"
-						},
-						"Parent_Pipeline": {
-							"value": "@pipeline().Pipeline",
-							"type": "Expression"
-						}
+						"Parent_DataFactory": "@pipeline().DataFactory",
+						"Parent_Pipeline": "@pipeline().Pipeline",
+						"Success_Fail_Header": "***SUCCESS***",
+						"Etl_Utc_Tag": "@variables('Etl_Utc_Tag')"
 					}
 				}
 			},
 			{
-				"name": "SendPipelineFailMail",
+				"name": "SendPipelineMailFail",
 				"type": "ExecutePipeline",
 				"dependsOn": [
 					{
@@ -576,23 +592,29 @@
 				"userProperties": [],
 				"typeProperties": {
 					"pipeline": {
-						"referenceName": "PipelineMailFail_pl",
+						"referenceName": "PipelineSendMail_pl",
 						"type": "PipelineReference"
 					},
 					"waitOnCompletion": true,
 					"parameters": {
-						"Parent_DataFactory": {
-							"value": "@pipeline().DataFactory",
-							"type": "Expression"
-						},
-						"Parent_Pipeline": {
-							"value": "@pipeline().Pipeline",
-							"type": "Expression"
-						}
+						"Parent_DataFactory": "@pipeline().DataFactory",
+						"Parent_Pipeline": "@pipeline().Pipeline",
+						"Success_Fail_Header": "!!!FAILED!!!",
+						"Etl_Utc_Tag": "@variables('Etl_Utc_Tag')"
 					}
 				}
 			}
 		],
+		"variables": {
+			"Success_Fail_Header": {
+				"type": "String",
+				"defaultValue": "***SUCCESS***"
+			},
+			"Etl_Utc_Tag": {
+				"type": "String",
+				"defaultValue": "2019-10-22"
+			}
+		},
 		"annotations": []
 	}
 }
