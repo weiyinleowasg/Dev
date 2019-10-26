@@ -21,7 +21,7 @@
 	},
 	"resources": [
 		{
-			"name": "[concat(parameters('factoryName'), '/ProcessSourceBlob_coa_trx_category_pl')]",
+			"name": "[concat(parameters('factoryName'), '/ProcessSourceBlob_coa_trx_company_pl')]",
 			"type": "Microsoft.DataFactory/factories/pipelines",
 			"apiVersion": "2018-06-01",
 			"properties": {
@@ -48,7 +48,11 @@
 						"typeProperties": {
 							"source": {
 								"type": "AzureSqlSource",
-								"sqlReaderQuery": "SELECT [ORIGINAL_BLOB_LANDING_CONTAINER],\n\t[ORIGINAL_BLOB_NAME],\n\t[ORIGINAL_BLOP_FULLPATH],\n\t[TARGET_BLOB_LANDING_CONTAINER],\n\t[TARGET_BLOB_NAME],\n\t[DATALAKE_CONTAINER],\n\t[DATALAKE_FILE_PATH],\n\t[ORIGINAL_BLOB_ARCHIVE_CONTAINER],\n\t[ORIGINAL_BLOB_ARCHIVE_FULLPATH]\nFROM [log].[SOURCE_REGISTER_TABLE]\nWHERE [ETL_IS_PROCESSED] = 'N'\nAND [ORIGINAL_BLOB_NAME] LIKE 'FIN_MYO_GLCAT_%'\nORDER BY [ORIGINAL_BLOB_NAME];"
+								"sqlReaderQuery": "SELECT [ORIGINAL_BLOB_LANDING_CONTAINER],\n\t[ORIGINAL_BLOB_NAME],\n\t[ORIGINAL_BLOP_FULLPATH],\n\t[TARGET_BLOB_LANDING_CONTAINER],\n\t[TARGET_BLOB_NAME],\n\t[DATALAKE_CONTAINER],\n\t[DATALAKE_FILE_PATH],\n\t[ORIGINAL_BLOB_ARCHIVE_CONTAINER],\n\t[ORIGINAL_BLOB_ARCHIVE_FULLPATH],\n\tCONCAT(DATALAKE_CONTAINER,'/',DATALAKE_FILE_PATH,'/',TARGET_BLOB_NAME) AS DATALAKE_FULL_PATHFILE\nFROM [log].[SOURCE_REGISTER_TABLE]\nWHERE [ETL_IS_PROCESSED] = 'N'\nAND [ORIGINAL_BLOB_NAME] LIKE 'MYO_COM_%'\nORDER BY [ORIGINAL_BLOB_NAME];"
+							},
+							"dataset": {
+								"referenceName": "SQLsourceRegisterTable_ds",
+								"type": "DatasetReference"
 							},
 							"firstRowOnly": false
 						}
@@ -184,7 +188,7 @@
 												"userProperties": [],
 												"typeProperties": {
 													"dataset": {
-														"referenceName": "DelimitedText_sourcelandingscrubbed_coa_trx_category_ds",
+														"referenceName": "DelimitedText_sourcelandingscrubbed_coa_trx_company_ds",
 														"type": "DatasetReference"
 													},
 													"enableLogging": false,
@@ -328,7 +332,7 @@
 												},
 												"inputs": [
 													{
-														"referenceName": "DelimitedText_sourcelandingscrubbed_coa_trx_category_ds",
+														"referenceName": "DelimitedText_sourcelandingscrubbed_coa_trx_company_ds",
 														"type": "DatasetReference"
 													}
 												],
@@ -360,7 +364,7 @@
 												"userProperties": [],
 												"typeProperties": {
 													"dataflow": {
-														"referenceName": "LoadTxtToDBstaging_coa_trx_category_df",
+														"referenceName": "LoadTxtToDBstaging_coa_trx_company_df",
 														"type": "DataFlowReference"
 													}
 												}
@@ -394,7 +398,7 @@
 																"type": "Expression"
 															},
 															"FileName": {
-																"value": "'@{item().TARGET_BLOB_NAME}'",
+																"value": "'@{item().DATALAKE_FULL_PATHFILE}'",
 																"type": "Expression"
 															},
 															"Etl_Utc_Tag": {
@@ -575,7 +579,7 @@
 												"userProperties": [],
 												"typeProperties": {
 													"dataset": {
-														"referenceName": "DelimitedText_sourcelandingscrubbed_coa_trx_category_ds",
+														"referenceName": "DelimitedText_sourcelandingscrubbed_coa_trx_company_ds",
 														"type": "DatasetReference"
 													},
 													"enableLogging": false,
@@ -636,7 +640,7 @@
 									"value": "@variables('Etl_Utc_Tag')",
 									"type": "Expression"
 								},
-								"File_Pattern": "FIN_MYO_GLCAT_%"
+								"File_Pattern": "MYO_COM_%"
 							}
 						}
 					},
@@ -672,7 +676,7 @@
 									"value": "@variables('Etl_Utc_Tag')",
 									"type": "Expression"
 								},
-								"File_Pattern": "FIN_MYO_GLCAT_%"
+								"File_Pattern": "MYO_COM_%"
 							}
 						}
 					}
@@ -690,200 +694,15 @@
 				"annotations": []
 			},
 			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/SQLsourceRegisterTable_ds')]",
 				"[concat(variables('factoryId'), '/pipelines/PipelineSendMail_pl')]",
 				"[concat(variables('factoryId'), '/datasets/DelimitedText_sourcelandingraw_ds')]",
-				"[concat(variables('factoryId'), '/datasets/DelimitedText_sourcelandingscrubbed_coa_trx_category_ds')]",
+				"[concat(variables('factoryId'), '/datasets/DelimitedText_sourcelandingscrubbed_coa_trx_company_ds')]",
 				"[concat(variables('factoryId'), '/datasets/DelimitedText_datalake_financial_ds')]",
-				"[concat(variables('factoryId'), '/dataflows/LoadTxtToDBstaging_coa_trx_category_df')]",
+				"[concat(variables('factoryId'), '/dataflows/LoadTxtToDBstaging_coa_trx_company_df')]",
 				"[concat(variables('factoryId'), '/dataflows/LoadStagingDBtoRelationDB_coa_trx_common_df')]",
 				"[concat(variables('factoryId'), '/datasets/DelimitedText_sourcearchive_ds')]"
 			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/PipelineSendMail_pl')]",
-			"type": "Microsoft.DataFactory/factories/pipelines",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"activities": [
-					{
-						"name": "SuccessOrFailMail",
-						"type": "WebActivity",
-						"dependsOn": [
-							{
-								"activity": "GetErrorDuringProcessFiles",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"url": "https://prod-24.australiaeast.logic.azure.com:443/workflows/e28a90add06c495bbc9362b5109fb4c0/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=j2wEDAKOpnQ83iKkUa84aeGE6Nfb5604lp-z1-W4ek0",
-							"method": "POST",
-							"headers": {
-								"Content-Type": "application/json"
-							},
-							"body": {
-								"dataFactoryName": "@pipeline().parameters.Parent_DataFactory",
-								"pipelineName": "@pipeline().parameters.Parent_Pipeline",
-								"messageHeader": "@pipeline().parameters.Success_Fail_Header",
-								"messageProcessed": "@activity('GetProcessedFiles').output.firstRow",
-								"messageNotProcessed": "@activity('GetNotProcessedFiles').output.firstRow",
-								"messageErrorDuringProcess": "@activity('GetErrorDuringProcessFiles').output.firstRow"
-							}
-						}
-					},
-					{
-						"name": "GetProcessedFiles",
-						"type": "Lookup",
-						"dependsOn": [],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"source": {
-								"type": "AzureSqlSource",
-								"sqlReaderQuery": {
-									"value": "SELECT \n       stuff( (SELECT ', '+original_blob_name \n               FROM log.source_register_table\n\t\t\t   where etl_is_processed = 'Y'\n\t\t\t   and etl_utc_tag = '@{pipeline().parameters.Etl_Utc_Tag}'\n\t\t\t   order by original_blob_name\n               FOR XML PATH(''), TYPE).value('.', 'varchar(max)'),1,1,'') as Processed_Files\n;",
-									"type": "Expression"
-								}
-							},
-							"dataset": {
-								"referenceName": "SQLsourceRegisterTable_ds",
-								"type": "DatasetReference"
-							}
-						}
-					},
-					{
-						"name": "GetNotProcessedFiles",
-						"type": "Lookup",
-						"dependsOn": [
-							{
-								"activity": "GetProcessedFiles",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"source": {
-								"type": "AzureSqlSource",
-								"sqlReaderQuery": {
-									"value": "SELECT \n       stuff( (SELECT ', '+original_blob_name \n               FROM log.source_register_table\n\t\t\t   where etl_is_processed = 'N'\n\t\t\t   and original_blob_name like '@{pipeline().parameters.File_Pattern}'\n\t\t\t   order by original_blob_name\n               FOR XML PATH(''), TYPE).value('.', 'varchar(max)'),1,1,'') as Not_Processed_Files\n;",
-									"type": "Expression"
-								}
-							},
-							"dataset": {
-								"referenceName": "SQLsourceRegisterTable_ds",
-								"type": "DatasetReference"
-							}
-						}
-					},
-					{
-						"name": "GetErrorDuringProcessFiles",
-						"type": "Lookup",
-						"dependsOn": [
-							{
-								"activity": "GetNotProcessedFiles",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"source": {
-								"type": "AzureSqlSource",
-								"sqlReaderQuery": {
-									"value": "SELECT \n       stuff( (SELECT ', '+original_blob_name \n               FROM log.source_register_table\n\t\t\t   where etl_is_processed = 'N'\n\t\t\t   and etl_run_status like 'FAIL%'\n\t\t\t   and etl_utc_tag = '@{pipeline().parameters.Etl_Utc_Tag}'\n\t\t\t   order by original_blob_name\n               FOR XML PATH(''), TYPE).value('.', 'varchar(max)'),1,1,'') as ErrorDuringProcess_Files\n;",
-									"type": "Expression"
-								}
-							},
-							"dataset": {
-								"referenceName": "SQLsourceRegisterTable_ds",
-								"type": "DatasetReference"
-							}
-						}
-					}
-				],
-				"parameters": {
-					"Parent_DataFactory": {
-						"type": "string"
-					},
-					"Parent_Pipeline": {
-						"type": "string"
-					},
-					"Success_Fail_Header": {
-						"type": "string"
-					},
-					"Etl_Utc_Tag": {
-						"type": "string"
-					},
-					"File_Pattern": {
-						"type": "string"
-					}
-				},
-				"annotations": []
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/datasets/SQLsourceRegisterTable_ds')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/DelimitedText_sourcelandingraw_ds')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "[parameters('BlobStore_nfdwhstaging')]",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "DelimitedText",
-				"typeProperties": {
-					"location": {
-						"type": "AzureBlobStorageLocation",
-						"fileName": {
-							"value": "@{item().ORIGINAL_BLOB_NAME}",
-							"type": "Expression"
-						},
-						"container": "sourcelandingraw"
-					},
-					"columnDelimiter": ",",
-					"escapeChar": "\\",
-					"firstRowAsHeader": true,
-					"quoteChar": "\""
-				},
-				"schema": []
-			},
-			"dependsOn": []
 		},
 		{
 			"name": "[concat(parameters('factoryName'), '/SQLsourceRegisterTable_ds')]",
@@ -974,7 +793,240 @@
 			"dependsOn": []
 		},
 		{
-			"name": "[concat(parameters('factoryName'), '/DelimitedText_sourcelandingscrubbed_coa_trx_category_ds')]",
+			"name": "[concat(parameters('factoryName'), '/PipelineSendMail_pl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "CheckReportableUtcTag",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": {
+									"value": "SELECT COUNT(*) as UTC_TAG_COUNT FROM log.source_register_table\nWHERE etl_utc_tag = '@{pipeline().parameters.Etl_Utc_Tag}'\n;",
+									"type": "Expression"
+								}
+							},
+							"dataset": {
+								"referenceName": "SQLsourceRegisterTable_ds",
+								"type": "DatasetReference"
+							}
+						}
+					},
+					{
+						"name": "If Condition1",
+						"type": "IfCondition",
+						"dependsOn": [
+							{
+								"activity": "CheckReportableUtcTag",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@greater(activity('CheckReportableUtcTag').output.firstRow.UTC_TAG_COUNT,0)",
+								"type": "Expression"
+							},
+							"ifTrueActivities": [
+								{
+									"name": "GetProcessedFiles",
+									"type": "Lookup",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "AzureSqlSource",
+											"sqlReaderQuery": {
+												"value": "SELECT \n       stuff( (SELECT ', '+original_blob_name \n               FROM log.source_register_table\n\t\t\t   where etl_is_processed = 'Y'\n\t\t\t   and etl_utc_tag = '@{pipeline().parameters.Etl_Utc_Tag}'\n\t\t\t   order by original_blob_name\n               FOR XML PATH(''), TYPE).value('.', 'varchar(max)'),1,1,'') as Processed_Files\n;",
+												"type": "Expression"
+											}
+										},
+										"dataset": {
+											"referenceName": "SQLsourceRegisterTable_ds",
+											"type": "DatasetReference"
+										}
+									}
+								},
+								{
+									"name": "GetNotProcessedFiles",
+									"type": "Lookup",
+									"dependsOn": [
+										{
+											"activity": "GetProcessedFiles",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "AzureSqlSource",
+											"sqlReaderQuery": {
+												"value": "SELECT \n       stuff( (SELECT ', '+original_blob_name \n               FROM log.source_register_table\n\t\t\t   where etl_is_processed = 'N'\n\t\t\t   and etl_utc_tag is null\n\t\t\t   and original_blob_name like '@{pipeline().parameters.File_Pattern}'\n\t\t\t   order by original_blob_name\n               FOR XML PATH(''), TYPE).value('.', 'varchar(max)'),1,1,'') as Not_Processed_Files\n;",
+												"type": "Expression"
+											}
+										},
+										"dataset": {
+											"referenceName": "SQLsourceRegisterTable_ds",
+											"type": "DatasetReference"
+										}
+									}
+								},
+								{
+									"name": "GetErrorDuringProcessFiles",
+									"type": "Lookup",
+									"dependsOn": [
+										{
+											"activity": "GetNotProcessedFiles",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "AzureSqlSource",
+											"sqlReaderQuery": {
+												"value": "SELECT \n       stuff( (SELECT ', '+original_blob_name \n               FROM log.source_register_table\n\t\t\t   where etl_is_processed = 'N'\n\t\t\t   and (etl_run_status like 'FAIL%' or etl_run_status like 'RUN%')\n\t\t\t   and etl_utc_tag = '@{pipeline().parameters.Etl_Utc_Tag}'\n\t\t\t   order by original_blob_name\n               FOR XML PATH(''), TYPE).value('.', 'varchar(max)'),1,1,'') as ErrorDuringProcess_Files\n;",
+												"type": "Expression"
+											}
+										},
+										"dataset": {
+											"referenceName": "SQLsourceRegisterTable_ds",
+											"type": "DatasetReference"
+										}
+									}
+								},
+								{
+									"name": "SuccessOrFailMail",
+									"type": "WebActivity",
+									"dependsOn": [
+										{
+											"activity": "GetErrorDuringProcessFiles",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"url": "https://prod-24.australiaeast.logic.azure.com:443/workflows/e28a90add06c495bbc9362b5109fb4c0/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=j2wEDAKOpnQ83iKkUa84aeGE6Nfb5604lp-z1-W4ek0",
+										"method": "POST",
+										"headers": {
+											"Content-Type": "application/json"
+										},
+										"body": {
+											"dataFactoryName": "@pipeline().parameters.Parent_DataFactory",
+											"pipelineName": "@pipeline().parameters.Parent_Pipeline",
+											"messageHeader": "@pipeline().parameters.Success_Fail_Header",
+											"messageProcessed": "@activity('GetProcessedFiles').output.firstRow",
+											"messageNotProcessed": "@activity('GetNotProcessedFiles').output.firstRow",
+											"messageErrorDuringProcess": "@activity('GetErrorDuringProcessFiles').output.firstRow"
+										}
+									}
+								}
+							]
+						}
+					}
+				],
+				"parameters": {
+					"Parent_DataFactory": {
+						"type": "string"
+					},
+					"Parent_Pipeline": {
+						"type": "string"
+					},
+					"Success_Fail_Header": {
+						"type": "string"
+					},
+					"Etl_Utc_Tag": {
+						"type": "string"
+					},
+					"File_Pattern": {
+						"type": "string"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/SQLsourceRegisterTable_ds')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DelimitedText_sourcelandingraw_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "[parameters('BlobStore_nfdwhstaging')]",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": {
+							"value": "@{item().ORIGINAL_BLOB_NAME}",
+							"type": "Expression"
+						},
+						"container": "sourcelandingraw"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DelimitedText_sourcelandingscrubbed_coa_trx_company_ds')]",
 			"type": "Microsoft.DataFactory/factories/datasets",
 			"apiVersion": "2018-06-01",
 			"properties": {
@@ -1086,7 +1138,7 @@
 			"dependsOn": []
 		},
 		{
-			"name": "[concat(parameters('factoryName'), '/LoadTxtToDBstaging_coa_trx_category_df')]",
+			"name": "[concat(parameters('factoryName'), '/LoadTxtToDBstaging_coa_trx_company_df')]",
 			"type": "Microsoft.DataFactory/factories/dataflows",
 			"apiVersion": "2018-06-01",
 			"properties": {
@@ -1095,16 +1147,23 @@
 					"sources": [
 						{
 							"dataset": {
-								"referenceName": "DelimitedText_sourcelandingscrubbed_coa_trx_category_ds",
+								"referenceName": "DelimitedText_sourcelandingscrubbed_coa_trx_company_ds",
 								"type": "DatasetReference"
 							},
 							"name": "LoadFromScrubbedToStagingDB"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLrelationfund_ds",
+								"type": "DatasetReference"
+							},
+							"name": "GetFundMaster"
 						}
 					],
 					"sinks": [
 						{
 							"dataset": {
-								"referenceName": "SQLstagingcoatrxcategory_ds",
+								"referenceName": "SQLstagingcoatrxcommon_ds",
 								"type": "DatasetReference"
 							},
 							"name": "StagingDB"
@@ -1119,14 +1178,21 @@
 						},
 						{
 							"name": "SelectForTarget"
+						},
+						{
+							"name": "LookupFundMaster"
+						},
+						{
+							"name": "SelectFundColumns"
 						}
 					],
-					"script": "\n\nsource(output(\n\t\tFund as string,\n\t\tAsset as string,\n\t\tGLaccount as string,\n\t\tId as string,\n\t\tSrc as string,\n\t\tDate as string,\n\t\tMemo as string,\n\t\tDebit as string,\n\t\tCredit as string,\n\t\tJob as string,\n\t\tNetActivity as string,\n\t\tEndingBalance as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tpartitionBy('hash', 1)) ~> LoadFromScrubbedToStagingDB\nLoadFromScrubbedToStagingDB select(mapColumn(\n\t\tFund,\n\t\tAsset,\n\t\tGLaccount,\n\t\tId,\n\t\tDate,\n\t\tMemo,\n\t\tDebit,\n\t\tCredit\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectSourceColumns\nSelectSourceColumns derive(Debit_Credit = case(isNull(Debit),'CR','DR'),\n\t\tTrx_Amount = coalesce(toDecimal(Debit,18,2,'$###,###.##'),toDecimal(Credit,18,2,'$###,###.##')),\n\t\tDate = toTimestamp(Date,'dd/MM/yyyy')) ~> SetDerivations\nSetDerivations select(mapColumn(\n\t\tFund_ID = Fund,\n\t\tAsset_ID = Asset,\n\t\tGL_Code = GLaccount,\n\t\tTrx_Code = Id,\n\t\tTrx_Date = Date,\n\t\tTrx_Desc = Memo,\n\t\tDebit_Credit,\n\t\tTrx_Amount\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectForTarget\nSelectForTarget sink(input(\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Amount as decimal(18,2)\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tpartitionBy('hash', 1)) ~> StagingDB"
+					"script": "\n\nsource(output(\n\t\tFund as string,\n\t\tAsset as string,\n\t\tGLaccount as string,\n\t\tId as string,\n\t\tSrc as string,\n\t\tDate as string,\n\t\tMemo as string,\n\t\tDebit as string,\n\t\tCredit as string,\n\t\tJob as string,\n\t\tNetActivity as string,\n\t\tEndingBalance as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tpartitionBy('hash', 1)) ~> LoadFromScrubbedToStagingDB\nsource(output(\n\t\tFund_ID as string,\n\t\tFund_Name as string,\n\t\tFund_Master as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [Fund_ID]\\n      ,[Fund_Name]\\n      ,[Fund_Master]\\n  FROM [relational].[Fund]\\n  WHERE [record_deleted_flag] = 0',\n\tformat: 'query') ~> GetFundMaster\nLoadFromScrubbedToStagingDB select(mapColumn(\n\t\tFund,\n\t\tAsset,\n\t\tGLaccount,\n\t\tId,\n\t\tDate,\n\t\tMemo,\n\t\tDebit,\n\t\tCredit\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectSourceColumns\nLookupFundMaster derive(Debit_Credit = case(isNull(Debit),'CR','DR'),\n\t\tTrx_Amount = coalesce(toDecimal(Debit,18,2,'$###,###.##'),toDecimal(Credit,18,2,'$###,###.##')),\n\t\tDate = toTimestamp(Date,'dd/MM/yyyy')) ~> SetDerivations\nSetDerivations select(mapColumn(\n\t\tFund_ID = Relation_Fund_ID,\n\t\tAsset_ID = Asset,\n\t\tGL_Code = GLaccount,\n\t\tTrx_Code = Id,\n\t\tTrx_Date = Date,\n\t\tTrx_Desc = Memo,\n\t\tDebit_Credit,\n\t\tTrx_Amount\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectForTarget\nSelectSourceColumns, SelectFundColumns lookup(Fund == Relation_Fund_Name,\n\tbroadcast: 'none')~> LookupFundMaster\nGetFundMaster select(mapColumn(\n\t\tRelation_Fund_ID = Fund_ID,\n\t\tRelation_Fund_Name = Fund_Name,\n\t\tRelation_Fund_Master = Fund_Master\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectFundColumns\nSelectForTarget sink(input(\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Amount as decimal(18,2)\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tDebit_Credit,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Amount\n\t),\n\tpartitionBy('hash', 1)) ~> StagingDB"
 				}
 			},
 			"dependsOn": [
-				"[concat(variables('factoryId'), '/datasets/DelimitedText_sourcelandingscrubbed_coa_trx_category_ds')]",
-				"[concat(variables('factoryId'), '/datasets/SQLstagingcoatrxcategory_ds')]"
+				"[concat(variables('factoryId'), '/datasets/DelimitedText_sourcelandingscrubbed_coa_trx_company_ds')]",
+				"[concat(variables('factoryId'), '/datasets/SQLrelationfund_ds')]",
+				"[concat(variables('factoryId'), '/datasets/SQLstagingcoatrxcommon_ds')]"
 			]
 		},
 		{
@@ -1139,14 +1205,14 @@
 					"sources": [
 						{
 							"dataset": {
-								"referenceName": "SQLstagingcoatrxcategory_ds",
+								"referenceName": "SQLstagingcoatrxcommon_ds",
 								"type": "DatasetReference"
 							},
 							"name": "StagingDB"
 						},
 						{
 							"dataset": {
-								"referenceName": "SQLrelationcoatrxcategory_ds",
+								"referenceName": "SQLrelationcoatrxcommon_ds",
 								"type": "DatasetReference"
 							},
 							"name": "RelationDB"
@@ -1155,7 +1221,7 @@
 					"sinks": [
 						{
 							"dataset": {
-								"referenceName": "SQLrelationcoatrxcategory_ds",
+								"referenceName": "SQLrelationcoatrxcommon_ds",
 								"type": "DatasetReference"
 							},
 							"name": "InsertUpdateRow"
@@ -1202,12 +1268,12 @@
 							"name": "UpdateSelectForExpire"
 						}
 					],
-					"script": "\nparameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Amount as decimal(18,2),\n\t\tCash_Flow_Code as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [Trx_Code]\\n      ,[Fund_ID]\\n      ,[Asset_ID]\\n      ,TRX.[GL_Code]\\n      ,[Debit_Credit]\\n      ,[Trx_Date]\\n      ,[Trx_Desc]\\n      ,[Trx_Amount]\\n\t  ,COA.[Cash_Flow_Code]\\n  FROM [staging].[COA_Transactions] TRX\\n  LEFT JOIN [relational].[Chart_of_Account] COA\\n  ON TRX.[GL_Code] = COA.[GL_Code]',\n\tformat: 'query',\n\tpartitionBy('hash', 1)) ~> StagingDB\nsource(output(\n\t\tTrx_ID as long,\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Type as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Amount as decimal(18,2),\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [Trx_ID]\\n      ,[Trx_Code]\\n      ,[Fund_ID]\\n      ,[Asset_ID]\\n      ,[GL_Code]\\n      ,[Cash_Flow_Code]\\n      ,[Debit_Credit]\\n      ,[Trx_Type]\\n      ,[Trx_Date]\\n      ,[Trx_Desc]\\n      ,[Trx_Amount]\\n      ,[Update_datetime]\\n      ,[record_deleted_flag]\\n      ,[process_name]\\n  FROM [relational].[COA_Transactions]\\n  WHERE [record_deleted_flag] = 0',\n\tformat: 'query',\n\tpartitionBy('hash', 1)) ~> RelationDB\nStagingDB derive(StagingChecksum = sha2(256, Trx_Code,Fund_ID,Asset_ID,GL_Code,Debit_Credit,Trx_Date,Trx_Desc,Trx_Amount),\n\tpartitionBy('hash', 1)) ~> StatgingAddChecksum\nStatgingAddChecksum, RelationRenameColumns lookup(StagingChecksum == Relation_RelationalChecksum,\n\tpartitionBy('hash', 1),\n\tbroadcast: 'none')~> LookupRelationalStream\nRelationDB derive(RelationalChecksum = sha2(256, Trx_Code,Fund_ID,Asset_ID,GL_Code,Debit_Credit,Trx_Date,Trx_Desc,Trx_Amount),\n\tpartitionBy('hash', 1)) ~> RelationalAddChecksum\nLookupRelationalStream split(isNull(Relation_RelationalChecksum),\n\tStagingChecksum != Relation_RelationalChecksum,\n\tdisjoint: false,\n\tpartitionBy('hash', 1)) ~> ConditionalSplitNewOrExpire@(StagingNewRow, StagingChangedRow, IgnoreNoChange)\nRelationalAddChecksum select(mapColumn(\n\t\tRelation_Trx_ID = Trx_ID,\n\t\tRelation_Trx_Code = Trx_Code,\n\t\tRelation_Fund_ID = Fund_ID,\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_GL_Code = GL_Code,\n\t\tRelation_Cash_Flow_Code = Cash_Flow_Code,\n\t\tRelation_Debit_Credit = Debit_Credit,\n\t\tRelation_Trx_Type = Trx_Type,\n\t\tRelation_Trx_Date = Trx_Date,\n\t\tRelation_Trx_Desc = Trx_Desc,\n\t\tRelation_Trx_Amount = Trx_Amount,\n\t\tRelation_Update_datetime = Update_datetime,\n\t\tRelation_record_deleted_flag = record_deleted_flag,\n\t\tRelation_process_name = process_name,\n\t\tRelation_RelationalChecksum = RelationalChecksum\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> RelationRenameColumns\nConditionalSplitNewOrExpire@StagingNewRow select(mapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tDebit_Credit,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Amount,\n\t\tCash_Flow_Code\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectNewStagingRow\nSelectNewStagingRow derive(Update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName),\n\t\tTrx_Type = toString('Actual'),\n\tpartitionBy('hash', 1)) ~> AddAuditColumns\nUnionForDB alterRow(insertIf(record_deleted_flag==toInteger(0)),\n\tupdateIf(record_deleted_flag==toInteger(1)),\n\tpartitionBy('hash', 1)) ~> AlterRowInsertUpdateExpire\nConditionalSplitNewOrExpire@StagingChangedRow derive(Update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('_', $ProcessName, $FileName),\n\tpartitionBy('hash', 1)) ~> UpdateAddAuditAttributes\nConditionalSplitNewOrExpire@StagingChangedRow derive(Update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\trecord_deleted_flag = toInteger(1),\n\tpartitionBy('hash', 1)) ~> AddExpiredAttributes\nUpdateAddAuditAttributes select(mapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tDebit_Credit,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Amount,\n\t\tCash_Flow_Code,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> UpdateSelectForInsert\nAddAuditColumns union(byName: true,\n\tpartitionBy('hash', 1))~> UnionForDB\nAddExpiredAttributes select(mapColumn(\n\t\tRelation_Trx_ID,\n\t\tRelation_Trx_Code,\n\t\tRelation_Fund_ID,\n\t\tRelation_Asset_ID,\n\t\tRelation_GL_Code,\n\t\tRelation_Cash_Flow_Code,\n\t\tRelation_Debit_Credit,\n\t\tRelation_Trx_Type,\n\t\tRelation_Trx_Date,\n\t\tRelation_Trx_Desc,\n\t\tRelation_Trx_Amount,\n\t\tRelation_Update_datetime,\n\t\tRelation_record_deleted_flag,\n\t\tRelation_process_name,\n\t\tend_datetime = Update_datetime,\n\t\trecord_deleted_flag\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> UpdateSelectForExpire\nAlterRowInsertUpdateExpire sink(input(\n\t\tTrx_ID as long,\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Type as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Amount as decimal(18,0),\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tkeys:['Fund_ID'],\n\tformat: 'table',\n\tmapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tTrx_Type,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Amount,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t),\n\tpartitionBy('hash', 1)) ~> InsertUpdateRow"
+					"script": "\nparameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Amount as decimal(18,2),\n\t\tCash_Flow_Code as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [Trx_Code]\\n      ,[Fund_ID]\\n      ,[Asset_ID]\\n      ,TRX.[GL_Code]\\n      ,[Debit_Credit]\\n      ,[Trx_Date]\\n      ,[Trx_Desc]\\n      ,[Trx_Amount]\\n\t  ,COA.[Cash_Flow_Code]\\n  FROM [staging].[COA_Transactions] TRX\\n  LEFT JOIN [relational].[Chart_of_Account] COA\\n  ON TRX.[GL_Code] = COA.[GL_Code]',\n\tformat: 'query',\n\tpartitionBy('hash', 1)) ~> StagingDB\nsource(output(\n\t\tTrx_ID as long,\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Type as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Amount as decimal(18,2),\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [Trx_ID]\\n      ,[Trx_Code]\\n      ,[Fund_ID]\\n      ,[Asset_ID]\\n      ,[GL_Code]\\n      ,[Cash_Flow_Code]\\n      ,[Debit_Credit]\\n      ,[Trx_Type]\\n      ,[Trx_Date]\\n      ,[Trx_Desc]\\n      ,[Trx_Amount]\\n      ,[Update_datetime]\\n      ,[record_deleted_flag]\\n      ,[process_name]\\n  FROM [relational].[COA_Transactions]\\n  WHERE [record_deleted_flag] = 0',\n\tformat: 'query',\n\tpartitionBy('hash', 1)) ~> RelationDB\nStagingDB derive(StagingChecksum = sha2(256, Trx_Code,Fund_ID,Asset_ID,GL_Code,Debit_Credit,Trx_Date,Trx_Desc,Trx_Amount),\n\tpartitionBy('hash', 1)) ~> StatgingAddChecksum\nStatgingAddChecksum, RelationRenameColumns lookup(StagingChecksum == Relation_RelationalChecksum,\n\tpartitionBy('hash', 1),\n\tbroadcast: 'none')~> LookupRelationalStream\nRelationDB derive(RelationalChecksum = sha2(256, Trx_Code,Fund_ID,Asset_ID,GL_Code,Debit_Credit,Trx_Date,Trx_Desc,Trx_Amount),\n\tpartitionBy('hash', 1)) ~> RelationalAddChecksum\nLookupRelationalStream split(isNull(Relation_RelationalChecksum),\n\tStagingChecksum != Relation_RelationalChecksum,\n\tdisjoint: false,\n\tpartitionBy('hash', 1)) ~> ConditionalSplitNewOrExpire@(StagingNewRow, StagingChangedRow, IgnoreNoChange)\nRelationalAddChecksum select(mapColumn(\n\t\tRelation_Trx_ID = Trx_ID,\n\t\tRelation_Trx_Code = Trx_Code,\n\t\tRelation_Fund_ID = Fund_ID,\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_GL_Code = GL_Code,\n\t\tRelation_Cash_Flow_Code = Cash_Flow_Code,\n\t\tRelation_Debit_Credit = Debit_Credit,\n\t\tRelation_Trx_Type = Trx_Type,\n\t\tRelation_Trx_Date = Trx_Date,\n\t\tRelation_Trx_Desc = Trx_Desc,\n\t\tRelation_Trx_Amount = Trx_Amount,\n\t\tRelation_Update_datetime = Update_datetime,\n\t\tRelation_record_deleted_flag = record_deleted_flag,\n\t\tRelation_process_name = process_name,\n\t\tRelation_RelationalChecksum = RelationalChecksum\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> RelationRenameColumns\nConditionalSplitNewOrExpire@StagingNewRow select(mapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tDebit_Credit,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Amount,\n\t\tCash_Flow_Code\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectNewStagingRow\nSelectNewStagingRow derive(Update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName),\n\t\tTrx_Type = toString('Actual'),\n\tpartitionBy('hash', 1)) ~> AddAuditColumns\nUnionForDB alterRow(insertIf(record_deleted_flag==toInteger(0)),\n\tupdateIf(record_deleted_flag==toInteger(1)),\n\tpartitionBy('hash', 1)) ~> AlterRowInsertUpdateExpire\nConditionalSplitNewOrExpire@StagingChangedRow derive(Update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('_', $ProcessName, $FileName),\n\tpartitionBy('hash', 1)) ~> UpdateAddAuditAttributes\nConditionalSplitNewOrExpire@StagingChangedRow derive(Update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\trecord_deleted_flag = toInteger(1),\n\tpartitionBy('hash', 1)) ~> AddExpiredAttributes\nUpdateAddAuditAttributes select(mapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tDebit_Credit,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Amount,\n\t\tCash_Flow_Code,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> UpdateSelectForInsert\nAddAuditColumns union(byName: true,\n\tpartitionBy('hash', 1))~> UnionForDB\nAddExpiredAttributes select(mapColumn(\n\t\tRelation_Trx_ID,\n\t\tRelation_Trx_Code,\n\t\tRelation_Fund_ID,\n\t\tRelation_Asset_ID,\n\t\tRelation_GL_Code,\n\t\tRelation_Cash_Flow_Code,\n\t\tRelation_Debit_Credit,\n\t\tRelation_Trx_Type,\n\t\tRelation_Trx_Date,\n\t\tRelation_Trx_Desc,\n\t\tRelation_Trx_Amount,\n\t\tRelation_Update_datetime,\n\t\tRelation_record_deleted_flag,\n\t\tRelation_process_name,\n\t\tend_datetime = Update_datetime,\n\t\trecord_deleted_flag\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> UpdateSelectForExpire\nAlterRowInsertUpdateExpire sink(input(\n\t\tTrx_ID as long,\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Type as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Amount as decimal(18,0),\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tkeys:['Fund_ID'],\n\tformat: 'table',\n\tpartitionBy('hash', 1)) ~> InsertUpdateRow"
 				}
 			},
 			"dependsOn": [
-				"[concat(variables('factoryId'), '/datasets/SQLstagingcoatrxcategory_ds')]",
-				"[concat(variables('factoryId'), '/datasets/SQLrelationcoatrxcategory_ds')]"
+				"[concat(variables('factoryId'), '/datasets/SQLstagingcoatrxcommon_ds')]",
+				"[concat(variables('factoryId'), '/datasets/SQLrelationcoatrxcommon_ds')]"
 			]
 		},
 		{
@@ -1244,7 +1310,84 @@
 			"dependsOn": []
 		},
 		{
-			"name": "[concat(parameters('factoryName'), '/SQLstagingcoatrxcategory_ds')]",
+			"name": "[concat(parameters('factoryName'), '/SQLrelationfund_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "[parameters('SQLdbConnection')]",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "Fund_ID",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Fund_Name",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Fund_Master",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Fund_master_Name",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Fund_ABN",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Fund_ARSN",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Fund_Country",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Fund_Region",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Fund_State",
+						"type": "nvarchar"
+					},
+					{
+						"name": "start_datetime",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					},
+					{
+						"name": "end_datetime",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					},
+					{
+						"name": "record_deleted_flag",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "process_name",
+						"type": "nvarchar"
+					}
+				],
+				"typeProperties": {
+					"schema": "relational",
+					"table": "Fund"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SQLstagingcoatrxcommon_ds')]",
 			"type": "Microsoft.DataFactory/factories/datasets",
 			"apiVersion": "2018-06-01",
 			"properties": {
@@ -1300,7 +1443,7 @@
 			"dependsOn": []
 		},
 		{
-			"name": "[concat(parameters('factoryName'), '/SQLrelationcoatrxcategory_ds')]",
+			"name": "[concat(parameters('factoryName'), '/SQLrelationcoatrxcommon_ds')]",
 			"type": "Microsoft.DataFactory/factories/datasets",
 			"apiVersion": "2018-06-01",
 			"properties": {
