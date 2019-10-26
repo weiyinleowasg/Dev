@@ -1,0 +1,32 @@
+{
+	"name": "LoadTxtToDBstaging_fund_df",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "DelimitedText_sourcelandingscrubbed_fund_ds",
+						"type": "DatasetReference"
+					},
+					"name": "LoadFromScrubbedToStagingDB"
+				}
+			],
+			"sinks": [
+				{
+					"dataset": {
+						"referenceName": "SQLstagingfund_ds",
+						"type": "DatasetReference"
+					},
+					"name": "StagingDB"
+				}
+			],
+			"transformations": [
+				{
+					"name": "SelectSourceColumns"
+				}
+			],
+			"script": "\n\nsource(output(\n\t\tFund_ID as string,\n\t\tFund_Name as string,\n\t\tFund_master as string,\n\t\tFund_master_name as string,\n\t\tFund_ABN as string,\n\t\tFund_ARSN as string,\n\t\tFund_country as string,\n\t\tFund_Region as string,\n\t\tFund_State as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tpartitionBy('hash', 1)) ~> LoadFromScrubbedToStagingDB\nLoadFromScrubbedToStagingDB select(mapColumn(\n\t\tFund_ID,\n\t\tFund_Name,\n\t\tFund_master,\n\t\tFund_master_name,\n\t\tFund_ABN,\n\t\tFund_ARSN,\n\t\tFund_country,\n\t\tFund_Region,\n\t\tFund_State\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectSourceColumns\nSelectSourceColumns sink(input(\n\t\tFund_ID as string,\n\t\tFund_Name as string,\n\t\tFund_Master as string,\n\t\tFund_master_Name as string,\n\t\tFund_ABN as string,\n\t\tFund_ARSN as string,\n\t\tFund_Country as string,\n\t\tFund_Region as string,\n\t\tFund_State as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tFund_ID,\n\t\tFund_Name,\n\t\tFund_Master = Fund_master,\n\t\tFund_master_Name = Fund_master_name,\n\t\tFund_ABN,\n\t\tFund_ARSN,\n\t\tFund_Country = Fund_country,\n\t\tFund_Region,\n\t\tFund_State\n\t),\n\tpartitionBy('hash', 1)) ~> StagingDB"
+		}
+	}
+}
