@@ -267,7 +267,7 @@
 										"type": "Copy",
 										"dependsOn": [
 											{
-												"activity": "LoadStagingDBtoRelationDB_df",
+												"activity": "RunProcessSourceBlobAdjustment_spl",
 												"dependencyConditions": [
 													"Succeeded"
 												]
@@ -346,55 +346,9 @@
 										}
 									},
 									{
-										"name": "LoadStagingDBtoRelationDB_df",
-										"type": "ExecuteDataFlow",
-										"dependsOn": [
-											{
-												"activity": "LoadTxtToDBstaging_ds",
-												"dependencyConditions": [
-													"Succeeded"
-												]
-											}
-										],
-										"policy": {
-											"timeout": "7.00:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
-											"secureOutput": false,
-											"secureInput": false
-										},
-										"userProperties": [],
-										"typeProperties": {
-											"dataflow": {
-												"referenceName": "LoadStagingDBtoRelationDB_adjustment_df",
-												"type": "DataFlowReference",
-												"parameters": {
-													"ProcessName": {
-														"value": "'@{pipeline().Pipeline}'",
-														"type": "Expression"
-													},
-													"FileName": {
-														"value": "'@{item().DATALAKE_FULL_PATHFILE}'",
-														"type": "Expression"
-													},
-													"Etl_Utc_Tag": {
-														"value": "'@{variables('Etl_Utc_Tag')}'",
-														"type": "Expression"
-													}
-												}
-											}
-										}
-									},
-									{
 										"name": "UpdateSourceRegisterFailedAbort",
 										"type": "SqlServerStoredProcedure",
 										"dependsOn": [
-											{
-												"activity": "LoadStagingDBtoRelationDB_df",
-												"dependencyConditions": [
-													"Failed"
-												]
-											},
 											{
 												"activity": "LoadTxtToDBstaging_ds",
 												"dependencyConditions": [
@@ -409,6 +363,12 @@
 											},
 											{
 												"activity": "CopyOriginalToArchive",
+												"dependencyConditions": [
+													"Failed"
+												]
+											},
+											{
+												"activity": "RunProcessSourceBlobAdjustment_spl",
 												"dependencyConditions": [
 													"Failed"
 												]
@@ -562,6 +522,40 @@
 											"storeSettings": {
 												"type": "AzureBlobStorageReadSettings",
 												"recursive": false
+											}
+										}
+									},
+									{
+										"name": "RunProcessSourceBlobAdjustment_spl",
+										"type": "ExecutePipeline",
+										"dependsOn": [
+											{
+												"activity": "LoadTxtToDBstaging_ds",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"userProperties": [],
+										"typeProperties": {
+											"pipeline": {
+												"referenceName": "ProcessSourceBlob_adjustment_spl",
+												"type": "PipelineReference"
+											},
+											"waitOnCompletion": true,
+											"parameters": {
+												"ProcessName": {
+													"value": "@pipeline().Pipeline",
+													"type": "Expression"
+												},
+												"FileName": {
+													"value": "@item().DATALAKE_FULL_PATHFILE",
+													"type": "Expression"
+												},
+												"Etl_Utc_Tag": {
+													"value": "@variables('Etl_Utc_Tag')",
+													"type": "Expression"
+												}
 											}
 										}
 									}
