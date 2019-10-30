@@ -24,7 +24,7 @@
 				"typeProperties": {
 					"source": {
 						"type": "AzureSqlSource",
-						"sqlReaderQuery": "SELECT [ORIGINAL_BLOB_LANDING_CONTAINER],\n\t[ORIGINAL_BLOB_NAME],\n\t[ORIGINAL_BLOP_FULLPATH],\n\t[TARGET_BLOB_LANDING_CONTAINER],\n\t[TARGET_BLOB_NAME],\n\t[DATALAKE_CONTAINER],\n\t[DATALAKE_FILE_PATH],\n\t[ORIGINAL_BLOB_ARCHIVE_CONTAINER],\n\t[ORIGINAL_BLOB_ARCHIVE_FULLPATH],\n\tCONCAT(DATALAKE_CONTAINER,'/',DATALAKE_FILE_PATH,'/',TARGET_BLOB_NAME) AS DATALAKE_FULL_PATHFILE\nFROM [log].[SOURCE_REGISTER_TABLE]\nWHERE [ETL_IS_PROCESSED] = 'N'\nAND [ORIGINAL_BLOB_NAME] LIKE 'MAS_MNL_ADJ_%'\nORDER BY [ORIGINAL_BLOB_NAME];"
+						"sqlReaderQuery": "SELECT [ORIGINAL_BLOB_LANDING_CONTAINER],\n\t[ORIGINAL_BLOB_NAME],\n\t[ORIGINAL_BLOP_FULLPATH],\n\t[TARGET_BLOB_LANDING_CONTAINER],\n\t[TARGET_BLOB_NAME],\n\t[DATALAKE_CONTAINER],\n\t[DATALAKE_FILE_PATH],\n\t[ORIGINAL_BLOB_ARCHIVE_CONTAINER],\n\t[ORIGINAL_BLOB_ARCHIVE_FULLPATH],\n\tCONCAT(DATALAKE_CONTAINER,'/',DATALAKE_FILE_PATH,'/',TARGET_BLOB_NAME) AS DATALAKE_FULL_PATHFILE\nFROM [log].[SOURCE_REGISTER_TABLE]\nWHERE [ETL_IS_PROCESSED] = 'N'\nAND [ORIGINAL_BLOB_NAME] LIKE 'ADJ_MNL_%'\nORDER BY [ORIGINAL_BLOB_NAME];"
 					},
 					"dataset": {
 						"referenceName": "SQLsourceRegisterTable_ds",
@@ -267,7 +267,7 @@
 										"type": "Copy",
 										"dependsOn": [
 											{
-												"activity": "LoadStagingDBtoRelationDB_df",
+												"activity": "RunProcessSourceBlobAdjustment_spl",
 												"dependencyConditions": [
 													"Succeeded"
 												]
@@ -346,55 +346,9 @@
 										}
 									},
 									{
-										"name": "LoadStagingDBtoRelationDB_df",
-										"type": "ExecuteDataFlow",
-										"dependsOn": [
-											{
-												"activity": "LoadTxtToDBstaging_ds",
-												"dependencyConditions": [
-													"Succeeded"
-												]
-											}
-										],
-										"policy": {
-											"timeout": "7.00:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
-											"secureOutput": false,
-											"secureInput": false
-										},
-										"userProperties": [],
-										"typeProperties": {
-											"dataflow": {
-												"referenceName": "LoadStagingDBtoRelationDB_adjustment_df",
-												"type": "DataFlowReference",
-												"parameters": {
-													"ProcessName": {
-														"value": "'@{pipeline().Pipeline}'",
-														"type": "Expression"
-													},
-													"FileName": {
-														"value": "'@{item().DATALAKE_FULL_PATHFILE}'",
-														"type": "Expression"
-													},
-													"Etl_Utc_Tag": {
-														"value": "'@{variables('Etl_Utc_Tag')}'",
-														"type": "Expression"
-													}
-												}
-											}
-										}
-									},
-									{
 										"name": "UpdateSourceRegisterFailedAbort",
 										"type": "SqlServerStoredProcedure",
 										"dependsOn": [
-											{
-												"activity": "LoadStagingDBtoRelationDB_df",
-												"dependencyConditions": [
-													"Failed"
-												]
-											},
 											{
 												"activity": "LoadTxtToDBstaging_ds",
 												"dependencyConditions": [
@@ -409,6 +363,12 @@
 											},
 											{
 												"activity": "CopyOriginalToArchive",
+												"dependencyConditions": [
+													"Failed"
+												]
+											},
+											{
+												"activity": "RunProcessSourceBlobAdjustment_spl",
 												"dependencyConditions": [
 													"Failed"
 												]
@@ -564,6 +524,40 @@
 												"recursive": false
 											}
 										}
+									},
+									{
+										"name": "RunProcessSourceBlobAdjustment_spl",
+										"type": "ExecutePipeline",
+										"dependsOn": [
+											{
+												"activity": "LoadTxtToDBstaging_ds",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"userProperties": [],
+										"typeProperties": {
+											"pipeline": {
+												"referenceName": "ProcessSourceBlob_adjustment_spl",
+												"type": "PipelineReference"
+											},
+											"waitOnCompletion": true,
+											"parameters": {
+												"ProcessName": {
+													"value": "@pipeline().Pipeline",
+													"type": "Expression"
+												},
+												"FileName": {
+													"value": "@item().DATALAKE_FULL_PATHFILE",
+													"type": "Expression"
+												},
+												"Etl_Utc_Tag": {
+													"value": "@variables('Etl_Utc_Tag')",
+													"type": "Expression"
+												}
+											}
+										}
 									}
 								]
 							}
@@ -598,7 +592,7 @@
 				"userProperties": [],
 				"typeProperties": {
 					"pipeline": {
-						"referenceName": "PipelineSendMail_pl1",
+						"referenceName": "PipelineSendMail_pl",
 						"type": "PipelineReference"
 					},
 					"waitOnCompletion": true,
@@ -616,7 +610,7 @@
 							"value": "@variables('Etl_Utc_Tag')",
 							"type": "Expression"
 						},
-						"File_Pattern": "MAS_MNL_ADJ_%"
+						"File_Pattern": "ADJ_MNL_%"
 					}
 				}
 			},
@@ -634,7 +628,7 @@
 				"userProperties": [],
 				"typeProperties": {
 					"pipeline": {
-						"referenceName": "PipelineSendMail_pl1",
+						"referenceName": "PipelineSendMail_pl",
 						"type": "PipelineReference"
 					},
 					"waitOnCompletion": true,
@@ -652,7 +646,7 @@
 							"value": "@variables('Etl_Utc_Tag')",
 							"type": "Expression"
 						},
-						"File_Pattern": "MAS_MNL_ADJ_%"
+						"File_Pattern": "ADJ_MNL_%"
 					}
 				}
 			}
