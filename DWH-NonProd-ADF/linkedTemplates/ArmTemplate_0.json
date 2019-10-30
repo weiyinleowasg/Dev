@@ -176,6 +176,74 @@
 			]
 		},
 		{
+			"name": "[concat(parameters('factoryName'), '/DelimitedText_sourcelandingscrubbed_adjustment_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "BlobStore_nfdwhstaging",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": {
+							"value": "@{item().TARGET_BLOB_NAME}",
+							"type": "Expression"
+						},
+						"container": "sourcelandingscrubbed"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": [
+					{
+						"name": "Date",
+						"type": "String"
+					},
+					{
+						"name": "Transaction_Code",
+						"type": "String"
+					},
+					{
+						"name": "Cashflow_Code",
+						"type": "String"
+					},
+					{
+						"name": "Fund_ID",
+						"type": "String"
+					},
+					{
+						"name": "Asset_ID",
+						"type": "String"
+					},
+					{
+						"name": "Trx_Type",
+						"type": "String"
+					},
+					{
+						"name": "GL_Code",
+						"type": "String"
+					},
+					{
+						"name": "GL_Description",
+						"type": "String"
+					},
+					{
+						"name": "Amount",
+						"type": "String"
+					}
+				]
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/BlobStore_nfdwhstaging')]"
+			]
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/DelimitedText_sourcelandingscrubbed_asset_ds')]",
 			"type": "Microsoft.DataFactory/factories/datasets",
 			"apiVersion": "2018-06-01",
@@ -287,6 +355,14 @@
 					},
 					{
 						"name": "Cash-Flow-Code",
+						"type": "String"
+					},
+					{
+						"name": "Parent-GL-Code",
+						"type": "String"
+					},
+					{
+						"name": "Level",
 						"type": "String"
 					}
 				]
@@ -713,6 +789,15 @@
 						"type": "nvarchar"
 					},
 					{
+						"name": "GL_Parent_Code",
+						"type": "nvarchar"
+					},
+					{
+						"name": "GL_Level_Code",
+						"type": "int",
+						"precision": 10
+					},
+					{
 						"name": "start_datetime",
 						"type": "datetime",
 						"precision": 23,
@@ -999,7 +1084,7 @@
 			]
 		},
 		{
-			"name": "[concat(parameters('factoryName'), '/SQLstagingasset_ds')]",
+			"name": "[concat(parameters('factoryName'), '/SQLstagingadjustment_ds')]",
 			"type": "Microsoft.DataFactory/factories/datasets",
 			"apiVersion": "2018-06-01",
 			"properties": {
@@ -1011,15 +1096,7 @@
 				"type": "AzureSqlTable",
 				"schema": [
 					{
-						"name": "Asset_ID",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Asset_Name",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Asset_Curency",
+						"name": "Trx_Code",
 						"type": "nvarchar"
 					},
 					{
@@ -1027,73 +1104,49 @@
 						"type": "nvarchar"
 					},
 					{
-						"name": "Asset_Alloc_Per",
-						"type": "decimal",
-						"precision": 18,
-						"scale": 2
-					},
-					{
-						"name": "Asset_country",
+						"name": "Asset_ID",
 						"type": "nvarchar"
 					},
-					{
-						"name": "Fund_Region",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Fund_State",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Prop_Mgr_Name",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Prop_Mgr_Company",
-						"type": "nvarchar"
-					}
-				],
-				"typeProperties": {
-					"schema": "staging",
-					"table": "Asset"
-				}
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/linkedServices/SQLdbConnection')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/SQLstagingcoa_ds')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "SQLdbConnection",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "AzureSqlTable",
-				"schema": [
 					{
 						"name": "GL_Code",
 						"type": "nvarchar"
 					},
 					{
-						"name": "GL_Desc",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Category",
-						"type": "nvarchar"
-					},
-					{
 						"name": "Cash_Flow_Code",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Debit_Credit",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Trx_Date",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					},
+					{
+						"name": "Trx_Desc",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Trx_Type",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Trx_Amount",
+						"type": "decimal",
+						"precision": 18,
+						"scale": 2
+					},
+					{
+						"name": "validation_error",
 						"type": "nvarchar"
 					}
 				],
 				"typeProperties": {
 					"schema": "staging",
-					"table": "Chart_of_Account"
+					"table": "COA_Adjustments"
 				}
 			},
 			"dependsOn": [
