@@ -7,17 +7,25 @@
 			"metadata": "Data Factory name",
 			"defaultValue": "DWH-NonProd-ADF"
 		},
-		"BlobStore_nfdwhdatalake_connectionString": {
+		"SRTEST_IR_SH_connectionString": {
 			"type": "secureString",
-			"metadata": "Secure string for 'connectionString' of 'BlobStore_nfdwhdatalake'"
+			"metadata": "Secure string for 'connectionString' of 'SRTEST_IR_SH'"
 		},
-		"BlobStore_nfdwhstaging_connectionString": {
-			"type": "secureString",
-			"metadata": "Secure string for 'connectionString' of 'BlobStore_nfdwhstaging'"
+		"NFDWHNonProdAKV_LS_properties_typeProperties_baseUrl": {
+			"type": "string",
+			"defaultValue": "https://NFDWHNonProdAKV.vault.azure.net/"
 		},
-		"SQLdbConnection_connectionString": {
-			"type": "secureString",
-			"metadata": "Secure string for 'connectionString' of 'SQLdbConnection'"
+		"BlobStore_nfdwhdatalake_properties_typeProperties_connectionString_secretName": {
+			"type": "string",
+			"defaultValue": "NFDWHNonProdBlobdatalakeConn"
+		},
+		"BlobStore_nfdwhstaging_properties_typeProperties_connectionString_secretName": {
+			"type": "string",
+			"defaultValue": "NFDWHNonProdBlobstagingConn"
+		},
+		"SQLdbConnection_properties_typeProperties_connectionString_secretName": {
+			"type": "string",
+			"defaultValue": "NFDWHDEVSQLConn"
 		}
 	},
 	"variables": {
@@ -25,40 +33,14 @@
 	},
 	"resources": [
 		{
-			"name": "[concat(parameters('factoryName'), '/BlobStore_nfdwhdatalake')]",
+			"name": "[concat(parameters('factoryName'), '/NFDWHNonProdAKV_LS')]",
 			"type": "Microsoft.DataFactory/factories/linkedServices",
 			"apiVersion": "2018-06-01",
 			"properties": {
 				"annotations": [],
-				"type": "AzureBlobStorage",
+				"type": "AzureKeyVault",
 				"typeProperties": {
-					"connectionString": "[parameters('BlobStore_nfdwhdatalake_connectionString')]"
-				}
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/BlobStore_nfdwhstaging')]",
-			"type": "Microsoft.DataFactory/factories/linkedServices",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"annotations": [],
-				"type": "AzureBlobStorage",
-				"typeProperties": {
-					"connectionString": "[parameters('BlobStore_nfdwhstaging_connectionString')]"
-				}
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/SQLdbConnection')]",
-			"type": "Microsoft.DataFactory/factories/linkedServices",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"annotations": [],
-				"type": "AzureSqlDatabase",
-				"typeProperties": {
-					"connectionString": "[parameters('SQLdbConnection_connectionString')]"
+					"baseUrl": "[parameters('NFDWHNonProdAKV_LS_properties_typeProperties_baseUrl')]"
 				}
 			},
 			"dependsOn": []
@@ -72,6 +54,179 @@
 				"typeProperties": {}
 			},
 			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/BlobStore_nfdwhdatalake')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureBlobStorage",
+				"typeProperties": {
+					"connectionString": {
+						"type": "AzureKeyVaultSecret",
+						"store": {
+							"referenceName": "NFDWHNonProdAKV_LS",
+							"type": "LinkedServiceReference"
+						},
+						"secretName": "[parameters('BlobStore_nfdwhdatalake_properties_typeProperties_connectionString_secretName')]"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/NFDWHNonProdAKV_LS')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/BlobStore_nfdwhstaging')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureBlobStorage",
+				"typeProperties": {
+					"connectionString": {
+						"type": "AzureKeyVaultSecret",
+						"store": {
+							"referenceName": "NFDWHNonProdAKV_LS",
+							"type": "LinkedServiceReference"
+						},
+						"secretName": "[parameters('BlobStore_nfdwhstaging_properties_typeProperties_connectionString_secretName')]"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/NFDWHNonProdAKV_LS')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SQLdbConnection')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureSqlDatabase",
+				"typeProperties": {
+					"connectionString": {
+						"type": "AzureKeyVaultSecret",
+						"store": {
+							"referenceName": "NFDWHNonProdAKV_LS",
+							"type": "LinkedServiceReference"
+						},
+						"secretName": "[parameters('SQLdbConnection_properties_typeProperties_connectionString_secretName')]"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/NFDWHNonProdAKV_LS')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SRTEST_IR_SH')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureBlobStorage",
+				"typeProperties": {
+					"connectionString": "[parameters('SRTEST_IR_SH_connectionString')]"
+				},
+				"connectVia": {
+					"referenceName": "IRVM1-SH-integrationRuntime",
+					"type": "IntegrationRuntimeReference"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/integrationRuntimes/IRVM1-SH-integrationRuntime')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DelimitedText_adjustment_loadready_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "BlobStore_nfdwhstaging",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"container": "adf2persistentarea"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": [
+					{
+						"name": "Trx_Code",
+						"type": "String"
+					},
+					{
+						"name": "Fund_ID",
+						"type": "String"
+					},
+					{
+						"name": "Asset_ID",
+						"type": "String"
+					},
+					{
+						"name": "GL_Code",
+						"type": "String"
+					},
+					{
+						"name": "Cash_Flow_Code",
+						"type": "String"
+					},
+					{
+						"name": "Debit_Credit",
+						"type": "String"
+					},
+					{
+						"name": "Trx_Date",
+						"type": "String"
+					},
+					{
+						"name": "Trx_Desc",
+						"type": "String"
+					},
+					{
+						"name": "Trx_Type",
+						"type": "String"
+					},
+					{
+						"name": "Trx_Amount",
+						"type": "String"
+					},
+					{
+						"name": "Trx_ID",
+						"type": "String"
+					},
+					{
+						"name": "Update_datetime",
+						"type": "String"
+					},
+					{
+						"name": "record_deleted_flag",
+						"type": "String"
+					},
+					{
+						"name": "process_name",
+						"type": "String"
+					},
+					{
+						"name": "insert_update_flag",
+						"type": "String"
+					}
+				]
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/BlobStore_nfdwhstaging')]"
+			]
 		},
 		{
 			"name": "[concat(parameters('factoryName'), '/DelimitedText_datalake_financial_ds')]",
@@ -638,6 +793,10 @@
 						"type": "String"
 					},
 					{
+						"name": "MYOB_Company_Name",
+						"type": "String"
+					},
+					{
 						"name": "Fund_Name",
 						"type": "String"
 					},
@@ -647,6 +806,10 @@
 					},
 					{
 						"name": "Fund_master_name",
+						"type": "String"
+					},
+					{
+						"name": "Fund_Parent_Allocation",
 						"type": "String"
 					},
 					{
@@ -908,245 +1071,6 @@
 				"typeProperties": {
 					"schema": "relational",
 					"table": "COA_Transactions"
-				}
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/linkedServices/SQLdbConnection')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/SQLrelationfund_ds')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "SQLdbConnection",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "AzureSqlTable",
-				"schema": [
-					{
-						"name": "Fund_ID",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Fund_Name",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Fund_Master",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Fund_master_Name",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Fund_ABN",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Fund_ARSN",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Fund_Country",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Fund_Region",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Fund_State",
-						"type": "nvarchar"
-					},
-					{
-						"name": "start_datetime",
-						"type": "datetime",
-						"precision": 23,
-						"scale": 3
-					},
-					{
-						"name": "end_datetime",
-						"type": "datetime",
-						"precision": 23,
-						"scale": 3
-					},
-					{
-						"name": "record_deleted_flag",
-						"type": "int",
-						"precision": 10
-					},
-					{
-						"name": "process_name",
-						"type": "nvarchar"
-					}
-				],
-				"typeProperties": {
-					"schema": "relational",
-					"table": "Fund"
-				}
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/linkedServices/SQLdbConnection')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/SQLsourceRegisterTable_ds')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "SQLdbConnection",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "AzureSqlTable",
-				"schema": [
-					{
-						"name": "ORIGINAL_BLOB_LANDING_CONTAINER",
-						"type": "varchar"
-					},
-					{
-						"name": "ORIGINAL_BLOB_NAME",
-						"type": "varchar"
-					},
-					{
-						"name": "ORIGINAL_BLOP_FULLPATH",
-						"type": "varchar"
-					},
-					{
-						"name": "TARGET_BLOB_LANDING_CONTAINER",
-						"type": "varchar"
-					},
-					{
-						"name": "TARGET_BLOB_NAME",
-						"type": "varchar"
-					},
-					{
-						"name": "DATALAKE_CONTAINER",
-						"type": "varchar"
-					},
-					{
-						"name": "DATALAKE_FILE_PATH",
-						"type": "varchar"
-					},
-					{
-						"name": "ORIGINAL_BLOB_ARCHIVE_CONTAINER",
-						"type": "varchar"
-					},
-					{
-						"name": "ORIGINAL_BLOB_ARCHIVE_FULLPATH",
-						"type": "varchar"
-					},
-					{
-						"name": "INSERT_TIMESTAMP",
-						"type": "datetime",
-						"precision": 23,
-						"scale": 3
-					},
-					{
-						"name": "UPDATE_TIMESTAMP",
-						"type": "datetime",
-						"precision": 23,
-						"scale": 3
-					},
-					{
-						"name": "ETL_IS_PROCESSED",
-						"type": "char"
-					},
-					{
-						"name": "IS_ARCHIVED",
-						"type": "char"
-					},
-					{
-						"name": "ETL_RUN_STATUS",
-						"type": "varchar"
-					},
-					{
-						"name": "FUNCAPP_NAME",
-						"type": "varchar"
-					},
-					{
-						"name": "ETL_JOBNAME",
-						"type": "varchar"
-					}
-				],
-				"typeProperties": {
-					"schema": "log",
-					"table": "Source_Register_table"
-				}
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/linkedServices/SQLdbConnection')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/SQLstagingadjustment_ds')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "SQLdbConnection",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "AzureSqlTable",
-				"schema": [
-					{
-						"name": "Trx_Code",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Fund_ID",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Asset_ID",
-						"type": "nvarchar"
-					},
-					{
-						"name": "GL_Code",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Cash_Flow_Code",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Debit_Credit",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Trx_Date",
-						"type": "datetime",
-						"precision": 23,
-						"scale": 3
-					},
-					{
-						"name": "Trx_Desc",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Trx_Type",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Trx_Amount",
-						"type": "decimal",
-						"precision": 18,
-						"scale": 2
-					},
-					{
-						"name": "validation_error",
-						"type": "nvarchar"
-					}
-				],
-				"typeProperties": {
-					"schema": "staging",
-					"table": "COA_Adjustments"
 				}
 			},
 			"dependsOn": [

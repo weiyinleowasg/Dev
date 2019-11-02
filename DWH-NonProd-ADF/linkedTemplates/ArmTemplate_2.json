@@ -13,6 +13,171 @@
 	},
 	"resources": [
 		{
+			"name": "[concat(parameters('factoryName'), '/LoadTxtToDBstaging_coa_trx_category_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "DelimitedText_sourcelandingscrubbed_coa_trx_category_ds",
+								"type": "DatasetReference"
+							},
+							"name": "LoadFromScrubbedToStagingDB",
+							"typeProperties": {}
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLstagingcoatrxcommon_ds",
+								"type": "DatasetReference"
+							},
+							"name": "StagingDB"
+						}
+					],
+					"transformations": [
+						{
+							"name": "SelectSourceColumns"
+						},
+						{
+							"name": "SetDerivations"
+						},
+						{
+							"name": "SelectForTarget"
+						}
+					],
+					"script": "\n\nsource(output(\n\t\tFund as string,\n\t\tAsset as string,\n\t\tGLaccount as string,\n\t\tId as string,\n\t\tSrc as string,\n\t\tDate as string,\n\t\tMemo as string,\n\t\tDebit as string,\n\t\tCredit as string,\n\t\tJob as string,\n\t\tNetActivity as string,\n\t\tEndingBalance as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> LoadFromScrubbedToStagingDB\nLoadFromScrubbedToStagingDB select(mapColumn(\n\t\tFund,\n\t\tAsset,\n\t\tGLaccount,\n\t\tId,\n\t\tDate,\n\t\tMemo,\n\t\tDebit,\n\t\tCredit\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectSourceColumns\nSelectSourceColumns derive(Debit_Credit = case(isNull(Debit),'CR','DR'),\n\t\tTrx_Amount = coalesce(toDecimal(Debit,18,2,'$###,###.##'),toDecimal(Credit,18,2,'$###,###.##')),\n\t\tDate = toTimestamp(Date,'dd/MM/yyyy')) ~> SetDerivations\nSetDerivations select(mapColumn(\n\t\tFund_ID = Fund,\n\t\tAsset_ID = Asset,\n\t\tGL_Code = GLaccount,\n\t\tTrx_Code = Id,\n\t\tTrx_Date = Date,\n\t\tTrx_Desc = Memo,\n\t\tDebit_Credit,\n\t\tTrx_Amount\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectForTarget\nSelectForTarget sink(input(\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Amount as decimal(18,2)\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table') ~> StagingDB"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadTxtToDBstaging_coa_trx_company_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "DelimitedText_sourcelandingscrubbed_coa_trx_company_ds",
+								"type": "DatasetReference"
+							},
+							"name": "LoadFromScrubbedToStagingDB",
+							"typeProperties": {}
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLstagingcoatrxcommon_ds",
+								"type": "DatasetReference"
+							},
+							"name": "StagingDB"
+						}
+					],
+					"transformations": [
+						{
+							"name": "SelectSourceColumns"
+						},
+						{
+							"name": "SetDerivations"
+						},
+						{
+							"name": "SelectForTarget"
+						}
+					],
+					"script": "\n\nsource(output(\n\t\tFund as string,\n\t\tAsset as string,\n\t\tGLaccount as string,\n\t\tId as string,\n\t\tSrc as string,\n\t\tDate as string,\n\t\tMemo as string,\n\t\tDebit as string,\n\t\tCredit as string,\n\t\tJob as string,\n\t\tNetActivity as string,\n\t\tEndingBalance as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> LoadFromScrubbedToStagingDB\nLoadFromScrubbedToStagingDB select(mapColumn(\n\t\tFund,\n\t\tAsset,\n\t\tGLaccount,\n\t\tId,\n\t\tDate,\n\t\tMemo,\n\t\tDebit,\n\t\tCredit\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectSourceColumns\nSelectSourceColumns derive(Debit_Credit = case(isNull(Debit),'CR','DR'),\n\t\tTrx_Amount = coalesce(toDecimal(Debit,18,2,'$###,###.##'),toDecimal(Credit,18,2,'$###,###.##')),\n\t\tDate = toTimestamp(Date,'dd/MM/yyyy')) ~> SetDerivations\nSetDerivations select(mapColumn(\n\t\tFund_ID = Fund,\n\t\tAsset_ID = Asset,\n\t\tGL_Code = GLaccount,\n\t\tTrx_Code = Id,\n\t\tTrx_Date = Date,\n\t\tTrx_Desc = Memo,\n\t\tDebit_Credit,\n\t\tTrx_Amount\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectForTarget\nSelectForTarget sink(input(\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Amount as decimal(18,2)\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tDebit_Credit,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Amount\n\t)) ~> StagingDB"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadTxtToDBstaging_coa_trx_simple_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "DelimitedText_sourcelandingscrubbed_coa_trx_simple_ds",
+								"type": "DatasetReference"
+							},
+							"name": "LoadFromScrubbedToStagingDB",
+							"typeProperties": {}
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLstagingcoatrxcommon_ds",
+								"type": "DatasetReference"
+							},
+							"name": "StagingDB"
+						}
+					],
+					"transformations": [
+						{
+							"name": "SelectSourceColumns"
+						},
+						{
+							"name": "SetDerivations"
+						},
+						{
+							"name": "SelectForTarget"
+						}
+					],
+					"script": "\n\nsource(output(\n\t\tFund as string,\n\t\tGLaccount as string,\n\t\tId as string,\n\t\tSrc as string,\n\t\tDate as string,\n\t\tMemo as string,\n\t\tDebit as string,\n\t\tCredit as string,\n\t\tJob as string,\n\t\tNetActivity as string,\n\t\tEndingBalance as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> LoadFromScrubbedToStagingDB\nLoadFromScrubbedToStagingDB select(mapColumn(\n\t\tFund,\n\t\tGLaccount,\n\t\tId,\n\t\tSrc,\n\t\tDate,\n\t\tMemo,\n\t\tDebit,\n\t\tCredit,\n\t\tJob,\n\t\tNetActivity,\n\t\tEndingBalance\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectSourceColumns\nSelectSourceColumns derive(Debit_Credit = case(isNull(Debit),'CR','DR'),\n\t\tTrx_Amount = coalesce(toDecimal(Debit,18,2,'$###,###.##'),toDecimal(Credit,18,2,'$###,###.##')),\n\t\tDate = toTimestamp(Date,'dd/MM/yyyy'),\n\t\tAsset_ID = toString('NF')) ~> SetDerivations\nSetDerivations select(mapColumn(\n\t\tFund_ID = Fund,\n\t\tAsset_ID,\n\t\tGL_Code = GLaccount,\n\t\tTrx_Code = Id,\n\t\tTrx_Date = Date,\n\t\tTrx_Desc = Memo,\n\t\tDebit_Credit,\n\t\tTrx_Amount\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectForTarget\nSelectForTarget sink(input(\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Amount as decimal(18,2)\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table') ~> StagingDB"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadTxtToDBstaging_fund_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "DelimitedText_sourcelandingscrubbed_fund_ds",
+								"type": "DatasetReference"
+							},
+							"name": "LoadFromScrubbedToStagingDB",
+							"typeProperties": {}
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLstagingfund_ds",
+								"type": "DatasetReference"
+							},
+							"name": "StagingDB"
+						}
+					],
+					"transformations": [
+						{
+							"name": "SelectSourceColumns"
+						},
+						{
+							"name": "DerivedColumn"
+						}
+					],
+					"script": "\n\nsource(output(\n\t\tFund_ID as string,\n\t\tMYOB_Company_Name as string,\n\t\tFund_Name as string,\n\t\tFund_master as string,\n\t\tFund_master_name as string,\n\t\tFund_Parent_Allocation as string,\n\t\tFund_ABN as string,\n\t\tFund_ARSN as string,\n\t\tFund_country as string,\n\t\tFund_Region as string,\n\t\tFund_State as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> LoadFromScrubbedToStagingDB\nDerivedColumn select(mapColumn(\n\t\tFund_ID,\n\t\tCompany_Name = MYOB_Company_Name,\n\t\tFund_Name,\n\t\tFund_Master = Fund_master,\n\t\tFund_master_Name = Fund_master_name,\n\t\tFund_Parent_Allocation_percentage = Fund_Parent_Allocation,\n\t\tFund_ABN,\n\t\tFund_ARSN,\n\t\tFund_Country = Fund_country,\n\t\tFund_Region,\n\t\tFund_State\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectSourceColumns\nLoadFromScrubbedToStagingDB derive(Fund_Parent_Allocation = toDecimal(Fund_Parent_Allocation)) ~> DerivedColumn\nSelectSourceColumns sink(input(\n\t\tFund_ID as string,\n\t\tCompany_Name as string,\n\t\tFund_Name as string,\n\t\tFund_Master as string,\n\t\tFund_master_Name as string,\n\t\tFund_Parent_Allocation_percentage as decimal(18,2),\n\t\tFund_ABN as string,\n\t\tFund_ARSN as string,\n\t\tFund_Country as string,\n\t\tFund_Region as string,\n\t\tFund_State as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table') ~> StagingDB"
+				}
+			},
+			"dependsOn": []
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/ProcessSourceBlob_adjustment_spl')]",
 			"type": "Microsoft.DataFactory/factories/pipelines",
 			"apiVersion": "2018-06-01",
@@ -93,8 +258,7 @@
 											"datasetParameters": {
 												"StagingDB": {},
 												"RelationDB": {},
-												"InsertRow": {},
-												"UpdateRow": {}
+												"InsertUpdateRecords": {}
 											}
 										},
 										"staging": {}
@@ -126,7 +290,7 @@
 											},
 											"FileName": {
 												"value": {
-													"value": "@pipeline().parameters.FileName",
+													"value": "@pipeline().parameters.OriginalBlobName",
 													"type": "Expression"
 												},
 												"type": "String"
@@ -150,6 +314,9 @@
 						"type": "string"
 					},
 					"Etl_Utc_Tag": {
+						"type": "string"
+					},
+					"OriginalBlobName": {
 						"type": "string"
 					}
 				},
@@ -1949,7 +2116,7 @@
 														"datasetParameters": {
 															"StagingDB": {},
 															"RelationDB": {},
-															"InsertUpdateRow": {}
+															"InsertRow": {}
 														}
 													},
 													"staging": {}
@@ -2243,7 +2410,9 @@
 				},
 				"annotations": []
 			},
-			"dependsOn": []
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/dataflows/LoadTxtToDBstaging_coa_trx_category_df')]"
+			]
 		},
 		{
 			"name": "[concat(parameters('factoryName'), '/ProcessSourceBlob_coa_trx_company_pl')]",
@@ -2599,7 +2768,6 @@
 														"parameters": {},
 														"datasetParameters": {
 															"LoadFromScrubbedToStagingDB": {},
-															"GetFundMaster": {},
 															"StagingDB": {}
 														}
 													},
@@ -2646,7 +2814,7 @@
 														"datasetParameters": {
 															"StagingDB": {},
 															"RelationDB": {},
-															"InsertUpdateRow": {}
+															"InsertRow": {}
 														}
 													},
 													"staging": {}
@@ -2940,7 +3108,9 @@
 				},
 				"annotations": []
 			},
-			"dependsOn": []
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/dataflows/LoadTxtToDBstaging_coa_trx_company_df')]"
+			]
 		},
 		{
 			"name": "[concat(parameters('factoryName'), '/ProcessSourceBlob_coa_trx_simple_pl')]",
@@ -3342,7 +3512,7 @@
 														"datasetParameters": {
 															"StagingDB": {},
 															"RelationDB": {},
-															"InsertUpdateRow": {}
+															"InsertRow": {}
 														}
 													},
 													"staging": {}
@@ -3636,7 +3806,9 @@
 				},
 				"annotations": []
 			},
-			"dependsOn": []
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/dataflows/LoadTxtToDBstaging_coa_trx_simple_df')]"
+			]
 		},
 		{
 			"name": "[concat(parameters('factoryName'), '/ProcessSourceBlob_fund_pl')]",
@@ -4332,7 +4504,9 @@
 				},
 				"annotations": []
 			},
-			"dependsOn": []
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/dataflows/LoadTxtToDBstaging_fund_df')]"
+			]
 		},
 		{
 			"name": "[concat(parameters('factoryName'), '/MasterPipeline_pl')]",
@@ -4991,7 +5165,7 @@
 												"type": "Copy",
 												"dependsOn": [
 													{
-														"activity": "RunProcessSourceBlobAdjustment_spl",
+														"activity": "LoadTxtAdjustmentLoadReadyToDBinsert_coa_trx_df",
 														"dependencyConditions": [
 															"Succeeded"
 														]
@@ -5103,6 +5277,18 @@
 													},
 													{
 														"activity": "RunProcessSourceBlobAdjustment_spl",
+														"dependencyConditions": [
+															"Failed"
+														]
+													},
+													{
+														"activity": "LoadTxtAdjustmentLoadReadyToDBupdate_coa_trx_df",
+														"dependencyConditions": [
+															"Failed"
+														]
+													},
+													{
+														"activity": "LoadTxtAdjustmentLoadReadyToDBinsert_coa_trx_df",
 														"dependencyConditions": [
 															"Failed"
 														]
@@ -5293,8 +5479,76 @@
 														"Etl_Utc_Tag": {
 															"value": "@variables('Etl_Utc_Tag')",
 															"type": "Expression"
+														},
+														"OriginalBlobName": {
+															"value": "@item().ORIGINAL_BLOB_NAME",
+															"type": "Expression"
 														}
 													}
+												}
+											},
+											{
+												"name": "LoadTxtAdjustmentLoadReadyToDBupdate_coa_trx_df",
+												"type": "ExecuteDataFlow",
+												"dependsOn": [
+													{
+														"activity": "RunProcessSourceBlobAdjustment_spl",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"dataflow": {
+														"referenceName": "LoadTxtAdjustmentLoadReadyToDBupdate_coa_trx_df",
+														"type": "DataFlowReference",
+														"parameters": {},
+														"datasetParameters": {
+															"LoadReadyFile": {},
+															"DatabaseTarget": {}
+														}
+													},
+													"staging": {}
+												}
+											},
+											{
+												"name": "LoadTxtAdjustmentLoadReadyToDBinsert_coa_trx_df",
+												"type": "ExecuteDataFlow",
+												"dependsOn": [
+													{
+														"activity": "LoadTxtAdjustmentLoadReadyToDBupdate_coa_trx_df",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"dataflow": {
+														"referenceName": "LoadTxtAdjustmentLoadReadyToDBinsert_coa_trx_df",
+														"type": "DataFlowReference",
+														"parameters": {},
+														"datasetParameters": {
+															"LoadReadyFile": {},
+															"DatabaseTarget": {}
+														}
+													},
+													"staging": {}
 												}
 											}
 										]
