@@ -5,7 +5,14 @@
 			{
 				"name": "RunPipelineFund",
 				"type": "ExecutePipeline",
-				"dependsOn": [],
+				"dependsOn": [
+					{
+						"activity": "MasterUTCtag",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
 				"userProperties": [],
 				"typeProperties": {
 					"pipeline": {
@@ -240,7 +247,7 @@
 				"type": "SetVariable",
 				"dependsOn": [
 					{
-						"activity": "RunPipelineCoaTrxCat",
+						"activity": "RunPipelineBudget",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -329,6 +336,12 @@
 						"dependencyConditions": [
 							"Succeeded"
 						]
+					},
+					{
+						"activity": "RunPipelineBudget",
+						"dependencyConditions": [
+							"Failed"
+						]
 					}
 				],
 				"policy": {
@@ -354,12 +367,49 @@
 						"messageErrorDuringProcess": ""
 					}
 				}
+			},
+			{
+				"name": "MasterUTCtag",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "MasterUTCtag",
+					"value": {
+						"value": "@utcnow()",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "RunPipelineBudget",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "RunPipelineCoaTrxCat",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "ProcessSourceBlob_budget_pl",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true
+				}
 			}
 		],
 		"variables": {
 			"PipelineName": {
 				"type": "String",
 				"defaultValue": "MasterPipeline_pl"
+			},
+			"MasterUTCtag": {
+				"type": "String",
+				"defaultValue": "2019-11-07"
 			}
 		},
 		"annotations": []
