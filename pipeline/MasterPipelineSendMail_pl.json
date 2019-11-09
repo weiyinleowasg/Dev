@@ -71,9 +71,7 @@
 									"messageProcessed": "Pipelines completed successfully",
 									"messageNotProcessed": "",
 									"messageErrorDuringProcess": ""
-								},
-								"linkedServices": [],
-								"datasets": []
+								}
 							}
 						}
 					],
@@ -109,9 +107,9 @@
 							"type": "WebActivity",
 							"dependsOn": [
 								{
-									"activity": "GetErrorFiles",
+									"activity": "UpdateMasterRunLog_OverallFailed",
 									"dependencyConditions": [
-										"Succeeded"
+										"Completed"
 									]
 								}
 							],
@@ -139,6 +137,53 @@
 								},
 								"linkedServices": [],
 								"datasets": []
+							}
+						},
+						{
+							"name": "UpdateMasterRunLog_OverallFailed",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "GetErrorFiles",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[log].[UpdateMasterRunLog]",
+								"storedProcedureParameters": {
+									"MasterUtcTag": {
+										"value": {
+											"value": "@pipeline().parameters.Master_Utc_Tag",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"RunMessage": {
+										"value": {
+											"value": "@activity('CheckFilesProcessingStatus').output",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"RunStatus": {
+										"value": "FAILED",
+										"type": "String"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "SQLdbConnection",
+								"type": "LinkedServiceReference"
 							}
 						}
 					]
