@@ -267,7 +267,7 @@
 										"type": "Copy",
 										"dependsOn": [
 											{
-												"activity": "LoadTxtAdjustmentLoadReadyToDBinsert_coa_trx_df",
+												"activity": "LoadTxtAdjustmentLoadReadyToDBinsert_adjustment_df",
 												"dependencyConditions": [
 													"Succeeded"
 												]
@@ -346,41 +346,11 @@
 										}
 									},
 									{
-										"name": "UpdateSourceRegisterFailedAbort",
+										"name": "UpdateSourceRegisterFailedAbort_CopyToArchive",
 										"type": "SqlServerStoredProcedure",
 										"dependsOn": [
 											{
-												"activity": "LoadTxtToDBstaging_ds",
-												"dependencyConditions": [
-													"Failed"
-												]
-											},
-											{
-												"activity": "CopyScrubbedToDataLake",
-												"dependencyConditions": [
-													"Failed"
-												]
-											},
-											{
 												"activity": "CopyOriginalToArchive",
-												"dependencyConditions": [
-													"Failed"
-												]
-											},
-											{
-												"activity": "RunProcessSourceBlobAdjustment_spl",
-												"dependencyConditions": [
-													"Failed"
-												]
-											},
-											{
-												"activity": "LoadTxtAdjustmentLoadReadyToDBupdate_coa_trx_df",
-												"dependencyConditions": [
-													"Failed"
-												]
-											},
-											{
-												"activity": "LoadTxtAdjustmentLoadReadyToDBinsert_coa_trx_df",
 												"dependencyConditions": [
 													"Failed"
 												]
@@ -576,7 +546,7 @@
 										}
 									},
 									{
-										"name": "LoadTxtAdjustmentLoadReadyToDBupdate_coa_trx_df",
+										"name": "LoadTxtAdjustmentLoadReadyToDBupdate_adjustment_df",
 										"type": "ExecuteDataFlow",
 										"dependsOn": [
 											{
@@ -602,11 +572,11 @@
 										}
 									},
 									{
-										"name": "LoadTxtAdjustmentLoadReadyToDBinsert_coa_trx_df",
+										"name": "LoadTxtAdjustmentLoadReadyToDBinsert_adjustment_df",
 										"type": "ExecuteDataFlow",
 										"dependsOn": [
 											{
-												"activity": "LoadTxtAdjustmentLoadReadyToDBupdate_coa_trx_df",
+												"activity": "LoadTxtAdjustmentLoadReadyToDBupdate_adjustment_df",
 												"dependencyConditions": [
 													"Succeeded"
 												]
@@ -625,6 +595,221 @@
 												"referenceName": "LoadTxtAdjustmentLoadReadyToDBinsert_coa_trx_df",
 												"type": "DataFlowReference"
 											}
+										}
+									},
+									{
+										"name": "UpdateSourceRegisterFailedAbort_Staging",
+										"type": "SqlServerStoredProcedure",
+										"dependsOn": [
+											{
+												"activity": "LoadTxtToDBstaging_ds",
+												"dependencyConditions": [
+													"Failed"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "7.00:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"storedProcedureName": "[log].[UpdateSourceRegisterFailedAbort]",
+											"storedProcedureParameters": {
+												"EtlUtcTag": {
+													"value": {
+														"value": "@variables('Etl_Utc_Tag')",
+														"type": "Expression"
+													},
+													"type": "String"
+												},
+												"FileName": {
+													"value": {
+														"value": "@{item().ORIGINAL_BLOB_NAME}",
+														"type": "Expression"
+													},
+													"type": "String"
+												}
+											}
+										},
+										"linkedServiceName": {
+											"referenceName": "SQLdbConnection",
+											"type": "LinkedServiceReference"
+										}
+									},
+									{
+										"name": "UpdateSourceRegisterFailedAbort_Type2Process",
+										"type": "SqlServerStoredProcedure",
+										"dependsOn": [
+											{
+												"activity": "RunProcessSourceBlobAdjustment_spl",
+												"dependencyConditions": [
+													"Failed"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "7.00:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"storedProcedureName": "[log].[UpdateSourceRegisterFailedAbort]",
+											"storedProcedureParameters": {
+												"EtlUtcTag": {
+													"value": {
+														"value": "@variables('Etl_Utc_Tag')",
+														"type": "Expression"
+													},
+													"type": "String"
+												},
+												"FileName": {
+													"value": {
+														"value": "@{item().ORIGINAL_BLOB_NAME}",
+														"type": "Expression"
+													},
+													"type": "String"
+												}
+											}
+										},
+										"linkedServiceName": {
+											"referenceName": "SQLdbConnection",
+											"type": "LinkedServiceReference"
+										}
+									},
+									{
+										"name": "UpdateSourceRegisterFailedAbort_LoadDWexpire",
+										"type": "SqlServerStoredProcedure",
+										"dependsOn": [
+											{
+												"activity": "LoadTxtAdjustmentLoadReadyToDBupdate_adjustment_df",
+												"dependencyConditions": [
+													"Failed"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "7.00:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"storedProcedureName": "[log].[UpdateSourceRegisterFailedAbort]",
+											"storedProcedureParameters": {
+												"EtlUtcTag": {
+													"value": {
+														"value": "@variables('Etl_Utc_Tag')",
+														"type": "Expression"
+													},
+													"type": "String"
+												},
+												"FileName": {
+													"value": {
+														"value": "@{item().ORIGINAL_BLOB_NAME}",
+														"type": "Expression"
+													},
+													"type": "String"
+												}
+											}
+										},
+										"linkedServiceName": {
+											"referenceName": "SQLdbConnection",
+											"type": "LinkedServiceReference"
+										}
+									},
+									{
+										"name": "UpdateSourceRegisterFailedAbort_LoadDWinsert",
+										"type": "SqlServerStoredProcedure",
+										"dependsOn": [
+											{
+												"activity": "LoadTxtAdjustmentLoadReadyToDBinsert_adjustment_df",
+												"dependencyConditions": [
+													"Failed"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "7.00:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"storedProcedureName": "[log].[UpdateSourceRegisterFailedAbort]",
+											"storedProcedureParameters": {
+												"EtlUtcTag": {
+													"value": {
+														"value": "@variables('Etl_Utc_Tag')",
+														"type": "Expression"
+													},
+													"type": "String"
+												},
+												"FileName": {
+													"value": {
+														"value": "@{item().ORIGINAL_BLOB_NAME}",
+														"type": "Expression"
+													},
+													"type": "String"
+												}
+											}
+										},
+										"linkedServiceName": {
+											"referenceName": "SQLdbConnection",
+											"type": "LinkedServiceReference"
+										}
+									},
+									{
+										"name": "UpdateSourceRegisterFailedAbort_CopyToDL",
+										"type": "SqlServerStoredProcedure",
+										"dependsOn": [
+											{
+												"activity": "CopyScrubbedToDataLake",
+												"dependencyConditions": [
+													"Failed"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "7.00:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"storedProcedureName": "[log].[UpdateSourceRegisterFailedAbort]",
+											"storedProcedureParameters": {
+												"EtlUtcTag": {
+													"value": {
+														"value": "@variables('Etl_Utc_Tag')",
+														"type": "Expression"
+													},
+													"type": "String"
+												},
+												"FileName": {
+													"value": {
+														"value": "@{item().ORIGINAL_BLOB_NAME}",
+														"type": "Expression"
+													},
+													"type": "String"
+												}
+											}
+										},
+										"linkedServiceName": {
+											"referenceName": "SQLdbConnection",
+											"type": "LinkedServiceReference"
 										}
 									}
 								]
