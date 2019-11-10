@@ -1,0 +1,32 @@
+{
+	"name": "LoadTxtToDBstaging_asset_df1",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "DelimitedText_sourcelandingscrubbed_asset_ds1",
+						"type": "DatasetReference"
+					},
+					"name": "LoadFromScrubbedToStagingDB"
+				}
+			],
+			"sinks": [
+				{
+					"dataset": {
+						"referenceName": "SQLstagingasset_ds1",
+						"type": "DatasetReference"
+					},
+					"name": "StagingDB"
+				}
+			],
+			"transformations": [
+				{
+					"name": "SelectSourceColumns"
+				}
+			],
+			"script": "\n\nsource(output(\n\t\tAsset_ID as string,\n\t\tAsset_name as string,\n\t\tCurrency as string,\n\t\tFund_ID as string,\n\t\tAsset_alloc_percentage as decimal(10,0),\n\t\tAsset_country as string,\n\t\tFund_Region as string,\n\t\tFund_State as string,\n\t\tProp_Mgr_Name as string,\n\t\tProp_Mgr_Company as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tpartitionBy('hash', 1)) ~> LoadFromScrubbedToStagingDB\nLoadFromScrubbedToStagingDB select(mapColumn(\n\t\tAsset_ID,\n\t\tAsset_Name = Asset_name,\n\t\tAsset_Curency = Currency,\n\t\tFund_ID,\n\t\tAsset_Alloc_Per = Asset_alloc_percentage,\n\t\tAsset_country,\n\t\tFund_Region,\n\t\tFund_State,\n\t\tProp_Mgr_Name,\n\t\tProp_Mgr_Company\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectSourceColumns\nSelectSourceColumns sink(input(\n\t\tAsset_ID as string,\n\t\tAsset_Name as string,\n\t\tAsset_Curency as string,\n\t\tFund_ID as string,\n\t\tAsset_Alloc_Per as decimal(18,2),\n\t\tAsset_country as string,\n\t\tFund_Region as string,\n\t\tFund_State as string,\n\t\tProp_Mgr_Name as string,\n\t\tProp_Mgr_Company as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tAsset_Name,\n\t\tAsset_Curency,\n\t\tFund_ID,\n\t\tAsset_Alloc_Per,\n\t\tAsset_country,\n\t\tFund_Region,\n\t\tFund_State,\n\t\tProp_Mgr_Name,\n\t\tProp_Mgr_Company\n\t),\n\tpartitionBy('hash', 1)) ~> StagingDB"
+		}
+	}
+}
