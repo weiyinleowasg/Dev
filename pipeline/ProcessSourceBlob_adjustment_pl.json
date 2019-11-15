@@ -925,7 +925,7 @@
 				"typeProperties": {
 					"source": {
 						"type": "AzureSqlSource",
-						"sqlReaderQuery": "SELECT ORIGINAL_BLOB_NAME, RUNNING_STATE FROM (\nSELECT \nORIGINAL_BLOB_NAME,\nCOUNT(*) AS RUNNING_STATE\nFROM [log].[SOURCE_REGISTER_TABLE]\nWHERE [ETL_RUN_STATUS] = 'RUNNING'\nAND [ORIGINAL_BLOB_NAME] LIKE 'ADJ_MNL_%'\nGROUP BY ORIGINAL_BLOB_NAME\nUNION\nSELECT '' AS ORIGINAL_BLOB_NAME, 0 AS RUNNING_STATE\n)x\nORDER BY RUNNING_STATE DESC;"
+						"sqlReaderQuery": "SELECT ORIGINAL_BLOB_NAME, RUNNING_STATE FROM (\nSELECT \nORIGINAL_BLOB_NAME,\nCOUNT(*) AS RUNNING_STATE\nFROM [log].[SOURCE_REGISTER_TABLE]\nWHERE [ETL_RUN_STATUS] = 'RUNNING'\nAND [ORIGINAL_BLOB_NAME] LIKE 'ADJ_MNL_%'\nGROUP BY ORIGINAL_BLOB_NAME\nUNION\nSELECT '' AS ORIGINAL_BLOB_NAME, 0 AS RUNNING_STATE\nUNION\nSELECT \nORIGINAL_BLOB_NAME,\nCOUNT(*) AS RUNNING_STATE\nFROM (\n      SELECT 'ADJ_MNL' AS ORIGINAL_BLOB_NAME FROM [log].[SOURCE_REGISTER_TABLE]\n      WHERE [ETL_IS_PROCESSED] = 'N'\n      AND [ETL_RUN_STATUS] IS NULL\n      AND [ORIGINAL_BLOB_NAME] LIKE 'ADJ_MNL_%'\n\t  )x\nGROUP BY ORIGINAL_BLOB_NAME HAVING COUNT(*) > 1\n)x\nORDER BY RUNNING_STATE DESC;"
 					},
 					"dataset": {
 						"referenceName": "SQLsourceRegisterTable_ds",
@@ -1016,9 +1016,7 @@
 									"messageProcessed": "@activity('CheckIfPipelineAlreadyRunning').output.firstRow.ORIGINAL_BLOB_NAME",
 									"messageNotProcessed": "",
 									"messageErrorDuringProcess": ""
-								},
-								"linkedServices": [],
-								"datasets": []
+								}
 							}
 						}
 					]
