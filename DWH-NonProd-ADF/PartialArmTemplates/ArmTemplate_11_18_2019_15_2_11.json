@@ -1,0 +1,94 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory name",
+			"defaultValue": "DWH-NonProd-ADF"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadStagingDBtoRelationDB_budget_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "SQLstagingbudget_ds",
+								"type": "DatasetReference"
+							},
+							"name": "StagingDB"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLrelationbudget_ds",
+								"type": "DatasetReference"
+							},
+							"name": "RelationDB"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "DelimitedText_budget_loadready_ds",
+								"type": "DatasetReference"
+							},
+							"name": "InsertUpdateRecords"
+						}
+					],
+					"transformations": [
+						{
+							"name": "StatgingAddChecksum"
+						},
+						{
+							"name": "LookupRelationalStream"
+						},
+						{
+							"name": "RelationalAddChecksum"
+						},
+						{
+							"name": "ConditionalSplitNewOrExpire"
+						},
+						{
+							"name": "RelationRenameColumns"
+						},
+						{
+							"name": "SelectNewStagingRow"
+						},
+						{
+							"name": "AddAuditColumns"
+						},
+						{
+							"name": "UpdateAddAuditAttributes"
+						},
+						{
+							"name": "AddExpiredAttributes"
+						},
+						{
+							"name": "UpdateSelectForInsert"
+						},
+						{
+							"name": "UnionForDB"
+						},
+						{
+							"name": "UpdateSelectForExpire"
+						},
+						{
+							"name": "SelectOutput"
+						}
+					],
+					"script": "\nparameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tVersion_Name as string,\n\t\tDebit_Credit as string,\n\t\tBudget_Date as timestamp,\n\t\tBudget_Desc as string,\n\t\tBudget_value as decimal(18,2),\n\t\tBudget_Type as string,\n\t\tvalidation_error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> StagingDB\nsource(output(\n\t\tVersion_Name as string,\n\t\tBudget_ID as long,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tBudget_Type as string,\n\t\tBudget_Date as timestamp,\n\t\tBudget_Desc as string,\n\t\tBudget_value as decimal(18,2),\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [Version_Name]\\n      ,[Budget_ID]\\n      ,[Fund_ID]\\n      ,[Asset_ID]\\n      ,[GL_Code]\\n      ,[Cash_Flow_Code]\\n      ,[Debit_Credit]\\n      ,[Budget_Type]\\n      ,[Budget_Date]\\n      ,[Budget_Desc]\\n      ,[Budget_value]\\n      ,[Update_datetime]\\n      ,[record_deleted_flag]\\n      ,[process_name]\\n  FROM [relational].[COA_Budgets]\\n  WHERE [record_deleted_flag] = 0',\n\tformat: 'query') ~> RelationDB\nStagingDB derive(StagingChecksum = sha2(256, Fund_ID,Asset_ID,GL_Code,Budget_Date,Budget_Desc,Budget_Type,Version_Name)) ~> StatgingAddChecksum\nStatgingAddChecksum, RelationRenameColumns lookup(StagingChecksum == Relation_RelationalChecksum,\n\tbroadcast: 'none')~> LookupRelationalStream\nRelationDB derive(RelationalChecksum = sha2(256, Fund_ID,Asset_ID,GL_Code,Budget_Date,Budget_Desc,Budget_Type,Version_Name)) ~> RelationalAddChecksum\nLookupRelationalStream split(isNull(Relation_RelationalChecksum),\n\tDebit_Credit!=Relation_Debit_Credit || Budget_value!=Relation_Budget_value || Cash_Flow_Code!=Relation_Cash_Flow_Code,\n\tdisjoint: false) ~> ConditionalSplitNewOrExpire@(StagingNewRow, StagingChangedRow, IgnoreNoChange)\nRelationalAddChecksum select(mapColumn(\n\t\tRelation_Version_Name = Version_Name,\n\t\tRelation_Budget_ID = Budget_ID,\n\t\tRelation_Fund_ID = Fund_ID,\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_GL_Code = GL_Code,\n\t\tRelation_Cash_Flow_Code = Cash_Flow_Code,\n\t\tRelation_Debit_Credit = Debit_Credit,\n\t\tRelation_Budget_Type = Budget_Type,\n\t\tRelation_Budget_Date = Budget_Date,\n\t\tRelation_Budget_Desc = Budget_Desc,\n\t\tRelation_Budget_value = Budget_value,\n\t\tRelation_Update_datetime = Update_datetime,\n\t\tRelation_record_deleted_flag = record_deleted_flag,\n\t\tRelation_process_name = process_name,\n\t\tRelation_RelationalChecksum = RelationalChecksum\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> RelationRenameColumns\nConditionalSplitNewOrExpire@StagingNewRow select(mapColumn(\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tBudget_Date,\n\t\tBudget_Desc,\n\t\tBudget_value,\n\t\tBudget_Type,\n\t\tVersion_Name\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectNewStagingRow\nSelectNewStagingRow derive(Update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('-',$ProcessName,$FileName),\n\t\tinsert_update_flag = toString('I'),\n\t\tBudget_ID = toLong(null())) ~> AddAuditColumns\nConditionalSplitNewOrExpire@StagingChangedRow derive(Update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('-', $ProcessName, $FileName),\n\t\tinsert_update_flag = toString('I'),\n\t\tBudget_ID = toLong(null())) ~> UpdateAddAuditAttributes\nConditionalSplitNewOrExpire@StagingChangedRow derive(record_deleted_flag = toInteger(1),\n\t\tinsert_update_flag = toString('U')) ~> AddExpiredAttributes\nUpdateAddAuditAttributes select(mapColumn(\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tBudget_Date,\n\t\tBudget_Desc,\n\t\tBudget_value,\n\t\tBudget_Type,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name,\n\t\tinsert_update_flag,\n\t\tBudget_ID,\n\t\tVersion_Name\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> UpdateSelectForInsert\nAddAuditColumns, UpdateSelectForInsert, UpdateSelectForExpire union(byName: true)~> UnionForDB\nAddExpiredAttributes select(mapColumn(\n\t\tBudget_ID = Relation_Budget_ID,\n\t\tFund_ID = Relation_Fund_ID,\n\t\tAsset_ID = Relation_Asset_ID,\n\t\tGL_Code = Relation_GL_Code,\n\t\tCash_Flow_Code = Relation_Cash_Flow_Code,\n\t\tDebit_Credit = Relation_Debit_Credit,\n\t\tBudget_Type = Relation_Budget_Type,\n\t\tBudget_Date = Relation_Budget_Date,\n\t\tBudget_Desc = Relation_Budget_Desc,\n\t\tBudget_value = Relation_Budget_value,\n\t\tprocess_name = Relation_process_name,\n\t\tUpdate_datetime = Relation_Update_datetime,\n\t\trecord_deleted_flag,\n\t\tinsert_update_flag,\n\t\tVersion_Name = Relation_Version_Name\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> UpdateSelectForExpire\nUnionForDB select(mapColumn(\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tBudget_Date,\n\t\tBudget_Desc,\n\t\tBudget_value,\n\t\tBudget_Type,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name,\n\t\tinsert_update_flag,\n\t\tBudget_ID,\n\t\tVersion_Name\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectOutput\nSelectOutput sink(input(\n\t\tVersion_Name as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tBudget_Date as string,\n\t\tBudget_Desc as string,\n\t\tBudget_value as string,\n\t\tBudget_Type as string,\n\t\tUpdate_datetime as string,\n\t\trecord_deleted_flag as string,\n\t\tprocess_name as string,\n\t\tinsert_update_flag as string,\n\t\tBudget_ID as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tpartitionFileNames:['BudgetLoadReadyFile.txt'],\n\tmapColumn(\n\t\tVersion_Name,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tBudget_Date,\n\t\tBudget_Desc,\n\t\tBudget_value,\n\t\tBudget_Type,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name,\n\t\tinsert_update_flag,\n\t\tBudget_ID\n\t),\n\tpartitionBy('hash', 1)) ~> InsertUpdateRecords"
+				}
+			},
+			"dependsOn": []
+		}
+	]
+}
