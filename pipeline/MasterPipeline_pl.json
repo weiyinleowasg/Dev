@@ -395,7 +395,7 @@
 				"type": "ExecutePipeline",
 				"dependsOn": [
 					{
-						"activity": "RunPipelineGLALLOCATE",
+						"activity": "RunPipelineFCTREFASSET",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -820,6 +820,81 @@
 				"dependsOn": [
 					{
 						"activity": "SetVarGLALLOCATE",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"url": "https://prod-24.australiaeast.logic.azure.com:443/workflows/e28a90add06c495bbc9362b5109fb4c0/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=j2wEDAKOpnQ83iKkUa84aeGE6Nfb5604lp-z1-W4ek0",
+					"method": "POST",
+					"headers": {
+						"Content-Type": "application/json"
+					},
+					"body": {
+						"dataFactoryName": "@pipeline().DataFactory",
+						"pipelineName": "@pipeline().Pipeline",
+						"messageHeader": "!!!MASTER PIPELINE FAILED!!!",
+						"messageProcessed": "@variables('PipelineName')",
+						"messageNotProcessed": "",
+						"messageErrorDuringProcess": ""
+					}
+				}
+			},
+			{
+				"name": "RunPipelineFCTREFASSET",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "RunPipelineGLALLOCATE",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "ProcessSourceBlob_fctrefasset_pl",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true
+				}
+			},
+			{
+				"name": "SetVarFCTREFASSET",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "RunPipelineFCTREFASSET",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "PipelineName",
+					"value": {
+						"value": "@activity('RunPipelineFCTREFASSET').output",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "SendFailMail_FCTREFASSET",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "SetVarFCTREFASSET",
 						"dependencyConditions": [
 							"Completed"
 						]
