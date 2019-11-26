@@ -267,7 +267,7 @@
 										"type": "Copy",
 										"dependsOn": [
 											{
-												"activity": "LoadStagingDBtoRelationDB_df",
+												"activity": "UpdateSourceRegisterRun",
 												"dependencyConditions": [
 													"Succeeded"
 												]
@@ -308,82 +308,16 @@
 										},
 										"inputs": [
 											{
-												"referenceName": "DelimitedText_sourcelandingscrubbed_glproduct_ds1",
+												"referenceName": "DelimitedText_sourcelandingscrubbed_ds",
 												"type": "DatasetReference"
 											}
 										],
 										"outputs": [
 											{
-												"referenceName": "DelimitedText_datalake_financial_ds1",
+												"referenceName": "DelimitedText_datalake_financial_ds",
 												"type": "DatasetReference"
 											}
 										]
-									},
-									{
-										"name": "LoadTxtToDBstaging_ds",
-										"type": "ExecuteDataFlow",
-										"dependsOn": [
-											{
-												"activity": "UpdateSourceRegisterRun",
-												"dependencyConditions": [
-													"Succeeded"
-												]
-											}
-										],
-										"policy": {
-											"timeout": "7.00:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
-											"secureOutput": false,
-											"secureInput": false
-										},
-										"userProperties": [],
-										"typeProperties": {
-											"dataflow": {
-												"referenceName": "LoadTxtToDBstaging_glproduct_df1",
-												"type": "DataFlowReference"
-											}
-										}
-									},
-									{
-										"name": "LoadStagingDBtoRelationDB_df",
-										"type": "ExecuteDataFlow",
-										"dependsOn": [
-											{
-												"activity": "LoadTxtToDBstaging_ds",
-												"dependencyConditions": [
-													"Succeeded"
-												]
-											}
-										],
-										"policy": {
-											"timeout": "7.00:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
-											"secureOutput": false,
-											"secureInput": false
-										},
-										"userProperties": [],
-										"typeProperties": {
-											"dataflow": {
-												"referenceName": "LoadStagingDBtoRelationDB_glproduct_df1",
-												"type": "DataFlowReference",
-												"parameters": {
-													"ProcessName": {
-														"value": "'@{pipeline().Pipeline}'",
-														"type": "Expression"
-													},
-													"FileName": {
-														"value": "'@{item().DATALAKE_FULL_PATHFILE}'",
-														"type": "Expression"
-													},
-													"Etl_Utc_Tag": {
-														"value": "'@{variables('Etl_Utc_Tag')}'",
-														"type": "Expression"
-													}
-												}
-											}
-										}
 									},
 									{
 										"name": "UpdateSourceRegisterFailedAbort_CopyToArchive",
@@ -474,13 +408,13 @@
 										},
 										"inputs": [
 											{
-												"referenceName": "DelimitedText_sourcelandingraw_ds1",
+												"referenceName": "DelimitedText_sourcelandingraw_ds",
 												"type": "DatasetReference"
 											}
 										],
 										"outputs": [
 											{
-												"referenceName": "DelimitedText_sourcearchive_ds1",
+												"referenceName": "DelimitedText_sourcearchive_ds",
 												"type": "DatasetReference"
 											}
 										]
@@ -506,7 +440,7 @@
 										"userProperties": [],
 										"typeProperties": {
 											"dataset": {
-												"referenceName": "DelimitedText_sourcelandingraw_ds1",
+												"referenceName": "DelimitedText_sourcelandingraw_ds",
 												"type": "DatasetReference"
 											},
 											"enableLogging": false,
@@ -537,7 +471,7 @@
 										"userProperties": [],
 										"typeProperties": {
 											"dataset": {
-												"referenceName": "DelimitedText_sourcelandingscrubbed_glproduct_ds1",
+												"referenceName": "DelimitedText_sourcelandingscrubbed_ds",
 												"type": "DatasetReference"
 											},
 											"enableLogging": false,
@@ -545,92 +479,6 @@
 												"type": "AzureBlobStorageReadSettings",
 												"recursive": false
 											}
-										}
-									},
-									{
-										"name": "UpdateSourceRegisterFailedAbort_Staging",
-										"type": "SqlServerStoredProcedure",
-										"dependsOn": [
-											{
-												"activity": "LoadTxtToDBstaging_ds",
-												"dependencyConditions": [
-													"Failed"
-												]
-											}
-										],
-										"policy": {
-											"timeout": "7.00:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
-											"secureOutput": false,
-											"secureInput": false
-										},
-										"userProperties": [],
-										"typeProperties": {
-											"storedProcedureName": "[log].[UpdateSourceRegisterFailedAbort]",
-											"storedProcedureParameters": {
-												"EtlUtcTag": {
-													"value": {
-														"value": "@variables('Etl_Utc_Tag')",
-														"type": "Expression"
-													},
-													"type": "String"
-												},
-												"FileName": {
-													"value": {
-														"value": "@{item().ORIGINAL_BLOB_NAME}",
-														"type": "Expression"
-													},
-													"type": "String"
-												}
-											}
-										},
-										"linkedServiceName": {
-											"referenceName": "SQLdbConnection",
-											"type": "LinkedServiceReference"
-										}
-									},
-									{
-										"name": "UpdateSourceRegisterFailedAbort_LoadDW",
-										"type": "SqlServerStoredProcedure",
-										"dependsOn": [
-											{
-												"activity": "LoadStagingDBtoRelationDB_df",
-												"dependencyConditions": [
-													"Failed"
-												]
-											}
-										],
-										"policy": {
-											"timeout": "7.00:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
-											"secureOutput": false,
-											"secureInput": false
-										},
-										"userProperties": [],
-										"typeProperties": {
-											"storedProcedureName": "[log].[UpdateSourceRegisterFailedAbort]",
-											"storedProcedureParameters": {
-												"EtlUtcTag": {
-													"value": {
-														"value": "@variables('Etl_Utc_Tag')",
-														"type": "Expression"
-													},
-													"type": "String"
-												},
-												"FileName": {
-													"value": {
-														"value": "@{item().ORIGINAL_BLOB_NAME}",
-														"type": "Expression"
-													},
-													"type": "String"
-												}
-											}
-										},
-										"linkedServiceName": {
-											"referenceName": "SQLdbConnection",
-											"type": "LinkedServiceReference"
 										}
 									},
 									{
