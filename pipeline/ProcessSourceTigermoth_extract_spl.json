@@ -53,7 +53,7 @@
 					"isSequential": true,
 					"activities": [
 						{
-							"name": "ExtractFromSPtoBlob",
+							"name": "ExtractFromSPtoBlob_sp_FSOPConsolidated",
 							"type": "Copy",
 							"dependsOn": [],
 							"policy": {
@@ -141,6 +141,96 @@
 						"value": "@utcnow()",
 						"type": "Expression"
 					}
+				}
+			},
+			{
+				"name": "ExtractFromSP_copy1",
+				"type": "ForEach",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('GetUnprocessedForecastAsset').output.value",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "ExtractFromSPtoBlob_copy1",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "SqlServerSource",
+									"sqlReaderStoredProcedureName": {
+										"value": "@{item().sp_FSOPConsolidated}",
+										"type": "Expression"
+									},
+									"storedProcedureParameters": {
+										"AttributeID": {
+											"type": "Int16",
+											"value": {
+												"value": "@{item().Attribute_id}",
+												"type": "Expression"
+											}
+										},
+										"GroupID": {
+											"type": "Int16",
+											"value": {
+												"value": "@{item().Group_ID}",
+												"type": "Expression"
+											}
+										},
+										"OriginID": {
+											"type": "Int16",
+											"value": {
+												"value": "@{item().Origin_id}",
+												"type": "Expression"
+											}
+										}
+									}
+								},
+								"sink": {
+									"type": "DelimitedTextSink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings"
+									},
+									"formatSettings": {
+										"type": "DelimitedTextWriteSettings",
+										"quoteAllText": true,
+										"fileExtension": ".txt"
+									}
+								},
+								"enableStaging": false
+							},
+							"inputs": [
+								{
+									"referenceName": "Tigermoth_DB_jao_ds",
+									"type": "DatasetReference",
+									"parameters": {
+										"dbname": {
+											"value": "@{item().DatabaseName}",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "Tigermoth_spFSOPConsolidated_sourcelandingraw_ds",
+									"type": "DatasetReference"
+								}
+							]
+						}
+					]
 				}
 			}
 		],
