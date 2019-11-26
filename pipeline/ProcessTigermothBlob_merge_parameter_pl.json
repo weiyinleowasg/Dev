@@ -7,9 +7,9 @@
 				"type": "Lookup",
 				"dependsOn": [
 					{
-						"activity": "SetEtlUtcTag",
+						"activity": "DeleteMergedForecastParameterFIle",
 						"dependencyConditions": [
-							"Succeeded"
+							"Completed"
 						]
 					}
 				],
@@ -24,7 +24,7 @@
 				"typeProperties": {
 					"source": {
 						"type": "AzureSqlSource",
-						"sqlReaderQuery": "SELECT [ORIGINAL_BLOB_LANDING_CONTAINER],\n\t[ORIGINAL_BLOB_NAME],\n\t[ORIGINAL_BLOP_FULLPATH],\n\t[TARGET_BLOB_LANDING_CONTAINER],\n\t[TARGET_BLOB_NAME],\n\t[DATALAKE_CONTAINER],\n\t[DATALAKE_FILE_PATH],\n\t[ORIGINAL_BLOB_ARCHIVE_CONTAINER],\n\t[ORIGINAL_BLOB_ARCHIVE_FULLPATH],\n\tCONCAT(DATALAKE_CONTAINER,'/',DATALAKE_FILE_PATH,'/',TARGET_BLOB_NAME) AS DATALAKE_FULL_PATHFILE\nFROM [log].[SOURCE_REGISTER_TABLE]\nWHERE [ETL_IS_PROCESSED] = 'N'\nAND [ORIGINAL_BLOB_NAME] LIKE 'TGR % spEst %'\nORDER BY [ORIGINAL_BLOB_NAME];"
+						"sqlReaderQuery": "SELECT [ORIGINAL_BLOB_LANDING_CONTAINER],\n\t[ORIGINAL_BLOB_NAME],\n\t[ORIGINAL_BLOP_FULLPATH],\n\t[TARGET_BLOB_LANDING_CONTAINER],\n\t[TARGET_BLOB_NAME],\n\t[DATALAKE_CONTAINER],\n\t[DATALAKE_FILE_PATH],\n\t[ORIGINAL_BLOB_ARCHIVE_CONTAINER],\n\t[ORIGINAL_BLOB_ARCHIVE_FULLPATH],\n\tCONCAT(DATALAKE_CONTAINER,'/',DATALAKE_FILE_PATH,'/',TARGET_BLOB_NAME) AS DATALAKE_FULL_PATHFILE\nFROM [log].[SOURCE_REGISTER_TABLE]\nWHERE [ETL_IS_PROCESSED] = 'N'\nAND [ORIGINAL_BLOB_NAME] LIKE 'TGR % param %'\nORDER BY [ORIGINAL_BLOB_NAME];"
 					},
 					"dataset": {
 						"referenceName": "SQLsourceRegisterTable_ds",
@@ -263,7 +263,7 @@
 										}
 									},
 									{
-										"name": "CopyScrubbedToDataLake",
+										"name": "MergeScrubbedToPersistent",
 										"type": "Copy",
 										"dependsOn": [
 											{
@@ -296,7 +296,8 @@
 											"sink": {
 												"type": "DelimitedTextSink",
 												"storeSettings": {
-													"type": "AzureBlobStorageWriteSettings"
+													"type": "AzureBlobStorageWriteSettings",
+													"copyBehavior": "MergeFiles"
 												},
 												"formatSettings": {
 													"type": "DelimitedTextWriteSettings",
@@ -314,7 +315,7 @@
 										],
 										"outputs": [
 											{
-												"referenceName": "DelimitedText_datalake_financial_ds",
+												"referenceName": "Tigermoth_parameter_adf2persistentarea_ds",
 												"type": "DatasetReference"
 											}
 										]
@@ -367,7 +368,7 @@
 										"type": "Copy",
 										"dependsOn": [
 											{
-												"activity": "CopyScrubbedToDataLake",
+												"activity": "MergeScrubbedToPersistent",
 												"dependencyConditions": [
 													"Succeeded"
 												]
@@ -408,7 +409,7 @@
 										},
 										"inputs": [
 											{
-												"referenceName": "DelimitedText_sourcelandingraw_ds",
+												"referenceName": "DelimitedText_sourcelandingscrubbed_ds",
 												"type": "DatasetReference"
 											}
 										],
@@ -486,7 +487,7 @@
 										"type": "SqlServerStoredProcedure",
 										"dependsOn": [
 											{
-												"activity": "CopyScrubbedToDataLake",
+												"activity": "MergeScrubbedToPersistent",
 												"dependencyConditions": [
 													"Failed"
 												]
@@ -540,6 +541,37 @@
 					"value": {
 						"value": "@utcnow()",
 						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "DeleteMergedForecastParameterFIle",
+				"type": "Delete",
+				"dependsOn": [
+					{
+						"activity": "SetEtlUtcTag",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "Tigermoth_parameter_adf2persistentarea_ds",
+						"type": "DatasetReference"
+					},
+					"enableLogging": false,
+					"storeSettings": {
+						"type": "AzureBlobStorageReadSettings",
+						"recursive": false
 					}
 				}
 			}
