@@ -24,110 +24,13 @@
 				"typeProperties": {
 					"source": {
 						"type": "AzureSqlSource",
-						"sqlReaderQuery": "SELECT [Fund_ID]\n      ,[Asset_ID]\n      ,[DatabaseName]\n      ,[Group_ID]\n      ,[Attribute_id]\n      ,[Origin_id]\n      ,[Asset_Offset]\n      ,[Version_name]\n      ,[IsProcessed]\n\t  ,'sp_FSOPConsolidated' AS sp_FSOPConsolidated\n\t  ,'sp_FSOPEstate' AS sp_FSOPEstate\n\t  ,'sp_FSOPOther' AS sp_FSOPOther\n      ,CONCAT('TGR ', Fund_ID, ' ', Asset_ID, ' ', Version_name, ' spCon ', FORMAT(START_DATETIME,'yyyyMMdd'),'.csv') AS TargetFileName_spFSOPConsolidated\n      ,CONCAT('TGR ', Fund_ID, ' ', Asset_ID, ' ', Version_name, ' spEst ', FORMAT(START_DATETIME,'yyyyMMdd'),'.csv') AS TargetFileName_spFSOPEstate\n      ,CONCAT('TGR ', Fund_ID, ' ', Asset_ID, ' ', Version_name, ' spOth ', FORMAT(START_DATETIME,'yyyyMMdd'),'.csv') AS TargetFileName_spFSOPOther\n      ,CONCAT('TGR ', Fund_ID, ' ', Asset_ID, ' ', Version_name, ' param ', FORMAT(START_DATETIME,'yyyyMMdd'),'.csv') AS TargetFileName_param\nFROM [relational].[Forecast_Asset_reference]\nWHERE record_deleted_flag = 0 AND IsProcessed = 0"
+						"sqlReaderQuery": "SELECT COUNT(*) AS TO_PROCESS\nFROM [relational].[Forecast_Asset_reference]\nWHERE record_deleted_flag = 0 AND IsProcessed = 0"
 					},
 					"dataset": {
 						"referenceName": "SQLrelationfctrefasset_ds",
 						"type": "DatasetReference"
 					},
-					"firstRowOnly": false
-				}
-			},
-			{
-				"name": "ExtractFrom_sp_FSOPConsolidated",
-				"type": "ForEach",
-				"dependsOn": [
-					{
-						"activity": "GetUnprocessedForecastAsset",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"userProperties": [],
-				"typeProperties": {
-					"items": {
-						"value": "@activity('GetUnprocessedForecastAsset').output.value",
-						"type": "Expression"
-					},
-					"isSequential": true,
-					"activities": [
-						{
-							"name": "ExtractFromSPtoBlob_sp_FSOPConsolidated",
-							"type": "Copy",
-							"dependsOn": [],
-							"policy": {
-								"timeout": "7.00:00:00",
-								"retry": 0,
-								"retryIntervalInSeconds": 30,
-								"secureOutput": false,
-								"secureInput": false
-							},
-							"userProperties": [],
-							"typeProperties": {
-								"source": {
-									"type": "SqlServerSource",
-									"sqlReaderStoredProcedureName": {
-										"value": "@{item().sp_FSOPConsolidated}",
-										"type": "Expression"
-									},
-									"storedProcedureParameters": {
-										"AttributeID": {
-											"type": "Int16",
-											"value": {
-												"value": "@{item().Attribute_id}",
-												"type": "Expression"
-											}
-										},
-										"GroupID": {
-											"type": "Int16",
-											"value": {
-												"value": "@{item().Group_ID}",
-												"type": "Expression"
-											}
-										},
-										"OriginID": {
-											"type": "Int16",
-											"value": {
-												"value": "@{item().Origin_id}",
-												"type": "Expression"
-											}
-										}
-									}
-								},
-								"sink": {
-									"type": "DelimitedTextSink",
-									"storeSettings": {
-										"type": "AzureBlobStorageWriteSettings"
-									},
-									"formatSettings": {
-										"type": "DelimitedTextWriteSettings",
-										"quoteAllText": true,
-										"fileExtension": ".txt"
-									}
-								},
-								"enableStaging": false
-							},
-							"inputs": [
-								{
-									"referenceName": "Tigermoth_DB_jao_ds",
-									"type": "DatasetReference",
-									"parameters": {
-										"dbname": {
-											"value": "@{item().DatabaseName}",
-											"type": "Expression"
-										}
-									}
-								}
-							],
-							"outputs": [
-								{
-									"referenceName": "Tigermoth_spFSOPConsolidated_sourcelandingraw_ds",
-									"type": "DatasetReference"
-								}
-							]
-						}
-					]
+					"firstRowOnly": true
 				}
 			},
 			{
@@ -146,14 +49,7 @@
 			{
 				"name": "ExtractFrom_sp_FSOPEstate",
 				"type": "ForEach",
-				"dependsOn": [
-					{
-						"activity": "ExtractFrom_sp_FSOPConsolidated",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
+				"dependsOn": [],
 				"userProperties": [],
 				"typeProperties": {
 					"items": {
@@ -404,6 +300,86 @@
 									"type": "DatasetReference"
 								}
 							]
+						}
+					]
+				}
+			},
+			{
+				"name": "CheckIfNeedToProcess",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "GetUnprocessedForecastAsset",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greater(activity('GetUnprocessedForecastAsset').output.firstRow.TO_PROCESS,0)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "TruncateTable_StagingTempForecastData",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[log].[TruncateStagingTable]",
+								"storedProcedureParameters": {
+									"TableName": {
+										"value": "temp_Forecast_Data",
+										"type": "String"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "SQLdbConnection",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "TruncateTable_StagingForecastData",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "TruncateTable_StagingTempForecastData",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[log].[TruncateStagingTable]",
+								"storedProcedureParameters": {
+									"TableName": {
+										"value": "Forecast_Data",
+										"type": "String"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "SQLdbConnection",
+								"type": "LinkedServiceReference"
+							}
 						}
 					]
 				}
