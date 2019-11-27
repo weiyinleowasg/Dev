@@ -263,7 +263,7 @@
 										}
 									},
 									{
-										"name": "MergeScrubbedToPersistent",
+										"name": "MergeScrubbedToStagingTable",
 										"type": "Copy",
 										"dependsOn": [
 											{
@@ -407,11 +407,11 @@
 										]
 									},
 									{
-										"name": "UpdateSourceRegisterFailedAbort_CopyToArchive",
+										"name": "UpdateSourceRegisterFailedAbort_CopyToDL",
 										"type": "SqlServerStoredProcedure",
 										"dependsOn": [
 											{
-												"activity": "CopyScrubbedToArchive",
+												"activity": "CopyScrubbedToDataLake",
 												"dependencyConditions": [
 													"Failed"
 												]
@@ -437,7 +437,7 @@
 												},
 												"FileName": {
 													"value": {
-														"value": "@{item().ORIGINAL_BLOB_NAME}",
+														"value": "@{item().TARGET_BLOB_NAME}",
 														"type": "Expression"
 													},
 													"type": "String"
@@ -450,11 +450,11 @@
 										}
 									},
 									{
-										"name": "CopyScrubbedToArchive",
+										"name": "CopyScrubbedToDataLake",
 										"type": "Copy",
 										"dependsOn": [
 											{
-												"activity": "MergeScrubbedToPersistent",
+												"activity": "MergeScrubbedToStagingTable",
 												"dependencyConditions": [
 													"Succeeded"
 												]
@@ -501,7 +501,7 @@
 										],
 										"outputs": [
 											{
-												"referenceName": "DelimitedText_sourcearchive_ds",
+												"referenceName": "DelimitedText_datalake_financial_ds",
 												"type": "DatasetReference"
 											}
 										]
@@ -511,7 +511,7 @@
 										"type": "Delete",
 										"dependsOn": [
 											{
-												"activity": "CopyScrubbedToArchive",
+												"activity": "CopyOriginalToArchive",
 												"dependencyConditions": [
 													"Succeeded"
 												]
@@ -569,11 +569,111 @@
 										}
 									},
 									{
-										"name": "UpdateSourceRegisterFailedAbort_CopyToDL",
+										"name": "UpdateSourceRegisterFailedAbort_CopyToStaging",
 										"type": "SqlServerStoredProcedure",
 										"dependsOn": [
 											{
-												"activity": "MergeScrubbedToPersistent",
+												"activity": "MergeScrubbedToStagingTable",
+												"dependencyConditions": [
+													"Failed"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "7.00:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"storedProcedureName": "[log].[UpdateSourceRegisterFailedAbort]",
+											"storedProcedureParameters": {
+												"EtlUtcTag": {
+													"value": {
+														"value": "@variables('Etl_Utc_Tag')",
+														"type": "Expression"
+													},
+													"type": "String"
+												},
+												"FileName": {
+													"value": {
+														"value": "@{item().TARGET_BLOB_NAME}",
+														"type": "Expression"
+													},
+													"type": "String"
+												}
+											}
+										},
+										"linkedServiceName": {
+											"referenceName": "SQLdbConnection",
+											"type": "LinkedServiceReference"
+										}
+									},
+									{
+										"name": "CopyOriginalToArchive",
+										"type": "Copy",
+										"dependsOn": [
+											{
+												"activity": "CopyScrubbedToDataLake",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "7.00:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "DelimitedTextSource",
+												"storeSettings": {
+													"type": "AzureBlobStorageReadSettings",
+													"recursive": false,
+													"enablePartitionDiscovery": false
+												},
+												"formatSettings": {
+													"type": "DelimitedTextReadSettings"
+												}
+											},
+											"sink": {
+												"type": "DelimitedTextSink",
+												"storeSettings": {
+													"type": "AzureBlobStorageWriteSettings"
+												},
+												"formatSettings": {
+													"type": "DelimitedTextWriteSettings",
+													"quoteAllText": true,
+													"fileExtension": ".txt"
+												}
+											},
+											"enableStaging": false
+										},
+										"inputs": [
+											{
+												"referenceName": "DelimitedText_sourcelandingraw_ds",
+												"type": "DatasetReference"
+											}
+										],
+										"outputs": [
+											{
+												"referenceName": "DelimitedText_sourcearchive_ds",
+												"type": "DatasetReference"
+											}
+										]
+									},
+									{
+										"name": "UpdateSourceRegisterFailedAbort_CopyToArchive",
+										"type": "SqlServerStoredProcedure",
+										"dependsOn": [
+											{
+												"activity": "CopyOriginalToArchive",
 												"dependencyConditions": [
 													"Failed"
 												]
