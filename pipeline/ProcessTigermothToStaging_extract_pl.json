@@ -1,0 +1,424 @@
+{
+	"name": "ProcessTigermothToStaging_extract_pl",
+	"properties": {
+		"activities": [
+			{
+				"name": "GetUnprocessedForecastAsset",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "SetEtlUtcTag",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "SELECT [Fund_ID]\n      ,[Asset_ID]\n      ,[DatabaseName]\n      ,[Group_ID]\n      ,[Attribute_id]\n      ,[Origin_id]\n      ,[Asset_Offset]\n      ,[Version_name]\n      ,[IsProcessed]\n\t  ,'sp_FSOPConsolidated' AS sp_FSOPConsolidated\n\t  ,'sp_FSOPEstate' AS sp_FSOPEstate\n\t  ,'sp_FSOPOther' AS sp_FSOPOther\n      ,CONCAT('TGR ', Fund_ID, ' ', Asset_ID, ' ', Version_name, ' spCon ', FORMAT(START_DATETIME,'yyyyMMdd'),'.csv') AS TargetFileName_spFSOPConsolidated\n      ,CONCAT('TGR ', Fund_ID, ' ', Asset_ID, ' ', Version_name, ' spEst ', FORMAT(START_DATETIME,'yyyyMMdd'),'.csv') AS TargetFileName_spFSOPEstate\n      ,CONCAT('TGR ', Fund_ID, ' ', Asset_ID, ' ', Version_name, ' spOth ', FORMAT(START_DATETIME,'yyyyMMdd'),'.csv') AS TargetFileName_spFSOPOther\n      ,CONCAT('TGR ', Fund_ID, ' ', Asset_ID, ' ', Version_name, ' param ', FORMAT(START_DATETIME,'yyyyMMdd'),'.csv') AS TargetFileName_param\nFROM [relational].[Forecast_Asset_reference]\nWHERE record_deleted_flag = 0 AND IsProcessed = 0"
+					},
+					"dataset": {
+						"referenceName": "SQLrelationfctrefasset_ds",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "ExtractFrom_sp_FSOPConsolidated",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "GetUnprocessedForecastAsset",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('GetUnprocessedForecastAsset').output.value",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "ExtractFromSPtoBlob_sp_FSOPConsolidated",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "SqlServerSource",
+									"sqlReaderStoredProcedureName": {
+										"value": "@{item().sp_FSOPConsolidated}",
+										"type": "Expression"
+									},
+									"storedProcedureParameters": {
+										"AttributeID": {
+											"type": "Int16",
+											"value": {
+												"value": "@{item().Attribute_id}",
+												"type": "Expression"
+											}
+										},
+										"GroupID": {
+											"type": "Int16",
+											"value": {
+												"value": "@{item().Group_ID}",
+												"type": "Expression"
+											}
+										},
+										"OriginID": {
+											"type": "Int16",
+											"value": {
+												"value": "@{item().Origin_id}",
+												"type": "Expression"
+											}
+										}
+									}
+								},
+								"sink": {
+									"type": "DelimitedTextSink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings"
+									},
+									"formatSettings": {
+										"type": "DelimitedTextWriteSettings",
+										"quoteAllText": true,
+										"fileExtension": ".txt"
+									}
+								},
+								"enableStaging": false
+							},
+							"inputs": [
+								{
+									"referenceName": "Tigermoth_DB_jao_ds",
+									"type": "DatasetReference",
+									"parameters": {
+										"dbname": {
+											"value": "@{item().DatabaseName}",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "Tigermoth_spFSOPConsolidated_sourcelandingraw_ds",
+									"type": "DatasetReference"
+								}
+							]
+						}
+					]
+				}
+			},
+			{
+				"name": "SetEtlUtcTag",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "Etl_Utc_Tag",
+					"value": {
+						"value": "@utcnow()",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "ExtractFrom_sp_FSOPEstate",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "ExtractFrom_sp_FSOPConsolidated",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('GetUnprocessedForecastAsset').output.value",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "ExtractFromSPtoBlob_sp_FSOPEstate",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "SqlServerSource",
+									"sqlReaderStoredProcedureName": {
+										"value": "@{item().sp_FSOPEstate}",
+										"type": "Expression"
+									},
+									"storedProcedureParameters": {
+										"AttributeID": {
+											"type": "Int16",
+											"value": {
+												"value": "@{item().Attribute_id}",
+												"type": "Expression"
+											}
+										},
+										"GroupID": {
+											"type": "Int16",
+											"value": {
+												"value": "@{item().Group_ID}",
+												"type": "Expression"
+											}
+										},
+										"OriginID": {
+											"type": "Int16",
+											"value": {
+												"value": "@{item().Origin_id}",
+												"type": "Expression"
+											}
+										}
+									}
+								},
+								"sink": {
+									"type": "DelimitedTextSink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings"
+									},
+									"formatSettings": {
+										"type": "DelimitedTextWriteSettings",
+										"quoteAllText": true,
+										"fileExtension": ".txt"
+									}
+								},
+								"enableStaging": false
+							},
+							"inputs": [
+								{
+									"referenceName": "Tigermoth_DB_jao_ds",
+									"type": "DatasetReference",
+									"parameters": {
+										"dbname": {
+											"value": "@{item().DatabaseName}",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "Tigermoth_spFSOPEstate_sourcelandingraw_ds",
+									"type": "DatasetReference"
+								}
+							]
+						}
+					]
+				}
+			},
+			{
+				"name": "ExtractFrom_sp_FSOPOther",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "ExtractFrom_sp_FSOPEstate",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('GetUnprocessedForecastAsset').output.value",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "ExtractFromSPtoBlob_sp_FSOPOther",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "SqlServerSource",
+									"sqlReaderStoredProcedureName": {
+										"value": "@{item().sp_FSOPOther}",
+										"type": "Expression"
+									},
+									"storedProcedureParameters": {
+										"AttributeID": {
+											"type": "Int16",
+											"value": {
+												"value": "@{item().Attribute_id}",
+												"type": "Expression"
+											}
+										},
+										"GroupID": {
+											"type": "Int16",
+											"value": {
+												"value": "@{item().Group_ID}",
+												"type": "Expression"
+											}
+										},
+										"OriginID": {
+											"type": "Int16",
+											"value": {
+												"value": "@{item().Origin_id}",
+												"type": "Expression"
+											}
+										}
+									}
+								},
+								"sink": {
+									"type": "DelimitedTextSink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings"
+									},
+									"formatSettings": {
+										"type": "DelimitedTextWriteSettings",
+										"quoteAllText": true,
+										"fileExtension": ".txt"
+									}
+								},
+								"enableStaging": false
+							},
+							"inputs": [
+								{
+									"referenceName": "Tigermoth_DB_jao_ds",
+									"type": "DatasetReference",
+									"parameters": {
+										"dbname": {
+											"value": "@{item().DatabaseName}",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "Tigermoth_spFSOPOther_sourcelandingraw_ds",
+									"type": "DatasetReference"
+								}
+							]
+						}
+					]
+				}
+			},
+			{
+				"name": "ExtractFrom_parameterTable",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "ExtractFrom_sp_FSOPOther",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('GetUnprocessedForecastAsset').output.value",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "ExtractFromTabletoBlob_parameter",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "SqlServerSource",
+									"sqlReaderQuery": "SELECT (SELECT Value FROM dbo.tbl_parameter WHERE Parameter = 'DescriptionYear') AS DescriptionYear ,  (SELECT Value FROM dbo.tbl_parameter WHERE Parameter = 'YearOffset') AS YearOffset"
+								},
+								"sink": {
+									"type": "DelimitedTextSink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings"
+									},
+									"formatSettings": {
+										"type": "DelimitedTextWriteSettings",
+										"quoteAllText": true,
+										"fileExtension": ".txt"
+									}
+								},
+								"enableStaging": false
+							},
+							"inputs": [
+								{
+									"referenceName": "Tigermoth_DB_jao_ds",
+									"type": "DatasetReference",
+									"parameters": {
+										"dbname": {
+											"value": "@{item().DatabaseName}",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "Tigermoth_parameter_sourcelandingraw_ds",
+									"type": "DatasetReference"
+								}
+							]
+						}
+					]
+				}
+			}
+		],
+		"variables": {
+			"Success_Fail_Header": {
+				"type": "String",
+				"defaultValue": "***SUCCESS***"
+			},
+			"Etl_Utc_Tag": {
+				"type": "String",
+				"defaultValue": "2019-10-22"
+			}
+		},
+		"annotations": []
+	}
+}
