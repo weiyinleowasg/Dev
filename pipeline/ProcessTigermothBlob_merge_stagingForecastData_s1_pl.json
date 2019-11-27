@@ -7,9 +7,9 @@
 				"type": "Lookup",
 				"dependsOn": [
 					{
-						"activity": "DeleteMergedForecastParameterFIle",
+						"activity": "spTruncateStagingTable",
 						"dependencyConditions": [
-							"Completed"
+							"Succeeded"
 						]
 					}
 				],
@@ -24,7 +24,7 @@
 				"typeProperties": {
 					"source": {
 						"type": "AzureSqlSource",
-						"sqlReaderQuery": "SELECT [ORIGINAL_BLOB_LANDING_CONTAINER],\n\t[ORIGINAL_BLOB_NAME],\n\t[ORIGINAL_BLOP_FULLPATH],\n\t[TARGET_BLOB_LANDING_CONTAINER],\n\t[TARGET_BLOB_NAME],\n\t[DATALAKE_CONTAINER],\n\t[DATALAKE_FILE_PATH],\n\t[ORIGINAL_BLOB_ARCHIVE_CONTAINER],\n\t[ORIGINAL_BLOB_ARCHIVE_FULLPATH],\n\tCONCAT(DATALAKE_CONTAINER,'/',DATALAKE_FILE_PATH,'/',TARGET_BLOB_NAME) AS DATALAKE_FULL_PATHFILE\nFROM [log].[SOURCE_REGISTER_TABLE]\nWHERE [ETL_IS_PROCESSED] = 'N'\nAND [ORIGINAL_BLOB_NAME] LIKE 'TGR % param %'\nORDER BY [ORIGINAL_BLOB_NAME];"
+						"sqlReaderQuery": "SELECT [ORIGINAL_BLOB_LANDING_CONTAINER],\n\t[ORIGINAL_BLOB_NAME],\n\t[ORIGINAL_BLOP_FULLPATH],\n\t[TARGET_BLOB_LANDING_CONTAINER],\n\t[TARGET_BLOB_NAME],\n\t[DATALAKE_CONTAINER],\n\t[DATALAKE_FILE_PATH],\n\t[ORIGINAL_BLOB_ARCHIVE_CONTAINER],\n\t[ORIGINAL_BLOB_ARCHIVE_FULLPATH],\n\tCONCAT(DATALAKE_CONTAINER,'/',DATALAKE_FILE_PATH,'/',TARGET_BLOB_NAME) AS DATALAKE_FULL_PATHFILE\nFROM [log].[SOURCE_REGISTER_TABLE]\nWHERE [ETL_IS_PROCESSED] = 'N'\nAND [ORIGINAL_BLOB_NAME] LIKE 'TGR % spCon %'\nORDER BY [ORIGINAL_BLOB_NAME];"
 					},
 					"dataset": {
 						"referenceName": "SQLsourceRegisterTable_ds",
@@ -545,8 +545,8 @@
 				}
 			},
 			{
-				"name": "DeleteMergedForecastParameterFIle",
-				"type": "Delete",
+				"name": "spTruncateStagingTable",
+				"type": "SqlServerStoredProcedure",
 				"dependsOn": [
 					{
 						"activity": "SetEtlUtcTag",
@@ -564,15 +564,17 @@
 				},
 				"userProperties": [],
 				"typeProperties": {
-					"dataset": {
-						"referenceName": "Tigermoth_parameter_adf2persistentarea_ds",
-						"type": "DatasetReference"
-					},
-					"enableLogging": false,
-					"storeSettings": {
-						"type": "AzureBlobStorageReadSettings",
-						"recursive": false
+					"storedProcedureName": "[log].[TruncateStagingTable]",
+					"storedProcedureParameters": {
+						"TableName": {
+							"value": "Forecast_Data",
+							"type": "String"
+						}
 					}
+				},
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
 				}
 			}
 		],
