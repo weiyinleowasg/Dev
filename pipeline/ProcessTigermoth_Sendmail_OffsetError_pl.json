@@ -1,0 +1,81 @@
+{
+	"name": "ProcessTigermoth_Sendmail_OffsetError_pl",
+	"properties": {
+		"activities": [
+			{
+				"name": "GetOffsetError",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "SetEtlUtcTag",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "SELECT CASE WHEN OFFSET_ERROR IS NULL THEN '' ELSE OFFSET_ERROR END AS OFFSET_ERROR FROM (\nSELECT \nstuff( (SELECT ', '+CONCAT(FAR.Fund_ID,'  ',FAR.Asset_ID,'  ',FAR.Version_name,\n'  Asset-Ref-Asset-Offset: ',FAR.Asset_Offset,'  Parameter-Asset-Offset: ',FCP.Asset_offset)\nFROM relational.Forecast_Asset_reference FAR\nJOIN staging.Forecast_Param FCP\nON FAR.Fund_ID = FCP.Fund_ID AND FAR.Asset_ID = FCP.Asset_ID \nAND FAR.Version_name = FCP.Version_name\nWHERE FAR.Asset_Offset < CAST(FCP.Asset_offset AS INT) ORDER BY FAR.Version_name\nFOR XML PATH(''), TYPE).value('.', 'varchar(max)'),1,1,'') AS OFFSET_ERROR\n)x"
+					},
+					"dataset": {
+						"referenceName": "SQLrelationfctrefasset_ds",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": true
+				}
+			},
+			{
+				"name": "SetEtlUtcTag",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "Etl_Utc_Tag",
+					"value": {
+						"value": "@utcnow()",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "IfOffsetErrorExistSendmail",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "GetOffsetError",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@activity('GetOffsetError').output.firstRow.OFFSET_ERROR",
+						"type": "Expression"
+					}
+				}
+			}
+		],
+		"variables": {
+			"Success_Fail_Header": {
+				"type": "String",
+				"defaultValue": "***SUCCESS***"
+			},
+			"Etl_Utc_Tag": {
+				"type": "String",
+				"defaultValue": "2019-10-22"
+			}
+		},
+		"annotations": []
+	}
+}
