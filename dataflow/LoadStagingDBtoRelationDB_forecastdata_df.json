@@ -1,0 +1,38 @@
+{
+	"name": "LoadStagingDBtoRelationDB_forecastdata_df",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "SQLstagingasset_ds",
+						"type": "DatasetReference"
+					},
+					"name": "StagingDB"
+				}
+			],
+			"sinks": [
+				{
+					"dataset": {
+						"referenceName": "SQLrelationforecastdata_ds",
+						"type": "DatasetReference"
+					},
+					"name": "InsertUpdateRow"
+				}
+			],
+			"transformations": [
+				{
+					"name": "SelectNewStagingRow"
+				},
+				{
+					"name": "AddAuditColumns"
+				},
+				{
+					"name": "AlterRowInsert"
+				}
+			],
+			"script": "\nparameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tPeriod_Date as timestamp,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tStatus as string,\n\t\tProduct as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tPerpetual_Amount as decimal(25,10),\n\t\tCurrent_Amount as decimal(25,10),\n\t\tFuture_Amount as decimal(25,10),\n\t\tDebit_Credit as string,\n\t\tForecast_Type as string,\n\t\tVersion_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT \\n --REF.ASSET_OFFSET AS REF_ASSET_OFFSET , PAR.ASSET_OFFSET AS PAR_ASSET_OFFSET, PAR.DESC_YEAR, DAT.PERIOD,\\n CASE WHEN REF.ASSET_OFFSET = PAR.ASSET_OFFSET \\n          THEN DATEADD(YEAR,CAST(DAT.PERIOD AS INT)-(CAST(REF.ASSET_OFFSET AS INT)-CAST(PAR.ASSET_OFFSET AS INT))-1,CAST(CONCAT(PAR.DESC_YEAR,\\'-01-01\\') AS DATETIME)) \\n          ELSE DATEADD(YEAR,CAST(DAT.PERIOD AS INT)-(CAST(REF.ASSET_OFFSET AS INT)-CAST(PAR.ASSET_OFFSET AS INT)),CAST(CONCAT(PAR.DESC_YEAR,\\'-01-01\\') AS DATETIME)) \\n END AS Period_Date,\\n REF.FUND_ID AS Fund_ID,\\n REF.ASSET_ID AS Asset_ID,\\n DAT.STATUS AS Status, \\n DAT.PRODUCT AS Product, \\n PRD.GL_CODE AS GL_Code,\\n CAST(NULL AS VARCHAR(100)) AS Cash_Flow_Code,\\n ABS(( CAST(CAST(DAT.CURENT_AMOUNT AS FLOAT) + CAST(DAT.FUTURE_AMOUNT AS FLOAT) AS DECIMAL(25,10)) )) AS Perpetual_Amount,\\n CAST(CAST(DAT.CURENT_AMOUNT AS FLOAT) AS DECIMAL(25,10)) AS Current_Amount, \\n CAST(CAST(DAT.FUTURE_AMOUNT AS FLOAT) AS DECIMAL(25,10)) AS Future_Amount,\\n CASE WHEN ( CAST(CAST(DAT.CURENT_AMOUNT AS FLOAT) + CAST(DAT.FUTURE_AMOUNT AS FLOAT) AS DECIMAL(25,10)) ) >= 0 THEN \\'DR\\' ElSE \\'CR\\' END AS Debit_Credit,\\n \\'Forecast\\' AS Forecast_Type,\\n REF.VERSION_NAME AS Version_name\\nFROM RELATIONAL.FORECAST_ASSET_REFERENCE REF\\nJOIN STAGING.FORECAST_PARAM PAR\\nON REF.FUND_ID = PAR.FUND_ID AND REF.ASSET_ID = PAR.ASSET_ID AND REF.VERSION_NAME = PAR.VERSION_NAME \\nJOIN STAGING.FORECAST_DATA DAT\\nON REF.FUND_ID = DAT.FUND_ID AND REF.ASSET_ID = DAT.ASSET_ID AND REF.VERSION_NAME = DAT.VERSION_NAME \\nLEFT JOIN RELATIONAL.FORECAST_GL_PRODUCT_MAP PRD\\nON DAT.STATUS = PRD.STATUS AND PRD.RECORD_DELETED_FLAG = 0\\nWHERE REF.ISPROCESSED = 0 AND REF.RECORD_DELETED_FLAG = 0 \\nAND DAT.STATUS != \\'\\' AND DAT.STATUS IS NOT NULL\\nAND CAST(REF.ASSET_OFFSET AS INT) >= CAST(PAR.ASSET_OFFSET AS INT)\\nAND CAST(DAT.PERIOD AS INT) >= CASE WHEN (CAST(REF.ASSET_OFFSET AS INT) - CAST(PAR.ASSET_OFFSET AS INT)) = 0 \\n    THEN 1 ELSE (CAST(REF.ASSET_OFFSET AS INT) - CAST(PAR.ASSET_OFFSET AS INT)) END',\n\tformat: 'query') ~> StagingDB\nStagingDB select(mapColumn(\n\t\tPeriod_Date,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tStatus,\n\t\tProduct,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tPerpetual_Amount,\n\t\tCurrent_Amount,\n\t\tFuture_Amount,\n\t\tDebit_Credit,\n\t\tForecast_Type,\n\t\tVersion_name\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectNewStagingRow\nSelectNewStagingRow derive(Update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> AddAuditColumns\nAddAuditColumns alterRow(insertIf(record_deleted_flag==toInteger(0))) ~> AlterRowInsert\nAlterRowInsert sink(input(\n\t\tPeriod_Date as timestamp,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tStatus as string,\n\t\tProduct as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tPerpetual_Amount as decimal(25,10),\n\t\tCurrent_Amount as decimal(25,10),\n\t\tFuture_Amount as decimal(25,10),\n\t\tDebit_Credit as string,\n\t\tForecast_Type as string,\n\t\tVersion_name as string,\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tkeys:['Asset_ID','Fund_ID'],\n\tformat: 'table',\n\tmapColumn(\n\t\tPeriod_Date,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tStatus,\n\t\tProduct,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tPerpetual_Amount,\n\t\tCurrent_Amount,\n\t\tFuture_Amount,\n\t\tDebit_Credit,\n\t\tForecast_Type,\n\t\tVersion_name,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t)) ~> InsertUpdateRow"
+		}
+	}
+}

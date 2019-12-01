@@ -1,0 +1,979 @@
+{
+	"name": "ProcessTigermoth_Master_pl",
+	"properties": {
+		"activities": [
+			{
+				"name": "GetUnprocessedForecastAsset",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "SetEtlUtcTag",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "SELECT COUNT(*) AS TO_PROCESS\nFROM [relational].[Forecast_Asset_reference]\nWHERE record_deleted_flag = 0 AND IsProcessed = 0"
+					},
+					"dataset": {
+						"referenceName": "SQLrelationfctrefasset_ds",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": true
+				}
+			},
+			{
+				"name": "SetEtlUtcTag",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "Etl_Utc_Tag",
+					"value": {
+						"value": "@utcnow()",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "CheckIfNeedToProcessAndReset",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "GetUnprocessedForecastAsset",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greater(activity('GetUnprocessedForecastAsset').output.firstRow.TO_PROCESS,0)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "TruncateTable_StagingForecastParam",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[log].[TruncateStagingTable]",
+								"storedProcedureParameters": {
+									"TableName": {
+										"value": "Forecast_Param",
+										"type": "String"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "SQLdbConnection",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "TruncateTable_StagingForecastData",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "TruncateTable_StagingForecastParam",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[log].[TruncateStagingTable]",
+								"storedProcedureParameters": {
+									"TableName": {
+										"value": "Forecast_Data",
+										"type": "String"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "SQLdbConnection",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "DeleteFiles_sourcelandingscrubbed",
+							"type": "Delete",
+							"dependsOn": [
+								{
+									"activity": "TruncateTable_StagingForecastData",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataset": {
+									"referenceName": "DelimitedText_sourcelandingscrubbed_nofiledefined_ds",
+									"type": "DatasetReference"
+								},
+								"enableLogging": false,
+								"storeSettings": {
+									"type": "AzureBlobStorageReadSettings",
+									"recursive": false,
+									"wildcardFileName": "TGR *"
+								}
+							}
+						},
+						{
+							"name": "DeleteFiles_sourcelandingraw",
+							"type": "Delete",
+							"dependsOn": [
+								{
+									"activity": "DeleteFiles_sourcelandingscrubbed",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataset": {
+									"referenceName": "DelimitedText_sourcelandingraw_nofiledefined_ds",
+									"type": "DatasetReference"
+								},
+								"enableLogging": false,
+								"storeSettings": {
+									"type": "AzureBlobStorageReadSettings",
+									"recursive": false,
+									"wildcardFileName": "TGR *"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "CheckToProcessExtractTigermoth",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "CheckIfNeedToProcessAndReset",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greater(activity('GetUnprocessedForecastAsset').output.firstRow.TO_PROCESS,0)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "ExtractDbToBlobAll",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "ProcessTigermothBlob_ExtractDbToBlobAll_pl",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "CheckToProcessCopyEstateToDL",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "CheckToProcessExtractTigermoth",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greater(activity('GetUnprocessedForecastAsset').output.firstRow.TO_PROCESS,0)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "CopyEstateToDL",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "ProcessTigermothBlob_CopyEstateToDL_pl",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "FailAndAbort_CheckAndReset",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "CheckIfNeedToProcessAndReset",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[log].[UpdateSourceRegisterFailedAbort]",
+					"storedProcedureParameters": {
+						"EtlUtcTag": {
+							"value": {
+								"value": "@variables('Etl_Utc_Tag')",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"FileName": {
+							"value": "XXXXXXXXXX",
+							"type": "String"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "FailAndAbort_ExtractTigermoth",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "CheckToProcessExtractTigermoth",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[log].[UpdateSourceRegisterFailedAbort]",
+					"storedProcedureParameters": {
+						"EtlUtcTag": {
+							"value": {
+								"value": "@variables('Etl_Utc_Tag')",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"FileName": {
+							"value": "XXXXXXXXXX",
+							"type": "String"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "FailAndAbort_CopyEstateToDL",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "CheckToProcessCopyEstateToDL",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[log].[UpdateSourceRegisterFailedAbort]",
+					"storedProcedureParameters": {
+						"EtlUtcTag": {
+							"value": {
+								"value": "@variables('Etl_Utc_Tag')",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"FileName": {
+							"value": "XXXXXXXXXX",
+							"type": "String"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "CheckToProcessConsolidateForestData",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "CheckToProcessCopyEstateToDL",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greater(activity('GetUnprocessedForecastAsset').output.firstRow.TO_PROCESS,0)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "MergeConsolidatedToForecastData",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "ProcessTigermothBlob_MergeConsolidate_stagingForecastData_pl",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "FailAndAbort_MergeConsolidated",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "CheckToProcessConsolidateForestData",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[log].[UpdateSourceRegisterFailedAbort]",
+					"storedProcedureParameters": {
+						"EtlUtcTag": {
+							"value": {
+								"value": "@variables('Etl_Utc_Tag')",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"FileName": {
+							"value": "XXXXXXXXXX",
+							"type": "String"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "CheckToProcessOtherForestData",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "CheckToProcessConsolidateForestData",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greater(activity('GetUnprocessedForecastAsset').output.firstRow.TO_PROCESS,0)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "MergeOtherToForecastData",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "ProcessTigermothBlob_MergeOther_stagingForecastData_pl",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "FailAndAbort_MergeOther",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "CheckToProcessOtherForestData",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[log].[UpdateSourceRegisterFailedAbort]",
+					"storedProcedureParameters": {
+						"EtlUtcTag": {
+							"value": {
+								"value": "@variables('Etl_Utc_Tag')",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"FileName": {
+							"value": "XXXXXXXXXX",
+							"type": "String"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "CheckToProcessParameterForestData",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "CheckToProcessOtherForestData",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greater(activity('GetUnprocessedForecastAsset').output.firstRow.TO_PROCESS,0)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "MergeParameterToForecastData",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "ProcessTigermothBlob_MergeParameter_stagingForecastParam_pl",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "FailAndAbort_MergeParameter",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "CheckToProcessParameterForestData",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[log].[UpdateSourceRegisterFailedAbort]",
+					"storedProcedureParameters": {
+						"EtlUtcTag": {
+							"value": {
+								"value": "@variables('Etl_Utc_Tag')",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"FileName": {
+							"value": "XXXXXXXXXX",
+							"type": "String"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "CheckToExpireVersion",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "CheckToProcessParameterForestData",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greater(activity('GetUnprocessedForecastAsset').output.firstRow.TO_PROCESS,0)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "PipelineExpireForecastDataVersion",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "ProcessTigermoth_ExpireForecastDataVersion",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "FailAndAbort_ExpireForecastData",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "CheckToExpireVersion",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[log].[UpdateSourceRegisterFailedAbort]",
+					"storedProcedureParameters": {
+						"EtlUtcTag": {
+							"value": {
+								"value": "@variables('Etl_Utc_Tag')",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"FileName": {
+							"value": "XXXXXXXXXX",
+							"type": "String"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "CheckToInsertForecastData",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "CheckToExpireVersion",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greater(activity('GetUnprocessedForecastAsset').output.firstRow.TO_PROCESS,0)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "PipelineLoadStagingToRelationalDB",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "ProcessTigermoth_LoadStagiingToRelationDB",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"ProcessName": {
+										"value": "@pipeline().Pipeline",
+										"type": "Expression"
+									},
+									"FileName": "spConsolidated_spOther",
+									"Etl_Utc_Tag": {
+										"value": "@variables('Etl_Utc_Tag')",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "FailAndAbort_InsertForecastData",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "CheckToInsertForecastData",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[log].[UpdateSourceRegisterFailedAbort]",
+					"storedProcedureParameters": {
+						"EtlUtcTag": {
+							"value": {
+								"value": "@variables('Etl_Utc_Tag')",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"FileName": {
+							"value": "XXXXXXXXXX",
+							"type": "String"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "CheckToReportForecastOffsetError",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "CheckToInsertForecastData",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greater(activity('GetUnprocessedForecastAsset').output.firstRow.TO_PROCESS,0)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "PipelineForecastOffsetError",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "ProcessTigermoth_Sendmail_OffsetError_pl",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"Parent_DataFactory": {
+										"value": "@pipeline().DataFactory",
+										"type": "Expression"
+									},
+									"Parent_Pipeline": {
+										"value": "@pipeline().Pipeline",
+										"type": "Expression"
+									},
+									"Success_Fail_Header": "***SUCCESS***"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "FailAndAbort_ReportOffsetError",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "CheckToReportForecastOffsetError",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[log].[UpdateSourceRegisterFailedAbort]",
+					"storedProcedureParameters": {
+						"EtlUtcTag": {
+							"value": {
+								"value": "@variables('Etl_Utc_Tag')",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"FileName": {
+							"value": "XXXXXXXXXX",
+							"type": "String"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "CheckToExpireAssetReferenceVersion",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "CheckToReportForecastOffsetError",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greater(activity('GetUnprocessedForecastAsset').output.firstRow.TO_PROCESS,0)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "PipelineExpireForecastAssetRefVersion",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "ProcessTigermoth_ExpireForecastAssetRef",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "FailAndAbort_ExpireAssetRefVersion",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "CheckToExpireAssetReferenceVersion",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[log].[UpdateSourceRegisterFailedAbort]",
+					"storedProcedureParameters": {
+						"EtlUtcTag": {
+							"value": {
+								"value": "@variables('Etl_Utc_Tag')",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"FileName": {
+							"value": "XXXXXXXXXX",
+							"type": "String"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "CheckToReportCompletion",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "CheckToExpireAssetReferenceVersion",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greater(activity('GetUnprocessedForecastAsset').output.firstRow.TO_PROCESS,0)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "PipelineTigermothSendmail_Completion",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "ProcessTigermothSendmail_Completion_pl",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"Parent_DataFactory": {
+										"value": "@pipeline().DataFactory",
+										"type": "Expression"
+									},
+									"Parent_Pipeline": {
+										"value": "@pipeline().Pipeline",
+										"type": "Expression"
+									},
+									"Success_Fail_Header": "***SUCCESS***"
+								}
+							}
+						}
+					]
+				}
+			}
+		],
+		"variables": {
+			"Success_Fail_Header": {
+				"type": "String",
+				"defaultValue": "***SUCCESS***"
+			},
+			"Etl_Utc_Tag": {
+				"type": "String",
+				"defaultValue": "2019-10-22"
+			}
+		},
+		"annotations": []
+	}
+}

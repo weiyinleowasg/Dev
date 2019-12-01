@@ -1,0 +1,124 @@
+{
+	"name": "ProcessTigermoth_Sendmail_OffsetError_pl",
+	"properties": {
+		"activities": [
+			{
+				"name": "GetOffsetError",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "SetEtlUtcTag",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "SELECT CASE WHEN OFFSET_ERROR IS NULL THEN '' ELSE OFFSET_ERROR END AS OFFSET_ERROR FROM (\nSELECT \nstuff( (SELECT ', '+CONCAT(FAR.Fund_ID,'  ',FAR.Asset_ID,'  ',FAR.Version_name,\n'  Asset-Ref-Asset-Offset: ',FAR.Asset_Offset,'  Parameter-Asset-Offset: ',FCP.Asset_offset)\nFROM relational.Forecast_Asset_reference FAR\nJOIN staging.Forecast_Param FCP\nON FAR.Fund_ID = FCP.Fund_ID AND FAR.Asset_ID = FCP.Asset_ID \nAND FAR.Version_name = FCP.Version_name\nWHERE FAR.Asset_Offset < CAST(FCP.Asset_offset AS INT) \nAND FAR.record_deleted_flag = 0 AND FAR.IsProcessed = 0\nORDER BY FAR.Version_name\nFOR XML PATH(''), TYPE).value('.', 'varchar(max)'),1,1,'') AS OFFSET_ERROR\n)x"
+					},
+					"dataset": {
+						"referenceName": "SQLrelationfctrefasset_ds",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": true
+				}
+			},
+			{
+				"name": "SetEtlUtcTag",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "Etl_Utc_Tag",
+					"value": {
+						"value": "@utcnow()",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "IfOffsetErrorExistSendmail",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "GetOffsetError",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@not(equals(activity('GetOffsetError').output.firstRow.OFFSET_ERROR,''))",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "SendMailOffsetError",
+							"type": "WebActivity",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"url": "https://prod-24.australiaeast.logic.azure.com:443/workflows/e28a90add06c495bbc9362b5109fb4c0/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=j2wEDAKOpnQ83iKkUa84aeGE6Nfb5604lp-z1-W4ek0",
+								"method": "POST",
+								"headers": {
+									"Content-Type": "application/json"
+								},
+								"body": {
+									"dataFactoryName": "@pipeline().parameters.Parent_DataFactory",
+									"pipelineName": "@pipeline().parameters.Parent_Pipeline",
+									"messageHeader": "!!!Forecast Offest Error!!!",
+									"messageProcessed": "@activity('GetOffsetError').output.firstRow",
+									"messageNotProcessed": "",
+									"messageErrorDuringProcess": ""
+								},
+								"linkedServices": [],
+								"datasets": []
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"Parent_DataFactory": {
+				"type": "string"
+			},
+			"Parent_Pipeline": {
+				"type": "string"
+			},
+			"Success_Fail_Header": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"Success_Fail_Header": {
+				"type": "String",
+				"defaultValue": "***SUCCESS***"
+			},
+			"Etl_Utc_Tag": {
+				"type": "String",
+				"defaultValue": "2019-10-22"
+			}
+		},
+		"annotations": []
+	}
+}

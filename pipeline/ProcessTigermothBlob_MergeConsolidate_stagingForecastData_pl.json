@@ -1,5 +1,5 @@
 {
-	"name": "ProcessSourceBlob_fctrefasset_pl",
+	"name": "ProcessTigermothBlob_MergeConsolidate_stagingForecastData_pl",
 	"properties": {
 		"activities": [
 			{
@@ -24,7 +24,7 @@
 				"typeProperties": {
 					"source": {
 						"type": "AzureSqlSource",
-						"sqlReaderQuery": "SELECT [ORIGINAL_BLOB_LANDING_CONTAINER],\n\t[ORIGINAL_BLOB_NAME],\n\t[ORIGINAL_BLOP_FULLPATH],\n\t[TARGET_BLOB_LANDING_CONTAINER],\n\t[TARGET_BLOB_NAME],\n\t[DATALAKE_CONTAINER],\n\t[DATALAKE_FILE_PATH],\n\t[ORIGINAL_BLOB_ARCHIVE_CONTAINER],\n\t[ORIGINAL_BLOB_ARCHIVE_FULLPATH],\n\tCONCAT(DATALAKE_CONTAINER,'/',DATALAKE_FILE_PATH,'/',TARGET_BLOB_NAME) AS DATALAKE_FULL_PATHFILE\nFROM [log].[SOURCE_REGISTER_TABLE]\nWHERE [ETL_IS_PROCESSED] = 'N'\nAND [ORIGINAL_BLOB_NAME] LIKE 'MAS_MNL_FCTREFASSET_%'\nORDER BY [ORIGINAL_BLOB_NAME];"
+						"sqlReaderQuery": "SELECT [ORIGINAL_BLOB_LANDING_CONTAINER],\n\t[ORIGINAL_BLOB_NAME],\n\t[ORIGINAL_BLOP_FULLPATH],\n\t[TARGET_BLOB_LANDING_CONTAINER],\n\t[TARGET_BLOB_NAME],\n\t[DATALAKE_CONTAINER],\n\t[DATALAKE_FILE_PATH],\n\t[ORIGINAL_BLOB_ARCHIVE_CONTAINER],\n\t[ORIGINAL_BLOB_ARCHIVE_FULLPATH],\n\tCONCAT(DATALAKE_CONTAINER,'/',DATALAKE_FILE_PATH,'/',TARGET_BLOB_NAME) AS DATALAKE_FULL_PATHFILE\nFROM [log].[SOURCE_REGISTER_TABLE]\nWHERE [ETL_IS_PROCESSED] = 'N'\nAND [ORIGINAL_BLOB_NAME] LIKE 'TGR % spCon %'\nORDER BY [ORIGINAL_BLOB_NAME];"
 					},
 					"dataset": {
 						"referenceName": "SQLsourceRegisterTable_ds",
@@ -164,7 +164,7 @@
 										"userProperties": [],
 										"typeProperties": {
 											"dataset": {
-												"referenceName": "DelimitedText_sourcelandingscrubbed_fctrefasset_ds",
+												"referenceName": "DelimitedText_sourcelandingscrubbed_ds",
 												"type": "DatasetReference"
 											},
 											"enableLogging": false,
@@ -263,11 +263,198 @@
 										}
 									},
 									{
+										"name": "MergeScrubbedToStagingTable",
+										"type": "Copy",
+										"dependsOn": [
+											{
+												"activity": "UpdateSourceRegisterRun",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "7.00:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "DelimitedTextSource",
+												"storeSettings": {
+													"type": "AzureBlobStorageReadSettings",
+													"recursive": false,
+													"enablePartitionDiscovery": false
+												},
+												"formatSettings": {
+													"type": "DelimitedTextReadSettings"
+												}
+											},
+											"sink": {
+												"type": "AzureSqlSink"
+											},
+											"enableStaging": false,
+											"translator": {
+												"type": "TabularTranslator",
+												"mappings": [
+													{
+														"source": {
+															"name": "Period",
+															"type": "String"
+														},
+														"sink": {
+															"name": "Period",
+															"type": "String"
+														}
+													},
+													{
+														"source": {
+															"name": "Status",
+															"type": "String"
+														},
+														"sink": {
+															"name": "Status",
+															"type": "String"
+														}
+													},
+													{
+														"source": {
+															"name": "Product",
+															"type": "String"
+														},
+														"sink": {
+															"name": "Product",
+															"type": "String"
+														}
+													},
+													{
+														"source": {
+															"name": "Perpetual",
+															"type": "String"
+														},
+														"sink": {
+															"name": "Perpetual_Amount",
+															"type": "String"
+														}
+													},
+													{
+														"source": {
+															"name": "Current",
+															"type": "String"
+														},
+														"sink": {
+															"name": "Curent_Amount",
+															"type": "String"
+														}
+													},
+													{
+														"source": {
+															"name": "Future",
+															"type": "String"
+														},
+														"sink": {
+															"name": "Future_Amount",
+															"type": "String"
+														}
+													},
+													{
+														"source": {
+															"name": "Fund",
+															"type": "String"
+														},
+														"sink": {
+															"name": "Fund_ID",
+															"type": "String"
+														}
+													},
+													{
+														"source": {
+															"name": "Asset",
+															"type": "String"
+														},
+														"sink": {
+															"name": "Asset_ID",
+															"type": "String"
+														}
+													},
+													{
+														"source": {
+															"name": "Version",
+															"type": "String"
+														},
+														"sink": {
+															"name": "Version_name",
+															"type": "String"
+														}
+													}
+												]
+											}
+										},
+										"inputs": [
+											{
+												"referenceName": "Tigermoth_spFSOPConsolidated_sourcelandingscrubbed_ds",
+												"type": "DatasetReference"
+											}
+										],
+										"outputs": [
+											{
+												"referenceName": "SQLstagingForestData",
+												"type": "DatasetReference"
+											}
+										]
+									},
+									{
+										"name": "UpdateSourceRegisterFailedAbort_CopyToDL",
+										"type": "SqlServerStoredProcedure",
+										"dependsOn": [
+											{
+												"activity": "CopyScrubbedToDataLake",
+												"dependencyConditions": [
+													"Failed"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "7.00:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"storedProcedureName": "[log].[UpdateSourceRegisterFailedAbort]",
+											"storedProcedureParameters": {
+												"EtlUtcTag": {
+													"value": {
+														"value": "@variables('Etl_Utc_Tag')",
+														"type": "Expression"
+													},
+													"type": "String"
+												},
+												"FileName": {
+													"value": {
+														"value": "@{item().TARGET_BLOB_NAME}",
+														"type": "Expression"
+													},
+													"type": "String"
+												}
+											}
+										},
+										"linkedServiceName": {
+											"referenceName": "SQLdbConnection",
+											"type": "LinkedServiceReference"
+										}
+									},
+									{
 										"name": "CopyScrubbedToDataLake",
 										"type": "Copy",
 										"dependsOn": [
 											{
-												"activity": "LoadStagingDBtoRelationDB_df",
+												"activity": "MergeScrubbedToStagingTable",
 												"dependencyConditions": [
 													"Succeeded"
 												]
@@ -308,7 +495,7 @@
 										},
 										"inputs": [
 											{
-												"referenceName": "DelimitedText_sourcelandingscrubbed_fctrefasset_ds",
+												"referenceName": "DelimitedText_sourcelandingscrubbed_ds",
 												"type": "DatasetReference"
 											}
 										],
@@ -320,77 +507,73 @@
 										]
 									},
 									{
-										"name": "LoadTxtToDBstaging_df",
-										"type": "ExecuteDataFlow",
-										"dependsOn": [
-											{
-												"activity": "UpdateSourceRegisterRun",
-												"dependencyConditions": [
-													"Succeeded"
-												]
-											}
-										],
-										"policy": {
-											"timeout": "7.00:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
-											"secureOutput": false,
-											"secureInput": false
-										},
-										"userProperties": [],
-										"typeProperties": {
-											"dataflow": {
-												"referenceName": "LoadTxtToDBstaging_fctasset_df",
-												"type": "DataFlowReference"
-											}
-										}
-									},
-									{
-										"name": "LoadStagingDBtoRelationDB_df",
-										"type": "ExecuteDataFlow",
-										"dependsOn": [
-											{
-												"activity": "LoadTxtToDBstaging_df",
-												"dependencyConditions": [
-													"Succeeded"
-												]
-											}
-										],
-										"policy": {
-											"timeout": "7.00:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
-											"secureOutput": false,
-											"secureInput": false
-										},
-										"userProperties": [],
-										"typeProperties": {
-											"dataflow": {
-												"referenceName": "LoadStagingDBtoRelationDB_fctasset_df",
-												"type": "DataFlowReference",
-												"parameters": {
-													"ProcessName": {
-														"value": "'@{pipeline().Pipeline}'",
-														"type": "Expression"
-													},
-													"FileName": {
-														"value": "'@{item().DATALAKE_FULL_PATHFILE}'",
-														"type": "Expression"
-													},
-													"Etl_Utc_Tag": {
-														"value": "'@{variables('Etl_Utc_Tag')}'",
-														"type": "Expression"
-													}
-												}
-											}
-										}
-									},
-									{
-										"name": "UpdateSourceRegisterFailedAbort_CopyToArchive",
-										"type": "SqlServerStoredProcedure",
+										"name": "DeleteSourceRaw",
+										"type": "Delete",
 										"dependsOn": [
 											{
 												"activity": "CopyOriginalToArchive",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "7.00:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"dataset": {
+												"referenceName": "DelimitedText_sourcelandingraw_ds",
+												"type": "DatasetReference"
+											},
+											"enableLogging": false,
+											"storeSettings": {
+												"type": "AzureBlobStorageReadSettings",
+												"recursive": false
+											}
+										}
+									},
+									{
+										"name": "DeleteFromScrubbed",
+										"type": "Delete",
+										"dependsOn": [
+											{
+												"activity": "DeleteSourceRaw",
+												"dependencyConditions": [
+													"Completed"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "7.00:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"dataset": {
+												"referenceName": "DelimitedText_sourcelandingscrubbed_ds",
+												"type": "DatasetReference"
+											},
+											"enableLogging": false,
+											"storeSettings": {
+												"type": "AzureBlobStorageReadSettings",
+												"recursive": false
+											}
+										}
+									},
+									{
+										"name": "UpdateSourceRegisterFailedAbort_CopyToStaging",
+										"type": "SqlServerStoredProcedure",
+										"dependsOn": [
+											{
+												"activity": "MergeScrubbedToStagingTable",
 												"dependencyConditions": [
 													"Failed"
 												]
@@ -416,7 +599,7 @@
 												},
 												"FileName": {
 													"value": {
-														"value": "@{item().ORIGINAL_BLOB_NAME}",
+														"value": "@{item().TARGET_BLOB_NAME}",
 														"type": "Expression"
 													},
 													"type": "String"
@@ -486,159 +669,11 @@
 										]
 									},
 									{
-										"name": "DeleteSourceRaw",
-										"type": "Delete",
+										"name": "UpdateSourceRegisterFailedAbort_CopyToArchive",
+										"type": "SqlServerStoredProcedure",
 										"dependsOn": [
 											{
 												"activity": "CopyOriginalToArchive",
-												"dependencyConditions": [
-													"Succeeded"
-												]
-											}
-										],
-										"policy": {
-											"timeout": "7.00:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
-											"secureOutput": false,
-											"secureInput": false
-										},
-										"userProperties": [],
-										"typeProperties": {
-											"dataset": {
-												"referenceName": "DelimitedText_sourcelandingraw_ds",
-												"type": "DatasetReference"
-											},
-											"enableLogging": false,
-											"storeSettings": {
-												"type": "AzureBlobStorageReadSettings",
-												"recursive": false
-											}
-										}
-									},
-									{
-										"name": "DeleteFromScrubbed",
-										"type": "Delete",
-										"dependsOn": [
-											{
-												"activity": "DeleteSourceRaw",
-												"dependencyConditions": [
-													"Completed"
-												]
-											}
-										],
-										"policy": {
-											"timeout": "7.00:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
-											"secureOutput": false,
-											"secureInput": false
-										},
-										"userProperties": [],
-										"typeProperties": {
-											"dataset": {
-												"referenceName": "DelimitedText_sourcelandingscrubbed_fctrefasset_ds",
-												"type": "DatasetReference"
-											},
-											"enableLogging": false,
-											"storeSettings": {
-												"type": "AzureBlobStorageReadSettings",
-												"recursive": false
-											}
-										}
-									},
-									{
-										"name": "UpdateSourceRegisterFailedAbort_Staging",
-										"type": "SqlServerStoredProcedure",
-										"dependsOn": [
-											{
-												"activity": "LoadTxtToDBstaging_df",
-												"dependencyConditions": [
-													"Failed"
-												]
-											}
-										],
-										"policy": {
-											"timeout": "7.00:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
-											"secureOutput": false,
-											"secureInput": false
-										},
-										"userProperties": [],
-										"typeProperties": {
-											"storedProcedureName": "[log].[UpdateSourceRegisterFailedAbort]",
-											"storedProcedureParameters": {
-												"EtlUtcTag": {
-													"value": {
-														"value": "@variables('Etl_Utc_Tag')",
-														"type": "Expression"
-													},
-													"type": "String"
-												},
-												"FileName": {
-													"value": {
-														"value": "@{item().ORIGINAL_BLOB_NAME}",
-														"type": "Expression"
-													},
-													"type": "String"
-												}
-											}
-										},
-										"linkedServiceName": {
-											"referenceName": "SQLdbConnection",
-											"type": "LinkedServiceReference"
-										}
-									},
-									{
-										"name": "UpdateSourceRegisterFailedAbort_LoadDW",
-										"type": "SqlServerStoredProcedure",
-										"dependsOn": [
-											{
-												"activity": "LoadStagingDBtoRelationDB_df",
-												"dependencyConditions": [
-													"Failed"
-												]
-											}
-										],
-										"policy": {
-											"timeout": "7.00:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
-											"secureOutput": false,
-											"secureInput": false
-										},
-										"userProperties": [],
-										"typeProperties": {
-											"storedProcedureName": "[log].[UpdateSourceRegisterFailedAbort]",
-											"storedProcedureParameters": {
-												"EtlUtcTag": {
-													"value": {
-														"value": "@variables('Etl_Utc_Tag')",
-														"type": "Expression"
-													},
-													"type": "String"
-												},
-												"FileName": {
-													"value": {
-														"value": "@{item().ORIGINAL_BLOB_NAME}",
-														"type": "Expression"
-													},
-													"type": "String"
-												}
-											}
-										},
-										"linkedServiceName": {
-											"referenceName": "SQLdbConnection",
-											"type": "LinkedServiceReference"
-										}
-									},
-									{
-										"name": "UpdateSourceRegisterFailedAbort_CopyToDL",
-										"type": "SqlServerStoredProcedure",
-										"dependsOn": [
-											{
-												"activity": "CopyScrubbedToDataLake",
 												"dependencyConditions": [
 													"Failed"
 												]
@@ -692,78 +727,6 @@
 					"value": {
 						"value": "@utcnow()",
 						"type": "Expression"
-					}
-				}
-			},
-			{
-				"name": "SendPipelineMailSuccess",
-				"type": "ExecutePipeline",
-				"dependsOn": [
-					{
-						"activity": "CheckProcessArchiveBlobUpdateRegister",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"userProperties": [],
-				"typeProperties": {
-					"pipeline": {
-						"referenceName": "PipelineSendMail_pl",
-						"type": "PipelineReference"
-					},
-					"waitOnCompletion": true,
-					"parameters": {
-						"Parent_DataFactory": {
-							"value": "@pipeline().DataFactory",
-							"type": "Expression"
-						},
-						"Parent_Pipeline": {
-							"value": "@pipeline().Pipeline",
-							"type": "Expression"
-						},
-						"Success_Fail_Header": "***SUCCESS***",
-						"Etl_Utc_Tag": {
-							"value": "@variables('Etl_Utc_Tag')",
-							"type": "Expression"
-						},
-						"File_Pattern": "MAS_MNL_FCTREFASSET_%"
-					}
-				}
-			},
-			{
-				"name": "SendPipelineMailFail",
-				"type": "ExecutePipeline",
-				"dependsOn": [
-					{
-						"activity": "CheckProcessArchiveBlobUpdateRegister",
-						"dependencyConditions": [
-							"Failed"
-						]
-					}
-				],
-				"userProperties": [],
-				"typeProperties": {
-					"pipeline": {
-						"referenceName": "PipelineSendMail_pl",
-						"type": "PipelineReference"
-					},
-					"waitOnCompletion": true,
-					"parameters": {
-						"Parent_DataFactory": {
-							"value": "@pipeline().DataFactory",
-							"type": "Expression"
-						},
-						"Parent_Pipeline": {
-							"value": "@pipeline().Pipeline",
-							"type": "Expression"
-						},
-						"Success_Fail_Header": "!!!FAILED!!!",
-						"Etl_Utc_Tag": {
-							"value": "@variables('Etl_Utc_Tag')",
-							"type": "Expression"
-						},
-						"File_Pattern": "MAS_MNL_FCTREFASSET_%"
 					}
 				}
 			}
