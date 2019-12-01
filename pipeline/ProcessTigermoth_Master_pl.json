@@ -856,6 +856,80 @@
 						}
 					]
 				}
+			},
+			{
+				"name": "FailAndAbort_ReportOffsetError",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "CheckToReportForecastOffsetError",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[log].[UpdateSourceRegisterFailedAbort]",
+					"storedProcedureParameters": {
+						"EtlUtcTag": {
+							"value": {
+								"value": "@variables('Etl_Utc_Tag')",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"FileName": {
+							"value": "XXXXXXXXXX",
+							"type": "String"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "CheckToExpireAssetReferenceVersion",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "CheckToReportForecastOffsetError",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greater(activity('GetUnprocessedForecastAsset').output.firstRow.TO_PROCESS,0)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "PipelineExpireForecastAssetRefVersion",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "ProcessTigermoth_ExpireForecastAssetRef",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true
+							}
+						}
+					]
+				}
 			}
 		],
 		"variables": {
