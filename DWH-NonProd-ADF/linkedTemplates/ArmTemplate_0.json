@@ -26,12 +26,76 @@
 		"SQLdbConnection_properties_typeProperties_connectionString_secretName": {
 			"type": "string",
 			"defaultValue": "NFDWHDEVSQLConn"
+		},
+		"Tigermoth_LS_properties_typeProperties_connectionString_secretName": {
+			"type": "string",
+			"defaultValue": "TigermothConn"
 		}
 	},
 	"variables": {
 		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
 	},
 	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/ProcessTigermothSendmail_Completion_pl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "TigermothCompletion_Sendmail",
+						"type": "WebActivity",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": "https://prod-24.australiaeast.logic.azure.com:443/workflows/e28a90add06c495bbc9362b5109fb4c0/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=j2wEDAKOpnQ83iKkUa84aeGE6Nfb5604lp-z1-W4ek0",
+							"method": "POST",
+							"headers": {
+								"Content-Type": "application/json"
+							},
+							"body": {
+								"dataFactoryName": "@pipeline().parameters.Parent_DataFactory",
+								"pipelineName": "@pipeline().parameters.Parent_Pipeline",
+								"messageHeader": "@pipeline().parameters.Success_Fail_Header",
+								"messageProcessed": "",
+								"messageNotProcessed": "",
+								"messageErrorDuringProcess": ""
+							}
+						}
+					}
+				],
+				"parameters": {
+					"Parent_DataFactory": {
+						"type": "string"
+					},
+					"Parent_Pipeline": {
+						"type": "string"
+					},
+					"Success_Fail_Header": {
+						"type": "string"
+					}
+				},
+				"variables": {
+					"Success_Fail_Header": {
+						"type": "String",
+						"defaultValue": "***SUCCESS***"
+					},
+					"Etl_Utc_Tag": {
+						"type": "String",
+						"defaultValue": "2019-10-22"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": []
+		},
 		{
 			"name": "[concat(parameters('factoryName'), '/NFDWHNonProdAKV_LS')]",
 			"type": "Microsoft.DataFactory/factories/linkedServices",
@@ -138,6 +202,39 @@
 			},
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/integrationRuntimes/IRVM1-SH-integrationRuntime')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/Tigermoth_LS')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"parameters": {
+					"dbname": {
+						"type": "String",
+						"defaultValue": "master"
+					}
+				},
+				"annotations": [],
+				"type": "SqlServer",
+				"typeProperties": {
+					"connectionString": {
+						"type": "AzureKeyVaultSecret",
+						"store": {
+							"referenceName": "NFDWHNonProdAKV_LS",
+							"type": "LinkedServiceReference"
+						},
+						"secretName": "[parameters('Tigermoth_LS_properties_typeProperties_connectionString_secretName')]"
+					}
+				},
+				"connectVia": {
+					"referenceName": "IRVM1-SH-integrationRuntime",
+					"type": "IntegrationRuntimeReference"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/integrationRuntimes/IRVM1-SH-integrationRuntime')]",
+				"[concat(variables('factoryId'), '/linkedServices/NFDWHNonProdAKV_LS')]"
 			]
 		},
 		{
@@ -405,6 +502,33 @@
 							"value": "@{item().ORIGINAL_BLOB_NAME}",
 							"type": "Expression"
 						},
+						"container": "sourcelandingraw"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/BlobStore_nfdwhstaging')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DelimitedText_sourcelandingraw_nofiledefined_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "BlobStore_nfdwhstaging",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
 						"container": "sourcelandingraw"
 					},
 					"columnDelimiter": ",",
@@ -755,7 +879,7 @@
 			]
 		},
 		{
-			"name": "[concat(parameters('factoryName'), '/DelimitedText_sourcelandingscrubbed_fctrefasset_ds')]",
+			"name": "[concat(parameters('factoryName'), '/DelimitedText_sourcelandingscrubbed_ds')]",
 			"type": "Microsoft.DataFactory/factories/datasets",
 			"apiVersion": "2018-06-01",
 			"properties": {
@@ -779,220 +903,7 @@
 					"firstRowAsHeader": true,
 					"quoteChar": "\""
 				},
-				"schema": [
-					{
-						"name": "Asset_ID",
-						"type": "String"
-					},
-					{
-						"name": "Fund_ID",
-						"type": "String"
-					},
-					{
-						"name": "Databasename",
-						"type": "String"
-					},
-					{
-						"name": "Roll_Forward_period",
-						"type": "String"
-					},
-					{
-						"name": "Group_ID",
-						"type": "String"
-					},
-					{
-						"name": "Attribute_Id",
-						"type": "String"
-					},
-					{
-						"name": "Origin_id",
-						"type": "String"
-					},
-					{
-						"name": "Version_Name",
-						"type": "String"
-					}
-				]
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/linkedServices/BlobStore_nfdwhstaging')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/DelimitedText_sourcelandingscrubbed_forex_ds')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "BlobStore_nfdwhstaging",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "DelimitedText",
-				"typeProperties": {
-					"location": {
-						"type": "AzureBlobStorageLocation",
-						"fileName": {
-							"value": "@{item().TARGET_BLOB_NAME}",
-							"type": "Expression"
-						},
-						"container": "sourcelandingscrubbed"
-					},
-					"columnDelimiter": ",",
-					"escapeChar": "\\",
-					"firstRowAsHeader": true,
-					"quoteChar": "\""
-				},
-				"schema": [
-					{
-						"name": "Date",
-						"type": "String"
-					},
-					{
-						"name": "Base_Currency",
-						"type": "String"
-					},
-					{
-						"name": "Target_Currency",
-						"type": "String"
-					},
-					{
-						"name": "EOM_Rate",
-						"type": "String"
-					},
-					{
-						"name": "Average_Mon_Rate",
-						"type": "String"
-					}
-				]
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/linkedServices/BlobStore_nfdwhstaging')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/DelimitedText_sourcelandingscrubbed_fund_ds')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "BlobStore_nfdwhstaging",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "DelimitedText",
-				"typeProperties": {
-					"location": {
-						"type": "AzureBlobStorageLocation",
-						"fileName": {
-							"value": "@{item().TARGET_BLOB_NAME}",
-							"type": "Expression"
-						},
-						"container": "sourcelandingscrubbed"
-					},
-					"columnDelimiter": ",",
-					"escapeChar": "\\",
-					"firstRowAsHeader": true,
-					"quoteChar": "\""
-				},
-				"schema": [
-					{
-						"name": "Fund_ID",
-						"type": "String"
-					},
-					{
-						"name": "MYOB_Company_Name",
-						"type": "String"
-					},
-					{
-						"name": "Fund_Name",
-						"type": "String"
-					},
-					{
-						"name": "Fund_master",
-						"type": "String"
-					},
-					{
-						"name": "Fund_master_name",
-						"type": "String"
-					},
-					{
-						"name": "Fund_Parent_Allocation",
-						"type": "String"
-					},
-					{
-						"name": "Fund_ABN",
-						"type": "String"
-					},
-					{
-						"name": "Fund_ARSN",
-						"type": "String"
-					},
-					{
-						"name": "Fund_country",
-						"type": "String"
-					},
-					{
-						"name": "Fund_Region",
-						"type": "String"
-					},
-					{
-						"name": "Fund_State",
-						"type": "String"
-					}
-				]
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/linkedServices/BlobStore_nfdwhstaging')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/DelimitedText_sourcelandingscrubbed_glallocate_ds')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "BlobStore_nfdwhstaging",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "DelimitedText",
-				"typeProperties": {
-					"location": {
-						"type": "AzureBlobStorageLocation",
-						"fileName": {
-							"value": "@{item().TARGET_BLOB_NAME}",
-							"type": "Expression"
-						},
-						"container": "sourcelandingscrubbed"
-					},
-					"columnDelimiter": ",",
-					"escapeChar": "\\",
-					"firstRowAsHeader": true,
-					"quoteChar": "\""
-				},
-				"schema": [
-					{
-						"name": "GL_Code",
-						"type": "String"
-					},
-					{
-						"name": "GL_Desc",
-						"type": "String"
-					},
-					{
-						"name": "Asset_ID",
-						"type": "String"
-					},
-					{
-						"name": "Fund_ID",
-						"type": "String"
-					},
-					{
-						"name": "Allocation_percentage",
-						"type": "String"
-					}
-				]
+				"schema": []
 			},
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/linkedServices/BlobStore_nfdwhstaging')]"
