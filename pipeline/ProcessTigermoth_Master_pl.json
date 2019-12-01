@@ -970,6 +970,51 @@
 					"referenceName": "SQLdbConnection",
 					"type": "LinkedServiceReference"
 				}
+			},
+			{
+				"name": "CheckToReportCompletion",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "CheckToExpireAssetReferenceVersion",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greater(activity('GetUnprocessedForecastAsset').output.firstRow.TO_PROCESS,0)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "PipelineTigermothSendmail_Completion",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "ProcessTigermothSendmail_Completion_pl",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"Parent_DataFactory": {
+										"value": "@pipeline().DataFactory",
+										"type": "Expression"
+									},
+									"Parent_Pipeline": {
+										"value": "@pipeline().Pipeline",
+										"type": "Expression"
+									},
+									"Success_Fail_Header": "***SUCCESS***"
+								}
+							}
+						}
+					]
+				}
 			}
 		],
 		"variables": {
