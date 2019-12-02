@@ -1,0 +1,1219 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory name",
+			"defaultValue": "DWH-NonProd-ADF"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/MasterPipeline_pl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "RunPipelineFund",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "MasterUTCtag",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "ProcessSourceBlob_fund_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true
+						}
+					},
+					{
+						"name": "RunPipelineAsset",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineFund",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "ProcessSourceBlob_asset_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true
+						}
+					},
+					{
+						"name": "RunPipelineCOA",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineAsset",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "ProcessSourceBlob_coa_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true
+						}
+					},
+					{
+						"name": "RunPipelineCoaTrxCommon",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineForex",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "ProcessSourceBlob_coa_trx_common_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true
+						}
+					},
+					{
+						"name": "SetVarFund",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineFund",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "PipelineName",
+							"value": {
+								"value": "@activity('RunPipelineFund').output",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "SetVarAsset",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineAsset",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "PipelineName",
+							"value": {
+								"value": "@activity('RunPipelineAsset').output",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "SetVarCOA",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineCOA",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "PipelineName",
+							"value": {
+								"value": "@activity('RunPipelineCOA').output",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "SetVarCoaTrxCat",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineCoaTrxCommon",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "PipelineName",
+							"value": {
+								"value": "@activity('RunPipelineCoaTrxCommon').output",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "SendFailMail_COA",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "UpdateMasterRunLog_COA",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": "https://prod-24.australiaeast.logic.azure.com:443/workflows/e28a90add06c495bbc9362b5109fb4c0/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=j2wEDAKOpnQ83iKkUa84aeGE6Nfb5604lp-z1-W4ek0",
+							"method": "POST",
+							"headers": {
+								"Content-Type": "application/json"
+							},
+							"body": {
+								"dataFactoryName": "@pipeline().DataFactory",
+								"pipelineName": "@pipeline().Pipeline",
+								"messageHeader": "!!!MASTER PIPELINE FAILED!!!",
+								"messageProcessed": "@variables('PipelineName')",
+								"messageNotProcessed": "",
+								"messageErrorDuringProcess": ""
+							}
+						}
+					},
+					{
+						"name": "MasterUTCtag",
+						"type": "SetVariable",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "MasterUTCtag",
+							"value": {
+								"value": "@utcnow()",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "RunPipelineBudget",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineCoaTrxCommon",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "ProcessSourceBlob_budget_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true
+						}
+					},
+					{
+						"name": "SetVarBudget",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineBudget",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "PipelineName",
+							"value": {
+								"value": "@activity('RunPipelineBudget').output",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "SendFailMail_Budget",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "UpdateMasterRunLog_Budget",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": "https://prod-24.australiaeast.logic.azure.com:443/workflows/e28a90add06c495bbc9362b5109fb4c0/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=j2wEDAKOpnQ83iKkUa84aeGE6Nfb5604lp-z1-W4ek0",
+							"method": "POST",
+							"headers": {
+								"Content-Type": "application/json"
+							},
+							"body": {
+								"dataFactoryName": "@pipeline().DataFactory",
+								"pipelineName": "@pipeline().Pipeline",
+								"messageHeader": "!!!MASTER PIPELINE FAILED!!!",
+								"messageProcessed": "@variables('PipelineName')",
+								"messageNotProcessed": "",
+								"messageErrorDuringProcess": ""
+							}
+						}
+					},
+					{
+						"name": "SendFailMail_CoaTrxCat",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "SetVarCoaTrxCat",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": "https://prod-24.australiaeast.logic.azure.com:443/workflows/e28a90add06c495bbc9362b5109fb4c0/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=j2wEDAKOpnQ83iKkUa84aeGE6Nfb5604lp-z1-W4ek0",
+							"method": "POST",
+							"headers": {
+								"Content-Type": "application/json"
+							},
+							"body": {
+								"dataFactoryName": "@pipeline().DataFactory",
+								"pipelineName": "@pipeline().Pipeline",
+								"messageHeader": "!!!MASTER PIPELINE FAILED!!!",
+								"messageProcessed": "@variables('PipelineName')",
+								"messageNotProcessed": "",
+								"messageErrorDuringProcess": ""
+							}
+						}
+					},
+					{
+						"name": "SendFailMail_Asset",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "UpdateMasterRunLog_Asset",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": "https://prod-24.australiaeast.logic.azure.com:443/workflows/e28a90add06c495bbc9362b5109fb4c0/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=j2wEDAKOpnQ83iKkUa84aeGE6Nfb5604lp-z1-W4ek0",
+							"method": "POST",
+							"headers": {
+								"Content-Type": "application/json"
+							},
+							"body": {
+								"dataFactoryName": "@pipeline().DataFactory",
+								"pipelineName": "@pipeline().Pipeline",
+								"messageHeader": "!!!MASTER PIPELINE FAILED!!!",
+								"messageProcessed": "@variables('PipelineName')",
+								"messageNotProcessed": "",
+								"messageErrorDuringProcess": ""
+							}
+						}
+					},
+					{
+						"name": "SendFailMail_Fund",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "UpdateMasterRunLog_Fund",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": "https://prod-24.australiaeast.logic.azure.com:443/workflows/e28a90add06c495bbc9362b5109fb4c0/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=j2wEDAKOpnQ83iKkUa84aeGE6Nfb5604lp-z1-W4ek0",
+							"method": "POST",
+							"headers": {
+								"Content-Type": "application/json"
+							},
+							"body": {
+								"dataFactoryName": "@pipeline().DataFactory",
+								"pipelineName": "@pipeline().Pipeline",
+								"messageHeader": "!!!MASTER PIPELINE FAILED!!!",
+								"messageProcessed": "@variables('PipelineName')",
+								"messageNotProcessed": "",
+								"messageErrorDuringProcess": ""
+							}
+						}
+					},
+					{
+						"name": "MasterPipelineSendMailAndLogStatus",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineForecastMaster",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "MasterPipelineSendMail_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"Parent_DataFactory": {
+									"value": "@pipeline().DataFactory",
+									"type": "Expression"
+								},
+								"Parent_Pipeline": {
+									"value": "@pipeline().Pipeline",
+									"type": "Expression"
+								},
+								"Master_Utc_Tag": {
+									"value": "@variables('MasterUTCtag')",
+									"type": "Expression"
+								}
+							}
+						}
+					},
+					{
+						"name": "UpdateMasterRunLog_Asset",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "SetVarAsset",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[log].[UpdateMasterRunLog]",
+							"storedProcedureParameters": {
+								"MasterUtcTag": {
+									"value": {
+										"value": "@variables('MasterUTCtag')",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"RunMessage": {
+									"value": {
+										"value": "@variables('PipelineName')",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"RunStatus": {
+									"value": {
+										"value": "FAILED",
+										"type": "Expression"
+									},
+									"type": "String"
+								}
+							}
+						},
+						"linkedServiceName": {
+							"referenceName": "SQLdbConnection",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "UpdateMasterRunLog_Budget",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "SetVarBudget",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[log].[UpdateMasterRunLog]",
+							"storedProcedureParameters": {
+								"MasterUtcTag": {
+									"value": {
+										"value": "@variables('MasterUTCtag')",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"RunMessage": {
+									"value": {
+										"value": "@variables('PipelineName')",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"RunStatus": {
+									"value": {
+										"value": "FAILED",
+										"type": "Expression"
+									},
+									"type": "String"
+								}
+							}
+						},
+						"linkedServiceName": {
+							"referenceName": "SQLdbConnection",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "UpdateMasterRunLog_Fund",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "SetVarFund",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[log].[UpdateMasterRunLog]",
+							"storedProcedureParameters": {
+								"MasterUtcTag": {
+									"value": {
+										"value": "@variables('MasterUTCtag')",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"RunMessage": {
+									"value": {
+										"value": "@variables('PipelineName')",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"RunStatus": {
+									"value": {
+										"value": "FAILED",
+										"type": "Expression"
+									},
+									"type": "String"
+								}
+							}
+						},
+						"linkedServiceName": {
+							"referenceName": "SQLdbConnection",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "UpdateMasterRunLog_COA",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "SetVarCOA",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[log].[UpdateMasterRunLog]",
+							"storedProcedureParameters": {
+								"MasterUtcTag": {
+									"value": {
+										"value": "@variables('MasterUTCtag')",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"RunMessage": {
+									"value": {
+										"value": "@variables('PipelineName')",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"RunStatus": {
+									"value": {
+										"value": "FAILED",
+										"type": "Expression"
+									},
+									"type": "String"
+								}
+							}
+						},
+						"linkedServiceName": {
+							"referenceName": "SQLdbConnection",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "RunPipelineForex",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineCOA",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "ProcessSourceBlob_forex_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true
+						}
+					},
+					{
+						"name": "SetVarForex",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineForex",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "PipelineName",
+							"value": {
+								"value": "@activity('RunPipelineForex').output",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "SendFailMail_Forex",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "SetVarForex",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": "https://prod-24.australiaeast.logic.azure.com:443/workflows/e28a90add06c495bbc9362b5109fb4c0/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=j2wEDAKOpnQ83iKkUa84aeGE6Nfb5604lp-z1-W4ek0",
+							"method": "POST",
+							"headers": {
+								"Content-Type": "application/json"
+							},
+							"body": {
+								"dataFactoryName": "@pipeline().DataFactory",
+								"pipelineName": "@pipeline().Pipeline",
+								"messageHeader": "!!!MASTER PIPELINE FAILED!!!",
+								"messageProcessed": "@variables('PipelineName')",
+								"messageNotProcessed": "",
+								"messageErrorDuringProcess": ""
+							}
+						}
+					},
+					{
+						"name": "RunPipelineGLPRODUCT",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineBudget",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "ProcessSourceBlob_glproduct_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true
+						}
+					},
+					{
+						"name": "SetVarGLPRODUCT",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineGLPRODUCT",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "PipelineName",
+							"value": {
+								"value": "@activity('RunPipelineGLPRODUCT').output",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "SendFailMail_GLPRODUCT",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "SetVarGLPRODUCT",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": "https://prod-24.australiaeast.logic.azure.com:443/workflows/e28a90add06c495bbc9362b5109fb4c0/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=j2wEDAKOpnQ83iKkUa84aeGE6Nfb5604lp-z1-W4ek0",
+							"method": "POST",
+							"headers": {
+								"Content-Type": "application/json"
+							},
+							"body": {
+								"dataFactoryName": "@pipeline().DataFactory",
+								"pipelineName": "@pipeline().Pipeline",
+								"messageHeader": "!!!MASTER PIPELINE FAILED!!!",
+								"messageProcessed": "@variables('PipelineName')",
+								"messageNotProcessed": "",
+								"messageErrorDuringProcess": ""
+							}
+						}
+					},
+					{
+						"name": "RunPipelineGLALLOCATE",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineGLPRODUCT",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "ProcessSourceBlob_glallocate_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true
+						}
+					},
+					{
+						"name": "SetVarGLALLOCATE",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineGLALLOCATE",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "PipelineName",
+							"value": {
+								"value": "@activity('RunPipelineGLALLOCATE').output",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "SendFailMail_GLALLOCATE",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "SetVarGLALLOCATE",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": "https://prod-24.australiaeast.logic.azure.com:443/workflows/e28a90add06c495bbc9362b5109fb4c0/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=j2wEDAKOpnQ83iKkUa84aeGE6Nfb5604lp-z1-W4ek0",
+							"method": "POST",
+							"headers": {
+								"Content-Type": "application/json"
+							},
+							"body": {
+								"dataFactoryName": "@pipeline().DataFactory",
+								"pipelineName": "@pipeline().Pipeline",
+								"messageHeader": "!!!MASTER PIPELINE FAILED!!!",
+								"messageProcessed": "@variables('PipelineName')",
+								"messageNotProcessed": "",
+								"messageErrorDuringProcess": ""
+							}
+						}
+					},
+					{
+						"name": "RunPipelineFCTREFASSET",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineGLALLOCATE",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "ProcessSourceBlob_fctrefasset_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true
+						}
+					},
+					{
+						"name": "SetVarFCTREFASSET",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineFCTREFASSET",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "PipelineName",
+							"value": {
+								"value": "@activity('RunPipelineFCTREFASSET').output",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "SendFailMail_FCTREFASSET",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "SetVarFCTREFASSET",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": "https://prod-24.australiaeast.logic.azure.com:443/workflows/e28a90add06c495bbc9362b5109fb4c0/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=j2wEDAKOpnQ83iKkUa84aeGE6Nfb5604lp-z1-W4ek0",
+							"method": "POST",
+							"headers": {
+								"Content-Type": "application/json"
+							},
+							"body": {
+								"dataFactoryName": "@pipeline().DataFactory",
+								"pipelineName": "@pipeline().Pipeline",
+								"messageHeader": "!!!MASTER PIPELINE FAILED!!!",
+								"messageProcessed": "@variables('PipelineName')",
+								"messageNotProcessed": "",
+								"messageErrorDuringProcess": ""
+							}
+						}
+					},
+					{
+						"name": "RunPipelineForecastMaster",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineFCTREFASSET",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "ProcessTigermoth_Master_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true
+						}
+					},
+					{
+						"name": "SetVarForecastMaster",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineForecastMaster",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "PipelineName",
+							"value": {
+								"value": "@activity('RunPipelineForecastMaster').output",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "SendFailMail_ForecastMaster",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "SetVarForecastMaster",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": "https://prod-24.australiaeast.logic.azure.com:443/workflows/e28a90add06c495bbc9362b5109fb4c0/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=j2wEDAKOpnQ83iKkUa84aeGE6Nfb5604lp-z1-W4ek0",
+							"method": "POST",
+							"headers": {
+								"Content-Type": "application/json"
+							},
+							"body": {
+								"dataFactoryName": "@pipeline().DataFactory",
+								"pipelineName": "@pipeline().Pipeline",
+								"messageHeader": "!!!MASTER PIPELINE FAILED!!!",
+								"messageProcessed": "@variables('PipelineName')",
+								"messageNotProcessed": "",
+								"messageErrorDuringProcess": ""
+							}
+						}
+					}
+				],
+				"variables": {
+					"PipelineName": {
+						"type": "String",
+						"defaultValue": "MasterPipeline_pl"
+					},
+					"MasterUTCtag": {
+						"type": "String",
+						"defaultValue": "2019-11-07"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadStagingDBtoRelationDB_adjustment_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "NOTE:This DF only cater for INSERT. There is no Update to Expire for consideration The branch containing \"UpdateSelectForExpire\" kept for reference only",
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "SQLstagingadjustment_ds",
+								"type": "DatasetReference"
+							},
+							"name": "StagingDB"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLrelationcoatrxcommon_ds",
+								"type": "DatasetReference"
+							},
+							"name": "RelationDB"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "DelimitedText_adjustment_loadready_ds",
+								"type": "DatasetReference"
+							},
+							"name": "InsertUpdateRecords"
+						}
+					],
+					"transformations": [
+						{
+							"name": "StatgingAddChecksum"
+						},
+						{
+							"name": "LookupRelationalStream"
+						},
+						{
+							"name": "RelationalAddChecksum"
+						},
+						{
+							"name": "ConditionalSplitNewOrExpire"
+						},
+						{
+							"name": "RelationRenameColumns"
+						},
+						{
+							"name": "SelectNewStagingRow"
+						},
+						{
+							"name": "AddAuditColumns"
+						},
+						{
+							"name": "UpdateAddAuditAttributes"
+						},
+						{
+							"name": "AddExpiredAttributes"
+						},
+						{
+							"name": "UpdateSelectForInsert"
+						},
+						{
+							"name": "UnionForDB"
+						},
+						{
+							"name": "UpdateSelectForExpire"
+						},
+						{
+							"name": "SelectOutput"
+						}
+					],
+					"script": "\nparameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Type as string,\n\t\tTrx_Amount as decimal(18,2),\n\t\tvalidation_error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> StagingDB\nsource(output(\n\t\tTrx_ID as long,\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Type as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Amount as decimal(18,2),\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [Trx_ID]\\n      ,[Trx_Code]\\n      ,[Fund_ID]\\n      ,[Asset_ID]\\n      ,[GL_Code]\\n      ,[Cash_Flow_Code]\\n      ,[Debit_Credit]\\n      ,[Trx_Type]\\n      ,[Trx_Date]\\n      ,[Trx_Desc]\\n      ,[Trx_Amount]\\n      ,[Update_datetime]\\n      ,[record_deleted_flag]\\n      ,[process_name]\\n  FROM [relational].[COA_Transactions]\\n  WHERE [Trx_Type] != \\'Actual\\'\\n  AND[record_deleted_flag] = 0',\n\tformat: 'query') ~> RelationDB\nStagingDB derive(StagingChecksum = sha2(256, Trx_Code,Fund_ID,Asset_ID,GL_Code,Cash_Flow_Code,Trx_Type,Trx_Date,Trx_Desc,Debit_Credit,Trx_Amount)) ~> StatgingAddChecksum\nStatgingAddChecksum, RelationRenameColumns lookup(StagingChecksum == Relation_RelationalChecksum,\n\tbroadcast: 'none')~> LookupRelationalStream\nRelationDB derive(RelationalChecksum = sha2(256, Trx_Code,Fund_ID,Asset_ID,GL_Code,Cash_Flow_Code,Trx_Type,Trx_Date,Trx_Desc,Debit_Credit,Trx_Amount)) ~> RelationalAddChecksum\nLookupRelationalStream split(isNull(Relation_RelationalChecksum),\n\tDebit_Credit!=Relation_Debit_Credit || Trx_Amount!=Relation_Trx_Amount,\n\tdisjoint: false) ~> ConditionalSplitNewOrExpire@(StagingNewRow, StagingChangedRow, IgnoreNoChange)\nRelationalAddChecksum select(mapColumn(\n\t\tRelation_Trx_ID = Trx_ID,\n\t\tRelation_Trx_Code = Trx_Code,\n\t\tRelation_Fund_ID = Fund_ID,\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_GL_Code = GL_Code,\n\t\tRelation_Cash_Flow_Code = Cash_Flow_Code,\n\t\tRelation_Debit_Credit = Debit_Credit,\n\t\tRelation_Trx_Type = Trx_Type,\n\t\tRelation_Trx_Date = Trx_Date,\n\t\tRelation_Trx_Desc = Trx_Desc,\n\t\tRelation_Trx_Amount = Trx_Amount,\n\t\tRelation_Update_datetime = Update_datetime,\n\t\tRelation_record_deleted_flag = record_deleted_flag,\n\t\tRelation_process_name = process_name,\n\t\tRelation_RelationalChecksum = RelationalChecksum\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> RelationRenameColumns\nConditionalSplitNewOrExpire@StagingNewRow select(mapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Type,\n\t\tTrx_Amount\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectNewStagingRow\nSelectNewStagingRow derive(Update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('-',$ProcessName,$FileName),\n\t\tinsert_update_flag = toString('I'),\n\t\tTrx_ID = toLong(null())) ~> AddAuditColumns\nConditionalSplitNewOrExpire@StagingChangedRow derive(Update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('-', $ProcessName, $FileName),\n\t\tinsert_update_flag = toString('I'),\n\t\tTrx_ID = toLong(null())) ~> UpdateAddAuditAttributes\nConditionalSplitNewOrExpire@StagingChangedRow derive(record_deleted_flag = toInteger(1),\n\t\tinsert_update_flag = toString('U')) ~> AddExpiredAttributes\nUpdateAddAuditAttributes select(mapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tDebit_Credit,\n\t\tTrx_Type,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Amount,\n\t\tCash_Flow_Code,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name,\n\t\tTrx_ID,\n\t\tinsert_update_flag\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> UpdateSelectForInsert\nAddAuditColumns union(byName: true)~> UnionForDB\nAddExpiredAttributes select(mapColumn(\n\t\tTrx_Code = Relation_Trx_Code,\n\t\tFund_ID = Relation_Fund_ID,\n\t\tAsset_ID = Relation_Asset_ID,\n\t\tGL_Code = Relation_GL_Code,\n\t\tCash_Flow_Code = Relation_Cash_Flow_Code,\n\t\tDebit_Credit = Relation_Debit_Credit,\n\t\tTrx_Type = Relation_Trx_Type,\n\t\tTrx_Date = Relation_Trx_Date,\n\t\tTrx_Desc = Relation_Trx_Desc,\n\t\tTrx_Amount = Relation_Trx_Amount,\n\t\tprocess_name = Relation_process_name,\n\t\tUpdate_datetime = Relation_Update_datetime,\n\t\trecord_deleted_flag,\n\t\tTrx_ID = Relation_Trx_ID,\n\t\tinsert_update_flag\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> UpdateSelectForExpire\nUnionForDB select(mapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Type,\n\t\tTrx_Amount,\n\t\tTrx_ID,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name,\n\t\tinsert_update_flag\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectOutput\nSelectOutput sink(input(\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Date as string,\n\t\tTrx_Desc as string,\n\t\tTrx_Type as string,\n\t\tTrx_Amount as string,\n\t\tTrx_ID as string,\n\t\tUpdate_datetime as string,\n\t\trecord_deleted_flag as string,\n\t\tprocess_name as string,\n\t\tinsert_update_flag as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tpartitionFileNames:['AdjustmentLoadReadyFile.txt'],\n\tmapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Type,\n\t\tTrx_Amount,\n\t\tTrx_ID,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name,\n\t\tinsert_update_flag\n\t),\n\tpartitionBy('hash', 1)) ~> InsertUpdateRecords"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadTxtToDBstaging_adjustment_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "DelimitedText_sourcelandingscrubbed_adjustment_ds",
+								"type": "DatasetReference"
+							},
+							"name": "LoadFromScrubbedToStagingDB"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLrelationasset_ds",
+								"type": "DatasetReference"
+							},
+							"name": "GetAssetMaster"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLrelationcoa_ds",
+								"type": "DatasetReference"
+							},
+							"name": "GetGLCodes"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLstagingadjustment_ds",
+								"type": "DatasetReference"
+							},
+							"name": "StagingDB"
+						}
+					],
+					"transformations": [
+						{
+							"name": "SelectSourceColumns"
+						},
+						{
+							"name": "SetDerivations"
+						},
+						{
+							"name": "SelectForTarget"
+						},
+						{
+							"name": "LookupFundAndAsset"
+						},
+						{
+							"name": "SelectFundColumns"
+						},
+						{
+							"name": "LookupGLcode"
+						},
+						{
+							"name": "SelectCOAcolumns"
+						},
+						{
+							"name": "TransactionTypeGL"
+						},
+						{
+							"name": "SelectGLData"
+						},
+						{
+							"name": "SelectCasfFlowData"
+						},
+						{
+							"name": "ConditionalSplitValidGL"
+						},
+						{
+							"name": "TransactionValidFundAsset"
+						},
+						{
+							"name": "SelectInvalidFundAssetData"
+						},
+						{
+							"name": "DerivedColumnValidationErrorFund"
+						},
+						{
+							"name": "DerivedColumnValidationErrorGL"
+						},
+						{
+							"name": "SelectInvalidGLdata"
+						},
+						{
+							"name": "SelectValidGLdata"
+						},
+						{
+							"name": "UnionAll"
+						},
+						{
+							"name": "TrimSingleQuoteFromGLcode"
+						},
+						{
+							"name": "ConvertAmountToValidFormat"
+						}
+					],
+					"script": "\n\nsource(output(\n\t\tDate as string,\n\t\tTransaction_Code as string,\n\t\tCashflow_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tTrx_Type as string,\n\t\tGL_Code as string,\n\t\tGL_Description as string,\n\t\tAmount as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> LoadFromScrubbedToStagingDB\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [Asset_ID]\\n      ,[Fund_ID]\\n  FROM [relational].[Asset]\\n  WHERE [record_deleted_flag] = 0',\n\tformat: 'query') ~> GetAssetMaster\nsource(output(\n\t\tGL_Code as string,\n\t\tCategory as string,\n\t\tCash_Flow_Code as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [GL_Code]\\n      ,[Category]\\n      ,[Cash_Flow_Code]\\n  FROM [relational].[Chart_of_Account]\\n  WHERE [record_deleted_flag] = 0',\n\tformat: 'query') ~> GetGLCodes\nConvertAmountToValidFormat select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectSourceColumns\nUnionAll derive(Debit_Credit = case(greaterOrEqual(toDecimal(Amount),0),'DR','CR'),\n\t\tTrx_Amount = abs(toDecimal(Amount,18,2)),\n\t\tDate = toTimestamp(Date,'dd/MM/yyyy')) ~> SetDerivations\nSetDerivations select(mapColumn(\n\t\tTrx_Date = Date,\n\t\tTrx_Code = Transaction_Code,\n\t\tCash_Flow_Code = Cashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tTrx_Desc = GL_Description,\n\t\tvalidation_error = Validation_Error,\n\t\tDebit_Credit,\n\t\tTrx_Amount\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectForTarget\nSelectSourceColumns, SelectFundColumns lookup(Asset_ID == Relation_Asset_ID\n\t&& Fund_ID == Relation_Fund_ID,\n\tbroadcast: 'none')~> LookupFundAndAsset\nGetAssetMaster select(mapColumn(\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_Fund_ID = Fund_ID\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectFundColumns\nSelectGLData, SelectCOAcolumns lookup(GL_Code == Relation_GL_Code,\n\tbroadcast: 'none')~> LookupGLcode\nGetGLCodes select(mapColumn(\n\t\tRelation_GL_Code = GL_Code,\n\t\tRelation_Category = Category,\n\t\tRelation_Cash_Flow_Code = Cash_Flow_Code\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectCOAcolumns\nTransactionValidFundAsset@ValidFundAsset split(not(isNull(GL_Code)),\n\tdisjoint: false) ~> TransactionTypeGL@(TransactionTypeGL, TransactionTypeCF)\nTrimSingleQuoteFromGLcode select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount,\n\t\tRelation_Asset_ID,\n\t\tRelation_Fund_ID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectGLData\nTransactionTypeGL@TransactionTypeCF select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectCasfFlowData\nLookupGLcode split(GL_Code == Relation_GL_Code,\n\tdisjoint: false) ~> ConditionalSplitValidGL@(ValidGL, NotValidGL)\nLookupFundAndAsset split(not(isNull(Relation_Fund_ID)),\n\tdisjoint: false) ~> TransactionValidFundAsset@(ValidFundAsset, InvalidFundAsset)\nDerivedColumnValidationErrorFund select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidFundAssetData\nTransactionValidFundAsset@InvalidFundAsset derive(Validation_Error = toString('Invalid Fund or Asset')) ~> DerivedColumnValidationErrorFund\nConditionalSplitValidGL@NotValidGL derive(Validation_Error = toString('Invalid GL Code')) ~> DerivedColumnValidationErrorGL\nDerivedColumnValidationErrorGL select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidGLdata\nConditionalSplitValidGL@ValidGL select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectValidGLdata\nSelectValidGLdata, SelectInvalidGLdata, SelectCasfFlowData, SelectInvalidFundAssetData union(byName: true)~> UnionAll\nTransactionTypeGL@TransactionTypeGL derive(GL_Code = trim(GL_Code,'\\'')) ~> TrimSingleQuoteFromGLcode\nLoadFromScrubbedToStagingDB derive(Amount = toDecimal(Amount,18,2,'###,###.##')) ~> ConvertAmountToValidFormat\nSelectForTarget sink(input(\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Type as string,\n\t\tTrx_Amount as decimal(18,2),\n\t\tvalidation_error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Type,\n\t\tTrx_Amount,\n\t\tvalidation_error\n\t)) ~> StagingDB"
+				}
+			},
+			"dependsOn": []
+		}
+	]
+}
