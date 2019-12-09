@@ -1,5 +1,5 @@
 {
-	"name": "ProcessSourceBlob_adjustment_pl",
+	"name": "ProcessSourceBlob_adjustment_n_actual_pl",
 	"properties": {
 		"activities": [
 			{
@@ -164,7 +164,7 @@
 										"userProperties": [],
 										"typeProperties": {
 											"dataset": {
-												"referenceName": "DelimitedText_sourcelandingscrubbed_adjustment_ds",
+												"referenceName": "DelimitedText_sourcelandingscrubbed_adjustment_dsx",
 												"type": "DatasetReference"
 											},
 											"enableLogging": false,
@@ -267,7 +267,7 @@
 										"type": "Copy",
 										"dependsOn": [
 											{
-												"activity": "LoadTxtAdjustmentLoadReadyToDBinsert_adjustment_df",
+												"activity": "RunProcessSourceBlobAdjustmentActual_spl",
 												"dependencyConditions": [
 													"Succeeded"
 												]
@@ -308,7 +308,7 @@
 										},
 										"inputs": [
 											{
-												"referenceName": "DelimitedText_sourcelandingscrubbed_adjustment_ds",
+												"referenceName": "DelimitedText_sourcelandingscrubbed_adj_n_actual_ds",
 												"type": "DatasetReference"
 											}
 										],
@@ -340,7 +340,7 @@
 										"userProperties": [],
 										"typeProperties": {
 											"dataflow": {
-												"referenceName": "LoadTxtToDBstaging_adjustment_df",
+												"referenceName": "LoadTxtToDBstaging_adjustment_n_actual_df",
 												"type": "DataFlowReference"
 											}
 										}
@@ -497,7 +497,7 @@
 										"userProperties": [],
 										"typeProperties": {
 											"dataset": {
-												"referenceName": "DelimitedText_sourcelandingscrubbed_adjustment_ds",
+												"referenceName": "DelimitedText_sourcelandingscrubbed_adj_n_actual_ds",
 												"type": "DatasetReference"
 											},
 											"enableLogging": false,
@@ -508,7 +508,7 @@
 										}
 									},
 									{
-										"name": "RunProcessSourceBlobAdjustment_spl",
+										"name": "RunProcessSourceBlobAdjustmentActual_spl",
 										"type": "ExecutePipeline",
 										"dependsOn": [
 											{
@@ -521,7 +521,7 @@
 										"userProperties": [],
 										"typeProperties": {
 											"pipeline": {
-												"referenceName": "ProcessSourceBlob_adjustment_spl",
+												"referenceName": "ProcessSourceBlob_adjustment_n_actual_spl",
 												"type": "PipelineReference"
 											},
 											"waitOnCompletion": true,
@@ -542,58 +542,6 @@
 													"value": "@item().ORIGINAL_BLOB_NAME",
 													"type": "Expression"
 												}
-											}
-										}
-									},
-									{
-										"name": "LoadTxtAdjustmentLoadReadyToDBupdate_adjustment_df",
-										"type": "ExecuteDataFlow",
-										"dependsOn": [
-											{
-												"activity": "RunProcessSourceBlobAdjustment_spl",
-												"dependencyConditions": [
-													"Succeeded"
-												]
-											}
-										],
-										"policy": {
-											"timeout": "7.00:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
-											"secureOutput": false,
-											"secureInput": false
-										},
-										"userProperties": [],
-										"typeProperties": {
-											"dataflow": {
-												"referenceName": "LoadTxtAdjustmentLoadReadyToDBupdate_coa_trx_df",
-												"type": "DataFlowReference"
-											}
-										}
-									},
-									{
-										"name": "LoadTxtAdjustmentLoadReadyToDBinsert_adjustment_df",
-										"type": "ExecuteDataFlow",
-										"dependsOn": [
-											{
-												"activity": "LoadTxtAdjustmentLoadReadyToDBupdate_adjustment_df",
-												"dependencyConditions": [
-													"Succeeded"
-												]
-											}
-										],
-										"policy": {
-											"timeout": "7.00:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
-											"secureOutput": false,
-											"secureInput": false
-										},
-										"userProperties": [],
-										"typeProperties": {
-											"dataflow": {
-												"referenceName": "LoadTxtAdjustmentLoadReadyToDBinsert_coa_trx_df",
-												"type": "DataFlowReference"
 											}
 										}
 									},
@@ -645,93 +593,7 @@
 										"type": "SqlServerStoredProcedure",
 										"dependsOn": [
 											{
-												"activity": "RunProcessSourceBlobAdjustment_spl",
-												"dependencyConditions": [
-													"Failed"
-												]
-											}
-										],
-										"policy": {
-											"timeout": "7.00:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
-											"secureOutput": false,
-											"secureInput": false
-										},
-										"userProperties": [],
-										"typeProperties": {
-											"storedProcedureName": "[log].[UpdateSourceRegisterFailedAbort]",
-											"storedProcedureParameters": {
-												"EtlUtcTag": {
-													"value": {
-														"value": "@variables('Etl_Utc_Tag')",
-														"type": "Expression"
-													},
-													"type": "String"
-												},
-												"FileName": {
-													"value": {
-														"value": "@{item().ORIGINAL_BLOB_NAME}",
-														"type": "Expression"
-													},
-													"type": "String"
-												}
-											}
-										},
-										"linkedServiceName": {
-											"referenceName": "SQLdbConnection",
-											"type": "LinkedServiceReference"
-										}
-									},
-									{
-										"name": "UpdateSourceRegisterFailedAbort_LoadDWexpire",
-										"type": "SqlServerStoredProcedure",
-										"dependsOn": [
-											{
-												"activity": "LoadTxtAdjustmentLoadReadyToDBupdate_adjustment_df",
-												"dependencyConditions": [
-													"Failed"
-												]
-											}
-										],
-										"policy": {
-											"timeout": "7.00:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
-											"secureOutput": false,
-											"secureInput": false
-										},
-										"userProperties": [],
-										"typeProperties": {
-											"storedProcedureName": "[log].[UpdateSourceRegisterFailedAbort]",
-											"storedProcedureParameters": {
-												"EtlUtcTag": {
-													"value": {
-														"value": "@variables('Etl_Utc_Tag')",
-														"type": "Expression"
-													},
-													"type": "String"
-												},
-												"FileName": {
-													"value": {
-														"value": "@{item().ORIGINAL_BLOB_NAME}",
-														"type": "Expression"
-													},
-													"type": "String"
-												}
-											}
-										},
-										"linkedServiceName": {
-											"referenceName": "SQLdbConnection",
-											"type": "LinkedServiceReference"
-										}
-									},
-									{
-										"name": "UpdateSourceRegisterFailedAbort_LoadDWinsert",
-										"type": "SqlServerStoredProcedure",
-										"dependsOn": [
-											{
-												"activity": "LoadTxtAdjustmentLoadReadyToDBinsert_adjustment_df",
+												"activity": "RunProcessSourceBlobAdjustmentActual_spl",
 												"dependencyConditions": [
 													"Failed"
 												]
@@ -1016,9 +878,7 @@
 									"messageProcessed": "@activity('CheckIfPipelineAlreadyRunning').output.firstRow.ORIGINAL_BLOB_NAME",
 									"messageNotProcessed": "",
 									"messageErrorDuringProcess": ""
-								},
-								"linkedServices": [],
-								"datasets": []
+								}
 							}
 						}
 					]
