@@ -267,7 +267,7 @@
 										"type": "Copy",
 										"dependsOn": [
 											{
-												"activity": "LoadStagingDBtoRelationDB_df",
+												"activity": "ProcessSourceBlob_opsanswers_spl",
 												"dependencyConditions": [
 													"Succeeded"
 												]
@@ -342,50 +342,6 @@
 											"dataflow": {
 												"referenceName": "LoadTxtToDBstaging_opsanswers_df",
 												"type": "DataFlowReference"
-											},
-											"compute": {
-												"coreCount": 8,
-												"computeType": "General"
-											}
-										}
-									},
-									{
-										"name": "LoadStagingDBtoRelationDB_df",
-										"type": "ExecuteDataFlow",
-										"dependsOn": [
-											{
-												"activity": "LoadTxtToDBstaging_ds",
-												"dependencyConditions": [
-													"Succeeded"
-												]
-											}
-										],
-										"policy": {
-											"timeout": "7.00:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
-											"secureOutput": false,
-											"secureInput": false
-										},
-										"userProperties": [],
-										"typeProperties": {
-											"dataflow": {
-												"referenceName": "LoadStagingDBtoRelationDB_opsanswers_df",
-												"type": "DataFlowReference",
-												"parameters": {
-													"ProcessName": {
-														"value": "'@{pipeline().Pipeline}'",
-														"type": "Expression"
-													},
-													"FileName": {
-														"value": "'@{item().DATALAKE_FULL_PATHFILE}'",
-														"type": "Expression"
-													},
-													"Etl_Utc_Tag": {
-														"value": "'@{variables('Etl_Utc_Tag')}'",
-														"type": "Expression"
-													}
-												}
 											},
 											"compute": {
 												"coreCount": 8,
@@ -603,7 +559,7 @@
 										"type": "SqlServerStoredProcedure",
 										"dependsOn": [
 											{
-												"activity": "LoadStagingDBtoRelationDB_df",
+												"activity": "ProcessSourceBlob_opsanswers_spl",
 												"dependencyConditions": [
 													"Failed"
 												]
@@ -682,6 +638,44 @@
 										"linkedServiceName": {
 											"referenceName": "SQLdbConnection",
 											"type": "LinkedServiceReference"
+										}
+									},
+									{
+										"name": "ProcessSourceBlob_opsanswers_spl",
+										"type": "ExecutePipeline",
+										"dependsOn": [
+											{
+												"activity": "LoadTxtToDBstaging_ds",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"userProperties": [],
+										"typeProperties": {
+											"pipeline": {
+												"referenceName": "ProcessSourceBlob_opsanswers_spl",
+												"type": "PipelineReference"
+											},
+											"waitOnCompletion": true,
+											"parameters": {
+												"ProcessName": {
+													"value": "@pipeline().Pipeline",
+													"type": "Expression"
+												},
+												"FileName": {
+													"value": "@item().DATALAKE_FULL_PATHFILE",
+													"type": "Expression"
+												},
+												"Etl_Utc_Tag": {
+													"value": "@variables('Etl_Utc_Tag')",
+													"type": "Expression"
+												},
+												"OriginalBlobName": {
+													"value": "@item().ORIGINAL_BLOB_NAME",
+													"type": "Expression"
+												}
+											}
 										}
 									}
 								]
