@@ -7,6 +7,14 @@
 			"metadata": "Data Factory name",
 			"defaultValue": "DWH-NonProd-ADF"
 		},
+		"FileStore_nfdwhsourcelanding_password": {
+			"type": "secureString",
+			"metadata": "Secure string for 'password' of 'FileStore_nfdwhsourcelanding'"
+		},
+		"FileStore_nfdwhsourcelandingraw_password": {
+			"type": "secureString",
+			"metadata": "Secure string for 'password' of 'FileStore_nfdwhsourcelandingraw'"
+		},
 		"SRTEST_IR_SH_connectionString": {
 			"type": "secureString",
 			"metadata": "Secure string for 'connectionString' of 'SRTEST_IR_SH'"
@@ -14,6 +22,22 @@
 		"Tigermoth_LS_connectionString": {
 			"type": "secureString",
 			"metadata": "Secure string for 'connectionString' of 'Tigermoth_LS'"
+		},
+		"FileStore_nfdwhsourcelanding_properties_typeProperties_host": {
+			"type": "string",
+			"defaultValue": "\\\\nfdwhstagingnonprod.file.core.windows.net\\nfdwhnonprodfilelanding"
+		},
+		"FileStore_nfdwhsourcelanding_properties_typeProperties_userId": {
+			"type": "string",
+			"defaultValue": "nfdwhstagingnonprod"
+		},
+		"FileStore_nfdwhsourcelandingraw_properties_typeProperties_host": {
+			"type": "string",
+			"defaultValue": "\\\\nfdwhstagingnonprod.file.core.windows.net\\nfdwhnonprodfilelanding"
+		},
+		"FileStore_nfdwhsourcelandingraw_properties_typeProperties_userId": {
+			"type": "string",
+			"defaultValue": "nfdwhstagingnonprod"
 		},
 		"NFDWHNonProdAKV_LS_properties_typeProperties_baseUrl": {
 			"type": "string",
@@ -109,6 +133,42 @@
 			"dependsOn": []
 		},
 		{
+			"name": "[concat(parameters('factoryName'), '/FileStore_nfdwhsourcelanding')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureFileStorage",
+				"typeProperties": {
+					"host": "[parameters('FileStore_nfdwhsourcelanding_properties_typeProperties_host')]",
+					"userId": "[parameters('FileStore_nfdwhsourcelanding_properties_typeProperties_userId')]",
+					"password": {
+						"type": "SecureString",
+						"value": "[parameters('FileStore_nfdwhsourcelanding_password')]"
+					}
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/FileStore_nfdwhsourcelandingraw')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "FileServer",
+				"typeProperties": {
+					"host": "[parameters('FileStore_nfdwhsourcelandingraw_properties_typeProperties_host')]",
+					"userId": "[parameters('FileStore_nfdwhsourcelandingraw_properties_typeProperties_userId')]",
+					"password": {
+						"type": "SecureString",
+						"value": "[parameters('FileStore_nfdwhsourcelandingraw_password')]"
+					}
+				}
+			},
+			"dependsOn": []
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/NFDWHNonProdAKV_LS')]",
 			"type": "Microsoft.DataFactory/factories/linkedServices",
 			"apiVersion": "2018-06-01",
@@ -158,6 +218,104 @@
 				}
 			},
 			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/BinaryDataSourceFileshareDirectory_MoveFile_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "It describes the folder in the data source store.",
+				"linkedServiceName": {
+					"referenceName": "FileStore_nfdwhsourcelandingraw",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "Binary",
+				"typeProperties": {
+					"location": {
+						"type": "FileServerLocation",
+						"folderPath": "SourceLandingArea"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/FileStore_nfdwhsourcelandingraw')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/BinaryDataSource_File_bak')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "It describes the file in the data source store.",
+				"linkedServiceName": {
+					"referenceName": "FileStore_nfdwhsourcelandingraw",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"FolderPath": {
+						"type": "String"
+					},
+					"Directory": {
+						"type": "String"
+					},
+					"filename": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "Binary",
+				"typeProperties": {
+					"location": {
+						"type": "FileServerLocation",
+						"fileName": {
+							"value": "@dataset().filename",
+							"type": "Expression"
+						},
+						"folderPath": {
+							"value": "@concat(dataset().FolderPath,'/',dataset().Directory)",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/FileStore_nfdwhsourcelandingraw')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/BinaryDataSource_Folder_bak')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "It describes the folder in the data source store.",
+				"linkedServiceName": {
+					"referenceName": "FileStore_nfdwhsourcelandingraw",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"FolderPath": {
+						"type": "String"
+					},
+					"Directory": {
+						"type": "String"
+					}
+				},
+				"annotations": [],
+				"type": "Binary",
+				"typeProperties": {
+					"location": {
+						"type": "FileServerLocation",
+						"folderPath": {
+							"value": "@concat(dataset().FolderPath,'/',dataset().Directory)",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/FileStore_nfdwhsourcelandingraw')]"
+			]
 		},
 		{
 			"name": "[concat(parameters('factoryName'), '/App1SQLServer_LS')]",
@@ -297,6 +455,75 @@
 			]
 		},
 		{
+			"name": "[concat(parameters('factoryName'), '/BinaryDataDestinationBlob_MoveFile_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "It describes the destination store.",
+				"linkedServiceName": {
+					"referenceName": "BlobStore_nfdwhstaging",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"filename": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "Binary",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"container": "sourcelandingraw"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/BlobStore_nfdwhstaging')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/BinaryDataDestination_bak')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "It describes the destination store.",
+				"linkedServiceName": {
+					"referenceName": "BlobStore_nfdwhstaging",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"Container": {
+						"type": "String"
+					},
+					"Directory": {
+						"type": "String"
+					},
+					"filename": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "Binary",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"folderPath": {
+							"value": "@{dataset().Directory}",
+							"type": "Expression"
+						},
+						"container": {
+							"value": "@{dataset().Container}",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/BlobStore_nfdwhstaging')]"
+			]
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/DelimitedText1')]",
 			"type": "Microsoft.DataFactory/factories/datasets",
 			"apiVersion": "2018-06-01",
@@ -430,359 +657,6 @@
 					},
 					{
 						"name": "insert_update_flag",
-						"type": "String"
-					}
-				]
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/linkedServices/BlobStore_nfdwhstaging')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/DelimitedText_budget_loadready_ds')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "BlobStore_nfdwhstaging",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "DelimitedText",
-				"typeProperties": {
-					"location": {
-						"type": "AzureBlobStorageLocation",
-						"container": "adf2persistentarea"
-					},
-					"columnDelimiter": ",",
-					"escapeChar": "\\",
-					"firstRowAsHeader": true,
-					"quoteChar": "\""
-				},
-				"schema": [
-					{
-						"name": "Version_Name",
-						"type": "String"
-					},
-					{
-						"name": "Fund_ID",
-						"type": "String"
-					},
-					{
-						"name": "Asset_ID",
-						"type": "String"
-					},
-					{
-						"name": "GL_Code",
-						"type": "String"
-					},
-					{
-						"name": "Cash_Flow_Code",
-						"type": "String"
-					},
-					{
-						"name": "Debit_Credit",
-						"type": "String"
-					},
-					{
-						"name": "Budget_Date",
-						"type": "String"
-					},
-					{
-						"name": "Budget_Desc",
-						"type": "String"
-					},
-					{
-						"name": "Budget_value",
-						"type": "String"
-					},
-					{
-						"name": "Budget_Type",
-						"type": "String"
-					},
-					{
-						"name": "Update_datetime",
-						"type": "String"
-					},
-					{
-						"name": "record_deleted_flag",
-						"type": "String"
-					},
-					{
-						"name": "process_name",
-						"type": "String"
-					},
-					{
-						"name": "insert_update_flag",
-						"type": "String"
-					},
-					{
-						"name": "Budget_ID",
-						"type": "String"
-					}
-				]
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/linkedServices/BlobStore_nfdwhstaging')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/DelimitedText_datalake_financial_ds')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"description": "Generic",
-				"linkedServiceName": {
-					"referenceName": "BlobStore_nfdwhdatalake",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "DelimitedText",
-				"typeProperties": {
-					"location": {
-						"type": "AzureBlobStorageLocation",
-						"fileName": {
-							"value": "@{item().TARGET_BLOB_NAME}",
-							"type": "Expression"
-						},
-						"folderPath": {
-							"value": "@{item().DATALAKE_FILE_PATH}",
-							"type": "Expression"
-						},
-						"container": "financial"
-					},
-					"columnDelimiter": ",",
-					"escapeChar": "\\",
-					"firstRowAsHeader": true,
-					"quoteChar": "\""
-				},
-				"schema": []
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/linkedServices/BlobStore_nfdwhdatalake')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/DelimitedText_sourcearchive_ds')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "BlobStore_nfdwhstaging",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "DelimitedText",
-				"typeProperties": {
-					"location": {
-						"type": "AzureBlobStorageLocation",
-						"fileName": {
-							"value": "@{item().ORIGINAL_BLOB_NAME}",
-							"type": "Expression"
-						},
-						"folderPath": {
-							"value": "@{item().ORIGINAL_BLOB_ARCHIVE_FULLPATH}",
-							"type": "Expression"
-						},
-						"container": "sourcearchive"
-					},
-					"columnDelimiter": ",",
-					"escapeChar": "\\",
-					"firstRowAsHeader": true,
-					"quoteChar": "\""
-				},
-				"schema": []
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/linkedServices/BlobStore_nfdwhstaging')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/DelimitedText_sourcelandingraw_ds')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "BlobStore_nfdwhstaging",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "DelimitedText",
-				"typeProperties": {
-					"location": {
-						"type": "AzureBlobStorageLocation",
-						"fileName": {
-							"value": "@{item().ORIGINAL_BLOB_NAME}",
-							"type": "Expression"
-						},
-						"container": "sourcelandingraw"
-					},
-					"columnDelimiter": ",",
-					"escapeChar": "\\",
-					"firstRowAsHeader": true,
-					"quoteChar": "\""
-				},
-				"schema": []
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/linkedServices/BlobStore_nfdwhstaging')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/DelimitedText_sourcelandingraw_nofiledefined_ds')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "BlobStore_nfdwhstaging",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "DelimitedText",
-				"typeProperties": {
-					"location": {
-						"type": "AzureBlobStorageLocation",
-						"container": "sourcelandingraw"
-					},
-					"columnDelimiter": ",",
-					"escapeChar": "\\",
-					"firstRowAsHeader": true,
-					"quoteChar": "\""
-				},
-				"schema": []
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/linkedServices/BlobStore_nfdwhstaging')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/DelimitedText_sourcelandingscrubbed_adj_n_actual_ds')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "BlobStore_nfdwhstaging",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "DelimitedText",
-				"typeProperties": {
-					"location": {
-						"type": "AzureBlobStorageLocation",
-						"fileName": {
-							"value": "@{item().TARGET_BLOB_NAME}",
-							"type": "Expression"
-						},
-						"container": "sourcelandingscrubbed"
-					},
-					"columnDelimiter": ",",
-					"escapeChar": "\\",
-					"firstRowAsHeader": true,
-					"quoteChar": "\""
-				},
-				"schema": [
-					{
-						"name": "Date",
-						"type": "String"
-					},
-					{
-						"name": "Transaction_Code",
-						"type": "String"
-					},
-					{
-						"name": "Cashflow_Code",
-						"type": "String"
-					},
-					{
-						"name": "Fund_ID",
-						"type": "String"
-					},
-					{
-						"name": "Asset_ID",
-						"type": "String"
-					},
-					{
-						"name": "Trx_Type",
-						"type": "String"
-					},
-					{
-						"name": "GL_Code",
-						"type": "String"
-					},
-					{
-						"name": "GL_Description",
-						"type": "String"
-					},
-					{
-						"name": "Amount",
-						"type": "String"
-					}
-				]
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/linkedServices/BlobStore_nfdwhstaging')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/DelimitedText_sourcelandingscrubbed_adjustment_dsx')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "BlobStore_nfdwhstaging",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "DelimitedText",
-				"typeProperties": {
-					"location": {
-						"type": "AzureBlobStorageLocation",
-						"fileName": {
-							"value": "@{item().TARGET_BLOB_NAME}",
-							"type": "Expression"
-						},
-						"container": "sourcelandingscrubbed"
-					},
-					"columnDelimiter": ",",
-					"escapeChar": "\\",
-					"firstRowAsHeader": true,
-					"quoteChar": "\""
-				},
-				"schema": [
-					{
-						"name": "Date",
-						"type": "String"
-					},
-					{
-						"name": "Transaction_Code",
-						"type": "String"
-					},
-					{
-						"name": "Cashflow_Code",
-						"type": "String"
-					},
-					{
-						"name": "Fund_ID",
-						"type": "String"
-					},
-					{
-						"name": "Asset_ID",
-						"type": "String"
-					},
-					{
-						"name": "Trx_Type",
-						"type": "String"
-					},
-					{
-						"name": "GL_Code",
-						"type": "String"
-					},
-					{
-						"name": "GL_Description",
-						"type": "String"
-					},
-					{
-						"name": "Amount",
 						"type": "String"
 					}
 				]
