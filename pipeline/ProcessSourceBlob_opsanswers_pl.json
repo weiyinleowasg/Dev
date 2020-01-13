@@ -1,5 +1,5 @@
 {
-	"name": "ProcessSourceBlob_adjustment_n_actual_pl",
+	"name": "ProcessSourceBlob_opsanswers_pl",
 	"properties": {
 		"activities": [
 			{
@@ -7,7 +7,7 @@
 				"type": "Lookup",
 				"dependsOn": [
 					{
-						"activity": "IsPipelineAlreadyRunning",
+						"activity": "SetEtlUtcTag",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -24,7 +24,7 @@
 				"typeProperties": {
 					"source": {
 						"type": "AzureSqlSource",
-						"sqlReaderQuery": "SELECT TOP 1 [ORIGINAL_BLOB_LANDING_CONTAINER],\n\t[ORIGINAL_BLOB_NAME],\n\t[ORIGINAL_BLOP_FULLPATH],\n\t[TARGET_BLOB_LANDING_CONTAINER],\n\t[TARGET_BLOB_NAME],\n\t[DATALAKE_CONTAINER],\n\t[DATALAKE_FILE_PATH],\n\t[ORIGINAL_BLOB_ARCHIVE_CONTAINER],\n\t[ORIGINAL_BLOB_ARCHIVE_FULLPATH],\n\tCONCAT(DATALAKE_CONTAINER,'/',DATALAKE_FILE_PATH,'/',TARGET_BLOB_NAME) AS DATALAKE_FULL_PATHFILE\nFROM [log].[SOURCE_REGISTER_TABLE]\nWHERE [ETL_IS_PROCESSED] = 'N'\nAND [ORIGINAL_BLOB_NAME] LIKE 'ADJ_MNL_%'\nORDER BY [ORIGINAL_BLOB_NAME];"
+						"sqlReaderQuery": "SELECT [ORIGINAL_BLOB_LANDING_CONTAINER],\n\t[ORIGINAL_BLOB_NAME],\n\t[ORIGINAL_BLOP_FULLPATH],\n\t[TARGET_BLOB_LANDING_CONTAINER],\n\t[TARGET_BLOB_NAME],\n\t[DATALAKE_CONTAINER],\n\t[DATALAKE_FILE_PATH],\n\t[ORIGINAL_BLOB_ARCHIVE_CONTAINER],\n\t[ORIGINAL_BLOB_ARCHIVE_FULLPATH],\n\tCONCAT(DATALAKE_CONTAINER,'/',DATALAKE_FILE_PATH,'/',TARGET_BLOB_NAME) AS DATALAKE_FULL_PATHFILE\nFROM [log].[SOURCE_REGISTER_TABLE]\nWHERE [ETL_IS_PROCESSED] = 'N'\nAND [ORIGINAL_BLOB_NAME] LIKE 'OPS_ANSWERS_%'\nORDER BY [ORIGINAL_BLOB_NAME];"
 					},
 					"dataset": {
 						"referenceName": "SQLsourceRegisterTable_ds",
@@ -164,7 +164,7 @@
 										"userProperties": [],
 										"typeProperties": {
 											"dataset": {
-												"referenceName": "DelimitedText_sourcelandingscrubbed_adj_n_actual_ds",
+												"referenceName": "DelimitedText_sourcelandingscrubbed_opsanswers_ds",
 												"type": "DatasetReference"
 											},
 											"enableLogging": false,
@@ -267,7 +267,7 @@
 										"type": "Copy",
 										"dependsOn": [
 											{
-												"activity": "RunProcessSourceBlobAdjustmentActual_spl",
+												"activity": "ProcessSourceBlob_opsanswers_spl",
 												"dependencyConditions": [
 													"Succeeded"
 												]
@@ -308,13 +308,13 @@
 										},
 										"inputs": [
 											{
-												"referenceName": "DelimitedText_sourcelandingscrubbed_adj_n_actual_ds",
+												"referenceName": "DelimitedText_sourcelandingscrubbed_opsanswers_ds",
 												"type": "DatasetReference"
 											}
 										],
 										"outputs": [
 											{
-												"referenceName": "DelimitedText_datalake_financial_ds",
+												"referenceName": "DelimitedText_datalake_nonfinancial_ds",
 												"type": "DatasetReference"
 											}
 										]
@@ -340,7 +340,7 @@
 										"userProperties": [],
 										"typeProperties": {
 											"dataflow": {
-												"referenceName": "LoadTxtToDBstaging_adjustment_n_actual_df",
+												"referenceName": "LoadTxtToDBstaging_opsanswers_df",
 												"type": "DataFlowReference"
 											},
 											"compute": {
@@ -501,51 +501,13 @@
 										"userProperties": [],
 										"typeProperties": {
 											"dataset": {
-												"referenceName": "DelimitedText_sourcelandingscrubbed_adj_n_actual_ds",
+												"referenceName": "DelimitedText_sourcelandingscrubbed_opsanswers_ds",
 												"type": "DatasetReference"
 											},
 											"enableLogging": false,
 											"storeSettings": {
 												"type": "AzureBlobStorageReadSettings",
 												"recursive": false
-											}
-										}
-									},
-									{
-										"name": "RunProcessSourceBlobAdjustmentActual_spl",
-										"type": "ExecutePipeline",
-										"dependsOn": [
-											{
-												"activity": "LoadTxtToDBstaging_ds",
-												"dependencyConditions": [
-													"Succeeded"
-												]
-											}
-										],
-										"userProperties": [],
-										"typeProperties": {
-											"pipeline": {
-												"referenceName": "ProcessSourceBlob_adjustment_n_actual_spl",
-												"type": "PipelineReference"
-											},
-											"waitOnCompletion": true,
-											"parameters": {
-												"ProcessName": {
-													"value": "@pipeline().Pipeline",
-													"type": "Expression"
-												},
-												"FileName": {
-													"value": "@item().DATALAKE_FULL_PATHFILE",
-													"type": "Expression"
-												},
-												"Etl_Utc_Tag": {
-													"value": "@variables('Etl_Utc_Tag')",
-													"type": "Expression"
-												},
-												"OriginalBlobName": {
-													"value": "@item().ORIGINAL_BLOB_NAME",
-													"type": "Expression"
-												}
 											}
 										}
 									},
@@ -593,11 +555,11 @@
 										}
 									},
 									{
-										"name": "UpdateSourceRegisterFailedAbort_Type2Process",
+										"name": "UpdateSourceRegisterFailedAbort_LoadDW",
 										"type": "SqlServerStoredProcedure",
 										"dependsOn": [
 											{
-												"activity": "RunProcessSourceBlobAdjustmentActual_spl",
+												"activity": "ProcessSourceBlob_opsanswers_spl",
 												"dependencyConditions": [
 													"Failed"
 												]
@@ -677,6 +639,44 @@
 											"referenceName": "SQLdbConnection",
 											"type": "LinkedServiceReference"
 										}
+									},
+									{
+										"name": "ProcessSourceBlob_opsanswers_spl",
+										"type": "ExecutePipeline",
+										"dependsOn": [
+											{
+												"activity": "LoadTxtToDBstaging_ds",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"userProperties": [],
+										"typeProperties": {
+											"pipeline": {
+												"referenceName": "ProcessSourceBlob_opsanswers_spl",
+												"type": "PipelineReference"
+											},
+											"waitOnCompletion": true,
+											"parameters": {
+												"ProcessName": {
+													"value": "@pipeline().Pipeline",
+													"type": "Expression"
+												},
+												"FileName": {
+													"value": "@item().DATALAKE_FULL_PATHFILE",
+													"type": "Expression"
+												},
+												"Etl_Utc_Tag": {
+													"value": "@variables('Etl_Utc_Tag')",
+													"type": "Expression"
+												},
+												"OriginalBlobName": {
+													"value": "@item().ORIGINAL_BLOB_NAME",
+													"type": "Expression"
+												}
+											}
+										}
 									}
 								]
 							}
@@ -729,7 +729,7 @@
 							"value": "@variables('Etl_Utc_Tag')",
 							"type": "Expression"
 						},
-						"File_Pattern": "ADJ_MNL_%"
+						"File_Pattern": "OPS_ANSWERS_%"
 					}
 				}
 			},
@@ -765,127 +765,8 @@
 							"value": "@variables('Etl_Utc_Tag')",
 							"type": "Expression"
 						},
-						"File_Pattern": "ADJ_MNL_%"
+						"File_Pattern": "OPS_ANSWERS_%"
 					}
-				}
-			},
-			{
-				"name": "CheckIfPipelineAlreadyRunning",
-				"type": "Lookup",
-				"dependsOn": [
-					{
-						"activity": "SetEtlUtcTag",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"policy": {
-					"timeout": "7.00:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"source": {
-						"type": "AzureSqlSource",
-						"sqlReaderQuery": "SELECT ORIGINAL_BLOB_NAME, RUNNING_STATE FROM (\nSELECT ORIGINAL_BLOB_NAME, 1 AS RUNNING_STATE\nFROM [log].[SOURCE_REGISTER_TABLE]\nWHERE [ETL_RUN_STATUS] = 'RUNNING'\nAND [ORIGINAL_BLOB_NAME] LIKE 'ADJ_MNL_%'\nUNION\nSELECT 'NO FILE' AS ORIGINAL_BLOB_NAME, 0 AS RUNNING_STATE\n)x\nORDER BY RUNNING_STATE DESC;"
-					},
-					"dataset": {
-						"referenceName": "SQLsourceRegisterTable_ds",
-						"type": "DatasetReference"
-					}
-				}
-			},
-			{
-				"name": "IsPipelineAlreadyRunning",
-				"type": "IfCondition",
-				"dependsOn": [
-					{
-						"activity": "CheckIfPipelineAlreadyRunning",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"userProperties": [],
-				"typeProperties": {
-					"expression": {
-						"value": "@greater(activity('CheckIfPipelineAlreadyRunning').output.firstRow.RUNNING_STATE,0)",
-						"type": "Expression"
-					},
-					"ifTrueActivities": [
-						{
-							"name": "UpdateSourceRegiserTableAndAbort_NonTable",
-							"type": "SqlServerStoredProcedure",
-							"dependsOn": [
-								{
-									"activity": "SendMailAlreadyRunning",
-									"dependencyConditions": [
-										"Completed"
-									]
-								}
-							],
-							"policy": {
-								"timeout": "7.00:00:00",
-								"retry": 0,
-								"retryIntervalInSeconds": 30,
-								"secureOutput": false,
-								"secureInput": false
-							},
-							"userProperties": [],
-							"typeProperties": {
-								"storedProcedureName": "[log].[UpdateSourceRegisterFailedAbort]",
-								"storedProcedureParameters": {
-									"EtlUtcTag": {
-										"value": {
-											"value": "@variables('Etl_Utc_Tag')",
-											"type": "Expression"
-										},
-										"type": "String"
-									},
-									"FileName": {
-										"value": "ADJ_XXXXXXXXXX",
-										"type": "String"
-									}
-								}
-							},
-							"linkedServiceName": {
-								"referenceName": "SQLdbConnection",
-								"type": "LinkedServiceReference"
-							}
-						},
-						{
-							"name": "SendMailAlreadyRunning",
-							"type": "WebActivity",
-							"dependsOn": [],
-							"policy": {
-								"timeout": "7.00:00:00",
-								"retry": 0,
-								"retryIntervalInSeconds": 30,
-								"secureOutput": false,
-								"secureInput": false
-							},
-							"userProperties": [],
-							"typeProperties": {
-								"url": "https://prod-24.australiaeast.logic.azure.com:443/workflows/e28a90add06c495bbc9362b5109fb4c0/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=j2wEDAKOpnQ83iKkUa84aeGE6Nfb5604lp-z1-W4ek0",
-								"method": "POST",
-								"headers": {
-									"Content-Type": "application/json"
-								},
-								"body": {
-									"dataFactoryName": "@pipeline().DataFactory",
-									"pipelineName": "@pipeline().Pipeline",
-									"messageHeader": "!!!Another Adjustment Pipeline Is Running!!!",
-									"messageProcessed": "@activity('CheckIfPipelineAlreadyRunning').output.firstRow.ORIGINAL_BLOB_NAME",
-									"messageNotProcessed": "",
-									"messageErrorDuringProcess": ""
-								}
-							}
-						}
-					]
 				}
 			}
 		],
@@ -896,10 +777,9 @@
 			},
 			"Etl_Utc_Tag": {
 				"type": "String",
-				"defaultValue": "2999-12-31"
+				"defaultValue": "2019-10-22"
 			}
 		},
 		"annotations": []
-	},
-	"type": "Microsoft.DataFactory/factories/pipelines"
+	}
 }
