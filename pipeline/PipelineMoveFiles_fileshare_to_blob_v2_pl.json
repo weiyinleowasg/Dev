@@ -139,6 +139,106 @@
 									}
 								}
 							}
+						},
+						{
+							"name": "If Condition1",
+							"type": "IfCondition",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@or(startswith(item().name,'MAS_MNL_FUND'), startswith(item().name,'MAS_MNL_FX') )",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "Copy data1",
+										"type": "Copy",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "7.00:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "BinarySource",
+												"storeSettings": {
+													"type": "FileServerReadSettings",
+													"recursive": false,
+													"wildcardFileName": {
+														"value": "@{item().name}",
+														"type": "Expression"
+													}
+												}
+											},
+											"sink": {
+												"type": "BinarySink",
+												"storeSettings": {
+													"type": "AzureBlobStorageWriteSettings"
+												}
+											},
+											"enableStaging": false
+										},
+										"inputs": [
+											{
+												"referenceName": "BinaryDataSourceFileshareDirectory_MoveFile_ds",
+												"type": "DatasetReference"
+											}
+										],
+										"outputs": [
+											{
+												"referenceName": "BinaryDataDestinationBlob_MoveFile_ds",
+												"type": "DatasetReference",
+												"parameters": {
+													"filename": {
+														"value": "@{item().name}",
+														"type": "Expression"
+													}
+												}
+											}
+										]
+									},
+									{
+										"name": "Delete1",
+										"type": "Delete",
+										"dependsOn": [
+											{
+												"activity": "Copy data1",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "7.00:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"dataset": {
+												"referenceName": "BinaryDataSourceFileshareDirectory_MoveFile_ds",
+												"type": "DatasetReference"
+											},
+											"enableLogging": false,
+											"storeSettings": {
+												"type": "FileServerReadSettings",
+												"recursive": false,
+												"wildcardFileName": {
+													"value": "@{item().name}",
+													"type": "Expression"
+												}
+											}
+										}
+									}
+								]
+							}
 						}
 					]
 				}
