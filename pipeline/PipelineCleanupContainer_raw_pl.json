@@ -18,14 +18,15 @@
 				"userProperties": [],
 				"typeProperties": {
 					"dataset": {
-						"referenceName": "BinaryDataSourceFileshareDirectory_MoveFile_ds",
+						"referenceName": "BinaryDataSourceLandingRaw_ds",
 						"type": "DatasetReference"
 					},
 					"fieldList": [
-						"childItems"
+						"itemName",
+						"lastModified"
 					],
 					"storeSettings": {
-						"type": "FileServerReadSettings",
+						"type": "AzureBlobStorageReadSettings",
 						"recursive": true
 					}
 				}
@@ -53,13 +54,50 @@
 						{
 							"name": "If Condition1",
 							"type": "IfCondition",
-							"dependsOn": [],
+							"dependsOn": [
+								{
+									"activity": "LookupSourceRegisterTable",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
 							"userProperties": [],
 							"typeProperties": {
 								"expression": {
-									"value": "@or(endswith(item().name,'.csv'), endswith(item().name,'.CSV') ) ",
+									"value": "@activity('LookupSourceRegisterTable').output.exists",
 									"type": "Expression"
 								},
+								"ifFalseActivities": [
+									{
+										"name": "DeleteInvalidRawFile",
+										"type": "Delete",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "7.00:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"dataset": {
+												"referenceName": "BinaryDataSourceLandingRaw_ds",
+												"type": "DatasetReference"
+											},
+											"enableLogging": true,
+											"storeSettings": {
+												"type": "AzureBlobStorageReadSettings",
+												"recursive": false,
+												"wildcardFileName": {
+													"value": "@{item().name}",
+													"type": "Expression"
+												}
+											}
+										}
+									}
+								],
 								"ifTrueActivities": [
 									{
 										"name": "Copy data1",
@@ -149,6 +187,33 @@
 									}
 								]
 							}
+						},
+						{
+							"name": "LookupSourceRegisterTable",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "@SELECT [ORIGINAL_BLOB_NAME]\n  FROM [log].[Source_Register_Table]\n  WHERE [ORIGINAL_BLOB_NAME] = @item().name\n  AND [ETL_IS_PROCESSED] = 'N'",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00"
+								},
+								"dataset": {
+									"referenceName": "SQLsourceRegisterTable_ds",
+									"type": "DatasetReference"
+								}
+							}
 						}
 					]
 				}
@@ -168,7 +233,7 @@
 				"userProperties": [],
 				"typeProperties": {
 					"items": {
-						"value": "@activity('GetFileList').output.childItems",
+						"value": "@activity('GetFileList').output.itemname",
 						"type": "Expression"
 					},
 					"condition": {
