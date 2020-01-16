@@ -7,6 +7,10 @@
 			"metadata": "Data Factory name",
 			"defaultValue": "DWH-NonProd-ADF"
 		},
+		"FileStore_nfdwhsource_errordump_password": {
+			"type": "secureString",
+			"metadata": "Secure string for 'password' of 'FileStore_nfdwhsource_errordump'"
+		},
 		"FileStore_nfdwhsourcelanding_password": {
 			"type": "secureString",
 			"metadata": "Secure string for 'password' of 'FileStore_nfdwhsourcelanding'"
@@ -34,6 +38,14 @@
 		"BlobStore_nfdwhstaging_properties_typeProperties_connectionString_secretName": {
 			"type": "string",
 			"defaultValue": "NFDWHNonProdBlobstagingConn"
+		},
+		"FileStore_nfdwhsource_errordump_properties_typeProperties_host": {
+			"type": "string",
+			"defaultValue": "\\\\nfdwhstagingnonprod.file.core.windows.net\\nfdwhnonproderrordump"
+		},
+		"FileStore_nfdwhsource_errordump_properties_typeProperties_userId": {
+			"type": "string",
+			"defaultValue": "nfdwhstagingnonprod"
 		},
 		"FileStore_nfdwhsourcelanding_properties_typeProperties_host": {
 			"type": "string",
@@ -1497,6 +1509,372 @@
 			]
 		},
 		{
+			"name": "[concat(parameters('factoryName'), '/PipelineCleanupContainer_raw_pl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Move files from one folder to another folder",
+				"activities": [
+					{
+						"name": "GetFileList",
+						"description": "Get the list of file",
+						"type": "GetMetadata",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataset": {
+								"referenceName": "BinaryDataBlobSourceLandingRaw_ds",
+								"type": "DatasetReference",
+								"parameters": {}
+							},
+							"fieldList": [
+								"childItems",
+								"lastModified"
+							],
+							"storeSettings": {
+								"type": "AzureBlobStorageReadSettings",
+								"recursive": true
+							}
+						}
+					},
+					{
+						"name": "ForEachFile",
+						"description": "Iterate each file, and move them one by one.",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "FilterFiles",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('FilterFiles').output.value",
+								"type": "Expression"
+							},
+							"isSequential": true,
+							"activities": [
+								{
+									"name": "If Condition1",
+									"type": "IfCondition",
+									"dependsOn": [
+										{
+											"activity": "LookupSourceRegisterTable",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"expression": {
+											"value": "@greater(activity('LookupSourceRegisterTable').output.firstRow.TOTREC,0)",
+											"type": "Expression"
+										},
+										"ifFalseActivities": [
+											{
+												"name": "DeleteInvalidRawFile",
+												"type": "Delete",
+												"dependsOn": [
+													{
+														"activity": "Copy data1",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"dataset": {
+														"referenceName": "BinaryDataBlobSourceLandingRaw_ds",
+														"type": "DatasetReference",
+														"parameters": {}
+													},
+													"enableLogging": false,
+													"storeSettings": {
+														"type": "AzureBlobStorageReadSettings",
+														"recursive": false,
+														"wildcardFileName": {
+															"value": "@{item().name}",
+															"type": "Expression"
+														}
+													}
+												}
+											},
+											{
+												"name": "Copy data1",
+												"type": "Copy",
+												"dependsOn": [],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "BinarySource",
+														"storeSettings": {
+															"type": "AzureBlobStorageReadSettings",
+															"recursive": true,
+															"wildcardFileName": {
+																"value": "@{item().name}",
+																"type": "Expression"
+															}
+														}
+													},
+													"sink": {
+														"type": "BinarySink",
+														"storeSettings": {
+															"type": "FileServerWriteSettings"
+														}
+													},
+													"enableStaging": false
+												},
+												"inputs": [
+													{
+														"referenceName": "BinaryDataBlobSourceLandingRaw_ds",
+														"type": "DatasetReference",
+														"parameters": {}
+													}
+												],
+												"outputs": [
+													{
+														"referenceName": "BinaryDataSoureFileShareErrorDump_ds",
+														"type": "DatasetReference",
+														"parameters": {}
+													}
+												]
+											}
+										]
+									}
+								},
+								{
+									"name": "LookupSourceRegisterTable",
+									"type": "Lookup",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "AzureSqlSource",
+											"sqlReaderQuery": {
+												"value": "SELECT COUNT(*) AS TOTREC\n  FROM [log].[Source_Register_Table]\n  WHERE [ORIGINAL_BLOB_NAME] = '@{item().name}'\n  AND [ETL_IS_PROCESSED] = 'N'",
+												"type": "Expression"
+											},
+											"queryTimeout": "02:00:00"
+										},
+										"dataset": {
+											"referenceName": "SQLsourceRegisterTable_ds",
+											"type": "DatasetReference",
+											"parameters": {}
+										}
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "FilterFiles",
+						"description": "Only files will be selected, the source-folders will not be selected.",
+						"type": "Filter",
+						"dependsOn": [
+							{
+								"activity": "GetFileList",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('GetFileList').output.childitems",
+								"type": "Expression"
+							},
+							"condition": {
+								"value": "@equals(item().type, 'File')",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/BinaryDataBlobSourceLandingRaw_ds')]",
+				"[concat(variables('factoryId'), '/datasets/SQLsourceRegisterTable_ds')]",
+				"[concat(variables('factoryId'), '/datasets/BinaryDataSoureFileShareErrorDump_ds')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/PipelineCleanupContainer_scrubbed_pl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "LookupSoureRegisterTableError",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": "SELECT ORIGINAL_BLOB_NAME AS TARGET_BLOB_NAME \nFROM LOG.SOURCE_REGISTER_TABLE \nWHERE ETL_IS_PROCESSED = 'E'\nAND DATEDIFF(DAY,INSERT_TIMESTAMP,CONVERT(smalldatetime,CONVERT(datetimeoffset, SYSDATETIME()) AT TIME ZONE 'AUS Eastern Standard Time')) < 60"
+							},
+							"dataset": {
+								"referenceName": "SQLsourceRegisterTable_ds",
+								"type": "DatasetReference",
+								"parameters": {}
+							},
+							"firstRowOnly": false
+						}
+					},
+					{
+						"name": "ForEachSourceRegisterTableError",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "LookupSoureRegisterTableError",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('LookupSoureRegisterTableError').output.value",
+								"type": "Expression"
+							},
+							"activities": [
+								{
+									"name": "GetFileNameFromScrubbed",
+									"type": "GetMetadata",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"dataset": {
+											"referenceName": "DelimitedText_sourcelandingscrubbed_ds",
+											"type": "DatasetReference",
+											"parameters": {}
+										},
+										"fieldList": [
+											"itemName",
+											"exists"
+										],
+										"storeSettings": {
+											"type": "AzureBlobStorageReadSettings",
+											"recursive": true
+										},
+										"formatSettings": {
+											"type": "DelimitedTextReadSettings"
+										}
+									}
+								},
+								{
+									"name": "IsFileExist",
+									"type": "IfCondition",
+									"dependsOn": [
+										{
+											"activity": "GetFileNameFromScrubbed",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"expression": {
+											"value": "@activity('GetFileNameFromScrubbed').output.exists",
+											"type": "Expression"
+										},
+										"ifTrueActivities": [
+											{
+												"name": "DeleteScrubbedFile",
+												"type": "Delete",
+												"dependsOn": [],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"dataset": {
+														"referenceName": "DelimitedText_sourcelandingscrubbed_ds",
+														"type": "DatasetReference",
+														"parameters": {}
+													},
+													"enableLogging": false,
+													"storeSettings": {
+														"type": "AzureBlobStorageReadSettings",
+														"recursive": false
+													}
+												}
+											}
+										]
+									}
+								}
+							]
+						}
+					}
+				],
+				"variables": {
+					"myVAR": {
+						"type": "String"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/SQLsourceRegisterTable_ds')]",
+				"[concat(variables('factoryId'), '/datasets/DelimitedText_sourcelandingscrubbed_ds')]"
+			]
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/PipelineMoveFiles_fileshare_to_blob_pl')]",
 			"type": "Microsoft.DataFactory/factories/pipelines",
 			"apiVersion": "2018-06-01",
@@ -1549,98 +1927,108 @@
 								"value": "@activity('FilterFiles').output.value",
 								"type": "Expression"
 							},
-							"batchCount": 20,
+							"isSequential": true,
 							"activities": [
 								{
-									"name": "CopyAFile",
-									"description": "Copy a file from the source store to the destination store.",
-									"type": "Copy",
+									"name": "CSVfilesOnly",
+									"type": "IfCondition",
 									"dependsOn": [],
-									"policy": {
-										"timeout": "7.00:00:00",
-										"retry": 0,
-										"retryIntervalInSeconds": 30,
-										"secureOutput": false,
-										"secureInput": false
-									},
 									"userProperties": [],
 									"typeProperties": {
-										"source": {
-											"type": "BinarySource",
-											"storeSettings": {
-												"type": "FileServerReadSettings",
-												"recursive": false,
-												"wildcardFileName": {
-													"value": "@{item().name}",
-													"type": "Expression"
-												}
+										"expression": {
+											"value": "@or(endswith(item().name,'.csv'), endswith(item().name,'.CSV') ) ",
+											"type": "Expression"
+										},
+										"ifTrueActivities": [
+											{
+												"name": "CopyFiromFilestoreToBlobstore",
+												"type": "Copy",
+												"dependsOn": [],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "BinarySource",
+														"storeSettings": {
+															"type": "FileServerReadSettings",
+															"recursive": false,
+															"wildcardFileName": {
+																"value": "@{item().name}",
+																"type": "Expression"
+															}
+														}
+													},
+													"sink": {
+														"type": "BinarySink",
+														"storeSettings": {
+															"type": "AzureBlobStorageWriteSettings"
+														}
+													},
+													"enableStaging": false
+												},
+												"inputs": [
+													{
+														"referenceName": "BinaryDataSourceFileshareDirectory_MoveFile_ds",
+														"type": "DatasetReference",
+														"parameters": {}
+													}
+												],
+												"outputs": [
+													{
+														"referenceName": "BinaryDataDestinationBlob_MoveFile_ds",
+														"type": "DatasetReference",
+														"parameters": {
+															"filename": {
+																"value": "@{item().name}",
+																"type": "Expression"
+															}
+														}
+													}
+												]
 											},
-											"recursive": false
-										},
-										"sink": {
-											"type": "BinarySink",
-											"storeSettings": {
-												"type": "AzureBlobStorageWriteSettings"
-											}
-										},
-										"enableStaging": false,
-										"dataIntegrationUnits": 0
-									},
-									"inputs": [
-										{
-											"referenceName": "BinaryDataSourceFileshareDirectory_MoveFile_ds",
-											"type": "DatasetReference",
-											"parameters": {}
-										}
-									],
-									"outputs": [
-										{
-											"referenceName": "BinaryDataDestinationBlob_MoveFile_ds",
-											"type": "DatasetReference",
-											"parameters": {
-												"filename": {
-													"value": "@item().name",
-													"type": "Expression"
+											{
+												"name": "DeleteFromFilestore",
+												"type": "Delete",
+												"dependsOn": [
+													{
+														"activity": "CopyFiromFilestoreToBlobstore",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"dataset": {
+														"referenceName": "BinaryDataSourceFileshareDirectory_MoveFile_ds",
+														"type": "DatasetReference",
+														"parameters": {}
+													},
+													"enableLogging": false,
+													"storeSettings": {
+														"type": "FileServerReadSettings",
+														"recursive": false,
+														"wildcardFileName": {
+															"value": "@{item().name}",
+															"type": "Expression"
+														}
+													}
 												}
 											}
-										}
-									]
-								},
-								{
-									"name": "DeleteAFile",
-									"description": "Delete a file from the source store",
-									"type": "Delete",
-									"dependsOn": [
-										{
-											"activity": "CopyAFile",
-											"dependencyConditions": [
-												"Succeeded"
-											]
-										}
-									],
-									"policy": {
-										"timeout": "7.00:00:00",
-										"retry": 0,
-										"retryIntervalInSeconds": 30,
-										"secureOutput": false,
-										"secureInput": false
-									},
-									"userProperties": [],
-									"typeProperties": {
-										"dataset": {
-											"referenceName": "BinaryDataSourceFileshareDirectory_MoveFile_ds",
-											"type": "DatasetReference",
-											"parameters": {}
-										},
-										"enableLogging": false,
-										"storeSettings": {
-											"type": "FileServerReadSettings",
-											"recursive": false,
-											"wildcardFileName": {
-												"value": "@{item().name}",
-												"type": "Expression"
-											}
-										}
+										]
 									}
 								}
 							]
@@ -2044,148 +2432,6 @@
 			},
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/datasets/SQLsourceRegisterTable_ds')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/ProcessCleanupContainer_scrubbed_pl')]",
-			"type": "Microsoft.DataFactory/factories/pipelines",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"activities": [
-					{
-						"name": "LookupSoureRegisterTableError",
-						"type": "Lookup",
-						"dependsOn": [],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"source": {
-								"type": "AzureSqlSource",
-								"sqlReaderQuery": "SELECT ORIGINAL_BLOB_NAME AS TARGET_BLOB_NAME \nFROM LOG.SOURCE_REGISTER_TABLE \nWHERE ETL_IS_PROCESSED = 'E'\nAND DATEDIFF(DAY,INSERT_TIMESTAMP,CONVERT(smalldatetime,CONVERT(datetimeoffset, SYSDATETIME()) AT TIME ZONE 'AUS Eastern Standard Time')) < 60"
-							},
-							"dataset": {
-								"referenceName": "SQLsourceRegisterTable_ds",
-								"type": "DatasetReference",
-								"parameters": {}
-							},
-							"firstRowOnly": false
-						}
-					},
-					{
-						"name": "ForEachSourceRegisterTableError",
-						"type": "ForEach",
-						"dependsOn": [
-							{
-								"activity": "LookupSoureRegisterTableError",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"items": {
-								"value": "@activity('LookupSoureRegisterTableError').output.value",
-								"type": "Expression"
-							},
-							"activities": [
-								{
-									"name": "GetFileNameFromScrubbed",
-									"type": "GetMetadata",
-									"dependsOn": [],
-									"policy": {
-										"timeout": "7.00:00:00",
-										"retry": 0,
-										"retryIntervalInSeconds": 30,
-										"secureOutput": false,
-										"secureInput": false
-									},
-									"userProperties": [],
-									"typeProperties": {
-										"dataset": {
-											"referenceName": "DelimitedText_sourcelandingscrubbed_ds",
-											"type": "DatasetReference",
-											"parameters": {}
-										},
-										"fieldList": [
-											"itemName",
-											"exists"
-										],
-										"storeSettings": {
-											"type": "AzureBlobStorageReadSettings",
-											"recursive": true
-										},
-										"formatSettings": {
-											"type": "DelimitedTextReadSettings"
-										}
-									}
-								},
-								{
-									"name": "IsFileExist",
-									"type": "IfCondition",
-									"dependsOn": [
-										{
-											"activity": "GetFileNameFromScrubbed",
-											"dependencyConditions": [
-												"Succeeded"
-											]
-										}
-									],
-									"userProperties": [],
-									"typeProperties": {
-										"expression": {
-											"value": "@activity('GetFileNameFromScrubbed').output.exists",
-											"type": "Expression"
-										},
-										"ifTrueActivities": [
-											{
-												"name": "DeleteScrubbedFile",
-												"type": "Delete",
-												"dependsOn": [],
-												"policy": {
-													"timeout": "7.00:00:00",
-													"retry": 0,
-													"retryIntervalInSeconds": 30,
-													"secureOutput": false,
-													"secureInput": false
-												},
-												"userProperties": [],
-												"typeProperties": {
-													"dataset": {
-														"referenceName": "DelimitedText_sourcelandingscrubbed_ds",
-														"type": "DatasetReference",
-														"parameters": {}
-													},
-													"enableLogging": false,
-													"storeSettings": {
-														"type": "AzureBlobStorageReadSettings",
-														"recursive": false
-													}
-												}
-											}
-										]
-									}
-								}
-							]
-						}
-					}
-				],
-				"variables": {
-					"myVAR": {
-						"type": "String"
-					}
-				},
-				"annotations": []
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/datasets/SQLsourceRegisterTable_ds')]",
-				"[concat(variables('factoryId'), '/datasets/DelimitedText_sourcelandingscrubbed_ds')]"
 			]
 		},
 		{
@@ -19862,6 +20108,29 @@
 			]
 		},
 		{
+			"name": "[concat(parameters('factoryName'), '/BinaryDataBlobSourceLandingRaw_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "It describes the destination store.",
+				"linkedServiceName": {
+					"referenceName": "BlobStore_nfdwhstaging",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "Binary",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"container": "sourcelandingraw"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/BlobStore_nfdwhstaging')]"
+			]
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/BinaryDataDestinationBlob_MoveFile_ds')]",
 			"type": "Microsoft.DataFactory/factories/datasets",
 			"apiVersion": "2018-06-01",
@@ -20026,6 +20295,27 @@
 			},
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/linkedServices/FileStore_nfdwhsourcelandingraw')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/BinaryDataSoureFileShareErrorDump_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "FileStore_nfdwhsource_errordump",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "Binary",
+				"typeProperties": {
+					"location": {
+						"type": "FileServerLocation"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/FileStore_nfdwhsource_errordump')]"
 			]
 		},
 		{
@@ -20744,6 +21034,10 @@
 					{
 						"name": "Level",
 						"type": "String"
+					},
+					{
+						"name": "Debit_Credit",
+						"type": "String"
 					}
 				]
 			},
@@ -21232,6 +21526,10 @@
 						"type": "String"
 					},
 					{
+						"name": "Answer_Number",
+						"type": "String"
+					},
+					{
 						"name": "Text_Response",
 						"type": "String"
 					},
@@ -21577,6 +21875,10 @@
 					{
 						"name": "process_name",
 						"type": "nvarchar"
+					},
+					{
+						"name": "Debit_Credit",
+						"type": "varchar"
 					}
 				],
 				"typeProperties": {
@@ -22172,6 +22474,11 @@
 					{
 						"name": "Attribute",
 						"type": "nvarchar"
+					},
+					{
+						"name": "Answer_Number",
+						"type": "int",
+						"precision": 10
 					},
 					{
 						"name": "Text_Response",
@@ -22857,6 +23164,10 @@
 						"name": "GL_Level_Code",
 						"type": "int",
 						"precision": 10
+					},
+					{
+						"name": "Debit_Credit",
+						"type": "varchar"
 					}
 				],
 				"typeProperties": {
@@ -23216,6 +23527,10 @@
 					},
 					{
 						"name": "Attribute",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Answer_Number",
 						"type": "nvarchar"
 					},
 					{
@@ -23867,6 +24182,24 @@
 			]
 		},
 		{
+			"name": "[concat(parameters('factoryName'), '/FileStore_nfdwhsource_errordump')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "FileServer",
+				"typeProperties": {
+					"host": "[parameters('FileStore_nfdwhsource_errordump_properties_typeProperties_host')]",
+					"userId": "[parameters('FileStore_nfdwhsource_errordump_properties_typeProperties_userId')]",
+					"password": {
+						"type": "SecureString",
+						"value": "[parameters('FileStore_nfdwhsource_errordump_password')]"
+					}
+				}
+			},
+			"dependsOn": []
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/FileStore_nfdwhsourcelanding')]",
 			"type": "Microsoft.DataFactory/factories/linkedServices",
 			"apiVersion": "2018-06-01",
@@ -24004,7 +24337,7 @@
 				"pipelines": [
 					{
 						"pipelineReference": {
-							"referenceName": "ProcessCleanupContainer_scrubbed_pl",
+							"referenceName": "PipelineCleanupContainer_scrubbed_pl",
 							"type": "PipelineReference"
 						},
 						"parameters": {}
@@ -24033,7 +24366,7 @@
 				}
 			},
 			"dependsOn": [
-				"[concat(variables('factoryId'), '/pipelines/ProcessCleanupContainer_scrubbed_pl')]"
+				"[concat(variables('factoryId'), '/pipelines/PipelineCleanupContainer_scrubbed_pl')]"
 			]
 		},
 		{
@@ -24673,7 +25006,7 @@
 							"name": "UpdateSelectForExpire"
 						}
 					],
-					"script": "\nparameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tGL_Code as string,\n\t\tGL_Desc as string,\n\t\tCategory as string,\n\t\tCash_Flow_Code as string,\n\t\tGL_Parent_Code as string,\n\t\tGL_Level_Code as integer\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> StagingDB\nsource(output(\n\t\tGL_Code as string,\n\t\tGL_Desc as string,\n\t\tCategory as string,\n\t\tCash_Flow_Code as string,\n\t\tGL_Parent_Code as string,\n\t\tGL_Level_Code as integer,\n\t\tstart_datetime as timestamp,\n\t\tend_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: ' SELECT [GL_Code]\\n      ,[GL_Desc]\\n      ,[Category]\\n      ,[Cash_Flow_Code]\\n      ,[GL_Parent_Code]\\n      ,[GL_Level_Code]\\n      ,[start_datetime]\\n      ,[end_datetime]\\n      ,[record_deleted_flag]\\n      ,[process_name]\\n  FROM [relational].[Chart_of_Account]\\n  WHERE [record_deleted_flag] = 0',\n\tformat: 'query') ~> RelationDB\nStagingDB derive(StagingChecksum = sha2(256, GL_Desc,Category,Cash_Flow_Code,GL_Parent_Code,GL_Level_Code)) ~> StatgingAddChecksum\nStatgingAddChecksum, RelationRenameColumns lookup(GL_Code == Relation_GL_Code,\n\tbroadcast: 'none')~> LookupRelationalStream\nRelationDB derive(RelationalChecksum = sha2(256, GL_Desc,Category,Cash_Flow_Code,GL_Parent_Code,GL_Level_Code)) ~> RelationalAddChecksum\nLookupRelationalStream split(isNull(Relation_RelationalChecksum),\n\tStagingChecksum != Relation_RelationalChecksum,\n\tdisjoint: false) ~> ConditionalSplitNewOrExpire@(StagingNewRow, StagingChangedRow, IgnoreNoChange)\nRelationalAddChecksum select(mapColumn(\n\t\tRelation_GL_Code = GL_Code,\n\t\tRelation_GL_Desc = GL_Desc,\n\t\tRelation_Category = Category,\n\t\tRelation_Cash_Flow_Code = Cash_Flow_Code,\n\t\tRelation_GL_Parent_Code = GL_Parent_Code,\n\t\tRelation_GL_Level_Code = GL_Level_Code,\n\t\tRelation_start_datetime = start_datetime,\n\t\tRelation_end_datetime = end_datetime,\n\t\tRelation_record_deleted_flag = record_deleted_flag,\n\t\tRelation_process_name = process_name,\n\t\tRelation_RelationalChecksum = RelationalChecksum\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> RelationRenameColumns\nConditionalSplitNewOrExpire@StagingNewRow select(mapColumn(\n\t\tGL_Code,\n\t\tGL_Desc,\n\t\tCategory,\n\t\tCash_Flow_Code,\n\t\tGL_Parent_Code,\n\t\tGL_Level_Code\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectNewStagingRow\nSelectNewStagingRow derive(start_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tend_datetime = toTimestamp('9999-12-31 00:00:00'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('-',$ProcessName,$FileName)) ~> AddAuditColumns\nUnionForDB alterRow(insertIf(record_deleted_flag==toInteger(0)),\n\tupdateIf(record_deleted_flag==toInteger(1))) ~> AlterRowInsertUpdateExpire\nConditionalSplitNewOrExpire@StagingChangedRow derive(start_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tend_datetime = toTimestamp('9999-12-31 00:00:00'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('-', $ProcessName, $FileName)) ~> UpdateAddAuditAttributes\nConditionalSplitNewOrExpire@StagingChangedRow derive(end_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\trecord_deleted_flag = toInteger(1)) ~> AddExpiredAttributes\nUpdateAddAuditAttributes select(mapColumn(\n\t\tGL_Code,\n\t\tGL_Desc,\n\t\tCategory,\n\t\tCash_Flow_Code,\n\t\tGL_Parent_Code,\n\t\tGL_Level_Code,\n\t\tstart_datetime,\n\t\tend_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> UpdateSelectForInsert\nAddAuditColumns, UpdateSelectForInsert, UpdateSelectForExpire union(byName: true)~> UnionForDB\nAddExpiredAttributes select(mapColumn(\n\t\tGL_Code = Relation_GL_Code,\n\t\tGL_Desc = Relation_GL_Desc,\n\t\tCategory = Relation_Category,\n\t\tCash_Flow_Code = Relation_Cash_Flow_Code,\n\t\tGL_Parent_Code = Relation_GL_Parent_Code,\n\t\tGL_Level_Code = Relation_GL_Level_Code,\n\t\tstart_datetime = Relation_start_datetime,\n\t\tprocess_name = Relation_process_name,\n\t\tend_datetime,\n\t\trecord_deleted_flag\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> UpdateSelectForExpire\nAlterRowInsertUpdateExpire sink(input(\n\t\tGL_Code as string,\n\t\tGL_Desc as string,\n\t\tCategory as string,\n\t\tCash_Flow_Code as string,\n\t\tGL_Parent_Code as string,\n\t\tGL_Level_Code as integer,\n\t\tstart_datetime as timestamp,\n\t\tend_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:true,\n\tupsertable:false,\n\tkeys:['GL_Code'],\n\tformat: 'table',\n\tmapColumn(\n\t\tGL_Code,\n\t\tGL_Desc,\n\t\tCategory,\n\t\tCash_Flow_Code,\n\t\tGL_Parent_Code,\n\t\tGL_Level_Code,\n\t\tstart_datetime,\n\t\tend_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t)) ~> InsertUpdateRow"
+					"script": "\nparameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tGL_Code as string,\n\t\tGL_Desc as string,\n\t\tCategory as string,\n\t\tCash_Flow_Code as string,\n\t\tGL_Parent_Code as string,\n\t\tGL_Level_Code as integer,\n\t\tDebit_Credit as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> StagingDB\nsource(output(\n\t\tGL_Code as string,\n\t\tGL_Desc as string,\n\t\tCategory as string,\n\t\tCash_Flow_Code as string,\n\t\tGL_Parent_Code as string,\n\t\tGL_Level_Code as integer,\n\t\tDebit_Credit as string,\n\t\tstart_datetime as timestamp,\n\t\tend_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: ' SELECT [GL_Code]\\n      ,[GL_Desc]\\n      ,[Category]\\n      ,[Cash_Flow_Code]\\n      ,[GL_Parent_Code]\\n      ,[GL_Level_Code]\\n\t  ,[Debit_Credit]\\n      ,[start_datetime]\\n      ,[end_datetime]\\n      ,[record_deleted_flag]\\n      ,[process_name]\\n  FROM [relational].[Chart_of_Account]\\n  WHERE [record_deleted_flag] = 0',\n\tformat: 'query') ~> RelationDB\nStagingDB derive(StagingChecksum = sha2(256, GL_Desc,Category,Cash_Flow_Code,GL_Parent_Code,GL_Level_Code,Debit_Credit)) ~> StatgingAddChecksum\nStatgingAddChecksum, RelationRenameColumns lookup(GL_Code == Relation_GL_Code,\n\tbroadcast: 'none')~> LookupRelationalStream\nRelationDB derive(RelationalChecksum = sha2(256, GL_Desc,Category,Cash_Flow_Code,GL_Parent_Code,GL_Level_Code,Debit_Credit)) ~> RelationalAddChecksum\nLookupRelationalStream split(isNull(Relation_RelationalChecksum),\n\tStagingChecksum != Relation_RelationalChecksum,\n\tdisjoint: false) ~> ConditionalSplitNewOrExpire@(StagingNewRow, StagingChangedRow, IgnoreNoChange)\nRelationalAddChecksum select(mapColumn(\n\t\tRelation_GL_Code = GL_Code,\n\t\tRelation_GL_Desc = GL_Desc,\n\t\tRelation_Category = Category,\n\t\tRelation_Cash_Flow_Code = Cash_Flow_Code,\n\t\tRelation_GL_Parent_Code = GL_Parent_Code,\n\t\tRelation_GL_Level_Code = GL_Level_Code,\n\t\tRelation_Debit_Credit = Debit_Credit,\n\t\tRelation_start_datetime = start_datetime,\n\t\tRelation_end_datetime = end_datetime,\n\t\tRelation_record_deleted_flag = record_deleted_flag,\n\t\tRelation_process_name = process_name,\n\t\tRelation_RelationalChecksum = RelationalChecksum\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> RelationRenameColumns\nConditionalSplitNewOrExpire@StagingNewRow select(mapColumn(\n\t\tGL_Code,\n\t\tGL_Desc,\n\t\tCategory,\n\t\tCash_Flow_Code,\n\t\tGL_Parent_Code,\n\t\tGL_Level_Code,\n\t\tDebit_Credit\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectNewStagingRow\nSelectNewStagingRow derive(start_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tend_datetime = toTimestamp('9999-12-31 00:00:00'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('-',$ProcessName,$FileName)) ~> AddAuditColumns\nUnionForDB alterRow(insertIf(record_deleted_flag==toInteger(0)),\n\tupdateIf(record_deleted_flag==toInteger(1))) ~> AlterRowInsertUpdateExpire\nConditionalSplitNewOrExpire@StagingChangedRow derive(start_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tend_datetime = toTimestamp('9999-12-31 00:00:00'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('-', $ProcessName, $FileName)) ~> UpdateAddAuditAttributes\nConditionalSplitNewOrExpire@StagingChangedRow derive(end_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\trecord_deleted_flag = toInteger(1)) ~> AddExpiredAttributes\nUpdateAddAuditAttributes select(mapColumn(\n\t\tGL_Code,\n\t\tGL_Desc,\n\t\tCategory,\n\t\tCash_Flow_Code,\n\t\tGL_Parent_Code,\n\t\tGL_Level_Code,\n\t\tDebit_Credit,\n\t\tstart_datetime,\n\t\tend_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> UpdateSelectForInsert\nAddAuditColumns, UpdateSelectForInsert, UpdateSelectForExpire union(byName: true)~> UnionForDB\nAddExpiredAttributes select(mapColumn(\n\t\tGL_Code = Relation_GL_Code,\n\t\tGL_Desc = Relation_GL_Desc,\n\t\tCategory = Relation_Category,\n\t\tCash_Flow_Code = Relation_Cash_Flow_Code,\n\t\tGL_Parent_Code = Relation_GL_Parent_Code,\n\t\tGL_Level_Code = Relation_GL_Level_Code,\n\t\tDebit_Credit = Relation_Debit_Credit,\n\t\tstart_datetime = Relation_start_datetime,\n\t\tprocess_name = Relation_process_name,\n\t\tend_datetime,\n\t\trecord_deleted_flag\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> UpdateSelectForExpire\nAlterRowInsertUpdateExpire sink(input(\n\t\tGL_Code as string,\n\t\tGL_Desc as string,\n\t\tCategory as string,\n\t\tCash_Flow_Code as string,\n\t\tGL_Parent_Code as string,\n\t\tGL_Level_Code as integer,\n\t\tstart_datetime as timestamp,\n\t\tend_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string,\n\t\tDebit_Credit as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:true,\n\tupsertable:false,\n\tkeys:['GL_Code'],\n\tformat: 'table',\n\tmapColumn(\n\t\tGL_Code,\n\t\tGL_Desc,\n\t\tCategory,\n\t\tCash_Flow_Code,\n\t\tGL_Parent_Code,\n\t\tGL_Level_Code,\n\t\tDebit_Credit,\n\t\tstart_datetime,\n\t\tend_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t)) ~> InsertUpdateRow"
 				}
 			},
 			"dependsOn": [
@@ -25304,7 +25637,7 @@
 							"name": "ConvertDataType"
 						}
 					],
-					"script": "\nparameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as string,\n\t\tUID as string,\n\t\tAttribute as string,\n\t\tText_Response as string,\n\t\tNumeric_Response as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [Asset_ID]\\n      ,[Fund_ID]\\n      ,[Reporting_Period]\\n      ,[UID]\\n      ,[Attribute]\\n      ,[Text_Response]\\n      ,[Numeric_Response]\\n FROM [staging].[OPS_Answers]',\n\tformat: 'query') ~> StagingDB\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as date,\n\t\tUID as string,\n\t\tAttribute as string,\n\t\tText_Response as string,\n\t\tNumeric_Response as decimal(19,4),\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> RelationDB\nConvertDataType derive(StagingChecksum = sha2(256, Asset_ID,Fund_ID,Text_Response,Numeric_Response)) ~> StatgingAddChecksum\nStatgingAddChecksum, RelationRenameColumns lookup(UID == Relation_UID\n\t&& Reporting_Period == Relation_Reporting_Period\n\t&& Attribute == Relation_Attribute,\n\tbroadcast: 'none')~> LookupRelationalStream\nRelationDB derive(RelationalChecksum = sha2(256, Asset_ID,Fund_ID,Text_Response,Numeric_Response)) ~> RelationalAddChecksum\nLookupRelationalStream split(isNull(Relation_RelationalChecksum),\n\tStagingChecksum != Relation_RelationalChecksum,\n\tdisjoint: false) ~> ConditionalSplitNewOrExpire@(StagingNewRow, StagingChangedRow, IgnoreNoChange)\nRelationalAddChecksum select(mapColumn(\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_Fund_ID = Fund_ID,\n\t\tRelation_Reporting_Period = Reporting_Period,\n\t\tRelation_UID = UID,\n\t\tRelation_Attribute = Attribute,\n\t\tRelation_Text_Response = Text_Response,\n\t\tRelation_Numeric_Response = Numeric_Response,\n\t\tRelation_Insert_Datetime = Insert_Datetime,\n\t\tRelation_Update_Datetime = Update_Datetime,\n\t\tRelation_Process_Name = Process_Name,\n\t\tRelation_RelationalChecksum = RelationalChecksum\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> RelationRenameColumns\nConditionalSplitNewOrExpire@StagingNewRow select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tUID,\n\t\tAttribute,\n\t\tText_Response,\n\t\tNumeric_Response\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectNewStagingRow\nSelectNewStagingRow derive(insert_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> AddAuditColumns\nConditionalSplitNewOrExpire@StagingChangedRow derive(update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> UpdateAddAuditAttributes\nUpdateAddAuditAttributes select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tUID,\n\t\tAttribute,\n\t\tText_Response,\n\t\tNumeric_Response,\n\t\tinsert_datetime = Relation_Insert_Datetime,\n\t\tupdate_datetime,\n\t\tprocess_name\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> UpdateSelectForUpdate\nAddAuditColumns, UpdateSelectForUpdate union(byName: true)~> UnionForDB\nUnionForDB alterRow(upsertIf(true())) ~> AlterRowForUpsert\nStagingDB derive(Reporting_Period = toDate(Reporting_Period,\"dd/MM/yyyy\"),\n\t\tNumeric_Response = toDecimal(Numeric_Response,19,4)) ~> ConvertDataType\nAlterRowForUpsert sink(input(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as date,\n\t\tUID as string,\n\t\tAttribute as string,\n\t\tText_Response as string,\n\t\tNumeric_Response as decimal(19,4),\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:true,\n\tkeys:['UID','Reporting_Period','Attribute'],\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tUID,\n\t\tAttribute,\n\t\tText_Response,\n\t\tNumeric_Response,\n\t\tInsert_Datetime = insert_datetime,\n\t\tUpdate_Datetime = update_datetime,\n\t\tProcess_Name = process_name\n\t)) ~> InsertUpdateRow"
+					"script": "\nparameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as string,\n\t\tUID as string,\n\t\tAttribute as string,\n\t\tAnswer_Number as string,\n\t\tText_Response as string,\n\t\tNumeric_Response as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [Asset_ID]\\n      ,[Fund_ID]\\n      ,[Reporting_Period]\\n      ,[UID]\\n      ,[Attribute]\\n\t  ,[Answer_Number]\\n      ,[Text_Response]\\n      ,[Numeric_Response]\\n FROM [staging].[OPS_Answers]',\n\tformat: 'query') ~> StagingDB\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as date,\n\t\tUID as string,\n\t\tAttribute as string,\n\t\tAnswer_Number as integer,\n\t\tText_Response as string,\n\t\tNumeric_Response as decimal(19,4),\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> RelationDB\nConvertDataType derive(StagingChecksum = sha2(256, Asset_ID,Fund_ID,Reporting_Period,UID,Attribute,Answer_Number,Text_Response,Numeric_Response)) ~> StatgingAddChecksum\nStatgingAddChecksum, RelationRenameColumns lookup(UID == Relation_UID\n\t&& Reporting_Period == Relation_Reporting_Period\n\t&& Fund_ID == Relation_Fund_ID\n\t&& Asset_ID == Relation_Asset_ID\n\t&& Answer_Number == Relation_Answer_Number,\n\tbroadcast: 'none')~> LookupRelationalStream\nRelationDB derive(RelationalChecksum = sha2(256, Asset_ID,Fund_ID,Reporting_Period,UID,Attribute,Answer_Number,Text_Response,Numeric_Response)) ~> RelationalAddChecksum\nLookupRelationalStream split(isNull(Relation_RelationalChecksum),\n\tStagingChecksum != Relation_RelationalChecksum,\n\tdisjoint: false) ~> ConditionalSplitNewOrExpire@(StagingNewRow, StagingChangedRow, IgnoreNoChange)\nRelationalAddChecksum select(mapColumn(\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_Fund_ID = Fund_ID,\n\t\tRelation_Reporting_Period = Reporting_Period,\n\t\tRelation_UID = UID,\n\t\tRelation_Attribute = Attribute,\n\t\tRelation_Answer_Number = Answer_Number,\n\t\tRelation_Text_Response = Text_Response,\n\t\tRelation_Numeric_Response = Numeric_Response,\n\t\tRelation_Insert_Datetime = Insert_Datetime,\n\t\tRelation_Update_Datetime = Update_Datetime,\n\t\tRelation_Process_Name = Process_Name,\n\t\tRelation_RelationalChecksum = RelationalChecksum\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> RelationRenameColumns\nConditionalSplitNewOrExpire@StagingNewRow select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tUID,\n\t\tAttribute,\n\t\tAnswer_Number,\n\t\tText_Response,\n\t\tNumeric_Response\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectNewStagingRow\nSelectNewStagingRow derive(insert_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> AddAuditColumns\nConditionalSplitNewOrExpire@StagingChangedRow derive(update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> UpdateAddAuditAttributes\nUpdateAddAuditAttributes select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tUID,\n\t\tAttribute,\n\t\tAnswer_Number,\n\t\tText_Response,\n\t\tNumeric_Response,\n\t\tinsert_datetime = Relation_Insert_Datetime,\n\t\tupdate_datetime,\n\t\tprocess_name\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> UpdateSelectForUpdate\nAddAuditColumns, UpdateSelectForUpdate union(byName: true)~> UnionForDB\nUnionForDB alterRow(upsertIf(true())) ~> AlterRowForUpsert\nStagingDB derive(Reporting_Period = toDate(Reporting_Period,\"dd/MM/yyyy\"),\n\t\tNumeric_Response = toDecimal(Numeric_Response,19,4),\n\t\tAnswer_Number = toInteger(Answer_Number)) ~> ConvertDataType\nAlterRowForUpsert sink(input(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as date,\n\t\tUID as string,\n\t\tAttribute as string,\n\t\tAnswer_Number as integer,\n\t\tText_Response as string,\n\t\tNumeric_Response as decimal(19,4),\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:true,\n\tkeys:['UID','Reporting_Period','Asset_ID','Fund_ID','Answer_Number'],\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tUID,\n\t\tAttribute,\n\t\tAnswer_Number,\n\t\tText_Response,\n\t\tNumeric_Response,\n\t\tInsert_Datetime = insert_datetime,\n\t\tUpdate_Datetime = update_datetime,\n\t\tProcess_Name = process_name\n\t)) ~> InsertUpdateRow"
 				}
 			},
 			"dependsOn": [
@@ -26185,13 +26518,16 @@
 							"name": "SelectSourceColumns"
 						},
 						{
-							"name": "AnalyticFunctionGroupGLcode"
+							"name": "DerivedColumn"
 						},
 						{
-							"name": "GetFirstGLcodeFromAnalyticsFunction"
+							"name": "AnalyticsFunctionGroupFundID"
+						},
+						{
+							"name": "GetFirstRowFromAnalyticsFunction"
 						}
 					],
-					"script": "\n\nsource(output(\n\t\t{GL-Code} as string,\n\t\t{GL-Desc} as string,\n\t\tCategory as string,\n\t\t{Cash-Flow-Code} as string,\n\t\t{Parent-GL-Code} as string,\n\t\tLevel as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> LoadFromScrubbedToStagingDB\nGetFirstGLcodeFromAnalyticsFunction select(mapColumn(\n\t\t{GL-Code},\n\t\t{GL-Desc},\n\t\tCategory,\n\t\t{Cash-Flow-Code},\n\t\t{Parent-GL-Code},\n\t\tLevel\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectSourceColumns\nLoadFromScrubbedToStagingDB window(over({GL-Code}),\n\tasc({GL-Code}, false),\n\tRN = rowNumber()) ~> AnalyticFunctionGroupGLcode\nAnalyticFunctionGroupGLcode filter(RN==1) ~> GetFirstGLcodeFromAnalyticsFunction\nSelectSourceColumns sink(input(\n\t\tGL_Code as string,\n\t\tGL_Desc as string,\n\t\tCategory as string,\n\t\tCash_Flow_Code as string,\n\t\tGL_Parent_Code as string,\n\t\tGL_Level_Code as integer\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tGL_Code = {GL-Code},\n\t\tGL_Desc = {GL-Desc},\n\t\tCategory,\n\t\tCash_Flow_Code = {Cash-Flow-Code},\n\t\tGL_Parent_Code = {Parent-GL-Code},\n\t\tGL_Level_Code = Level\n\t)) ~> StagingDB"
+					"script": "\n\nsource(output(\n\t\t{GL-Code} as string,\n\t\t{GL-Desc} as string,\n\t\tCategory as string,\n\t\t{Cash-Flow-Code} as string,\n\t\t{Parent-GL-Code} as string,\n\t\tLevel as string,\n\t\tDebit_Credit as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> LoadFromScrubbedToStagingDB\nDerivedColumn select(mapColumn(\n\t\t{GL-Code} = Derived_GL_Code,\n\t\t{GL-Desc},\n\t\tCategory,\n\t\t{Cash-Flow-Code},\n\t\t{Parent-GL-Code} = Derived_Parent_GL_Code,\n\t\tLevel,\n\t\tDebit_Credit\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectSourceColumns\nGetFirstRowFromAnalyticsFunction derive(Derived_GL_Code = trim({GL-Code}, '\\''),\n\t\tDerived_Parent_GL_Code = trim({Parent-GL-Code}, '\\'')) ~> DerivedColumn\nLoadFromScrubbedToStagingDB window(over({GL-Code}),\n\tasc({GL-Code}, false),\n\tRN = rowNumber()) ~> AnalyticsFunctionGroupFundID\nAnalyticsFunctionGroupFundID filter(RN==1) ~> GetFirstRowFromAnalyticsFunction\nSelectSourceColumns sink(input(\n\t\tGL_Code as string,\n\t\tGL_Desc as string,\n\t\tCategory as string,\n\t\tCash_Flow_Code as string,\n\t\tGL_Parent_Code as string,\n\t\tGL_Level_Code as integer,\n\t\tDebit_Credit as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tGL_Code = {GL-Code},\n\t\tGL_Desc = {GL-Desc},\n\t\tCategory,\n\t\tCash_Flow_Code = {Cash-Flow-Code},\n\t\tGL_Parent_Code = {Parent-GL-Code},\n\t\tGL_Level_Code = Level,\n\t\tDebit_Credit\n\t)) ~> StagingDB"
 				}
 			},
 			"dependsOn": [
@@ -26525,7 +26861,7 @@
 							"name": "LkpAsset"
 						}
 					],
-					"script": "\n\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as string,\n\t\tUID as string,\n\t\tAttribute as string,\n\t\tText_Response as string,\n\t\tNumeric_Response as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> LoadFromScrubbedToStagingDB\nsource(output(\n\t\tUID as string,\n\t\tSLI_ID as string,\n\t\tOps_Report_ID as string,\n\t\tMetric_Group as string,\n\t\tMetric_Sub_Group as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [UID]\\n      ,[SLI_ID]\\n      ,[Ops_Report_ID]\\n      ,[Metric_Group]\\n      ,[Metric_Sub_Group]\\n  FROM [relational].[OPS_Questions]',\n\tformat: 'query') ~> OpsQuestions\nsource(output(\n\t\tAsset_ID as string,\n\t\tAsset_Name as string,\n\t\tFund_ID as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [Asset_ID]\\n      ,[Asset_Name]\\n      ,[Fund_ID]\\n  FROM [relational].[Asset]\\n  WHERE record_deleted_flag = 0',\n\tformat: 'query') ~> Asset\nLoadFromScrubbedToStagingDB select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tUID,\n\t\tAttribute,\n\t\tText_Response,\n\t\tNumeric_Response\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectSourceColumns\nSelectSourceColumns, SelectQuestionKey lookup(UID == Question_UID,\n\tbroadcast: 'none')~> LkpOpsQuestionUID\nOpsQuestions select(mapColumn(\n\t\tQuestion_UID = UID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectQuestionKey\nAsset select(mapColumn(\n\t\tAsset_Asset_ID = Asset_ID,\n\t\tAsset_Fund_ID = Fund_ID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectAssetKey\nLkpAsset derive(Validation_Error = iif(isNull(Question_UID)||isNull(Asset_Asset_ID),'Error in UID or Fund or Asset',iif(isNull(toDate(Reporting_Period,'dd/MM/yyyy')),'Error in date',toString(null())))) ~> DerivedValidationError\nLkpOpsQuestionUID, SelectAssetKey lookup(Asset_ID == Asset_Asset_ID\n\t&& Fund_ID == Asset_Fund_ID,\n\tbroadcast: 'none')~> LkpAsset\nDerivedValidationError sink(input(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as string,\n\t\tUID as string,\n\t\tAttribute as string,\n\t\tText_Response as string,\n\t\tNumeric_Response as string,\n\t\tValidation_Error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tUID,\n\t\tAttribute,\n\t\tText_Response,\n\t\tNumeric_Response,\n\t\tValidation_Error\n\t)) ~> StagingDB"
+					"script": "\n\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as string,\n\t\tUID as string,\n\t\tAttribute as string,\n\t\tAnswer_Number as string,\n\t\tText_Response as string,\n\t\tNumeric_Response as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> LoadFromScrubbedToStagingDB\nsource(output(\n\t\tUID as string,\n\t\tSLI_ID as string,\n\t\tOps_Report_ID as string,\n\t\tMetric_Group as string,\n\t\tMetric_Sub_Group as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [UID]\\n      ,[SLI_ID]\\n      ,[Ops_Report_ID]\\n      ,[Metric_Group]\\n      ,[Metric_Sub_Group]\\n  FROM [relational].[OPS_Questions]',\n\tformat: 'query') ~> OpsQuestions\nsource(output(\n\t\tAsset_ID as string,\n\t\tAsset_Name as string,\n\t\tFund_ID as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [Asset_ID]\\n      ,[Asset_Name]\\n      ,[Fund_ID]\\n  FROM [relational].[Asset]\\n  WHERE record_deleted_flag = 0',\n\tformat: 'query') ~> Asset\nLoadFromScrubbedToStagingDB select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tUID,\n\t\tAttribute,\n\t\tAnswer_Number,\n\t\tText_Response,\n\t\tNumeric_Response\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectSourceColumns\nSelectSourceColumns, SelectQuestionKey lookup(UID == Question_UID,\n\tbroadcast: 'none')~> LkpOpsQuestionUID\nOpsQuestions select(mapColumn(\n\t\tQuestion_UID = UID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectQuestionKey\nAsset select(mapColumn(\n\t\tAsset_Asset_ID = Asset_ID,\n\t\tAsset_Fund_ID = Fund_ID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectAssetKey\nLkpAsset derive(Validation_Error = iif(isNull(Question_UID)||isNull(Asset_Asset_ID)||isNull(toDate(Reporting_Period,'dd/MM/yyyy'))||isNull(toInteger(Answer_Number)),'Error in UID / Fund / Asset / Reporting Date / Answer Number',toString(null()))) ~> DerivedValidationError\nLkpOpsQuestionUID, SelectAssetKey lookup(Asset_ID == Asset_Asset_ID\n\t&& Fund_ID == Asset_Fund_ID,\n\tbroadcast: 'none')~> LkpAsset\nDerivedValidationError sink(input(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as string,\n\t\tUID as string,\n\t\tAttribute as string,\n\t\tAnswer_Number as string,\n\t\tText_Response as string,\n\t\tNumeric_Response as string,\n\t\tValidation_Error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tUID,\n\t\tAttribute,\n\t\tAnswer_Number,\n\t\tText_Response,\n\t\tNumeric_Response,\n\t\tValidation_Error\n\t)) ~> StagingDB"
 				}
 			},
 			"dependsOn": [
