@@ -1,5 +1,5 @@
 {
-	"name": "PipelineMoveFiles_fileshare_to_blob_pl",
+	"name": "PipelineCleanupContainer_raw_pl",
 	"properties": {
 		"description": "Move files from one folder to another folder",
 		"activities": [
@@ -18,14 +18,15 @@
 				"userProperties": [],
 				"typeProperties": {
 					"dataset": {
-						"referenceName": "BinaryDataSourceFileshareDirectory_MoveFile_ds",
+						"referenceName": "BinaryDataBlobSourceLandingRaw_ds",
 						"type": "DatasetReference"
 					},
 					"fieldList": [
-						"childItems"
+						"childItems",
+						"lastModified"
 					],
 					"storeSettings": {
-						"type": "FileServerReadSettings",
+						"type": "AzureBlobStorageReadSettings",
 						"recursive": true
 					}
 				}
@@ -51,73 +52,29 @@
 					"isSequential": true,
 					"activities": [
 						{
-							"name": "CSVfilesOnly",
+							"name": "If Condition1",
 							"type": "IfCondition",
-							"dependsOn": [],
+							"dependsOn": [
+								{
+									"activity": "LookupSourceRegisterTable",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
 							"userProperties": [],
 							"typeProperties": {
 								"expression": {
-									"value": "@or(endswith(item().name,'.csv'), endswith(item().name,'.CSV') ) ",
+									"value": "@greater(activity('LookupSourceRegisterTable').output.firstRow.TOTREC,0)",
 									"type": "Expression"
 								},
-								"ifTrueActivities": [
+								"ifFalseActivities": [
 									{
-										"name": "CopyFiromFilestoreToBlobstore",
-										"type": "Copy",
-										"dependsOn": [],
-										"policy": {
-											"timeout": "7.00:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
-											"secureOutput": false,
-											"secureInput": false
-										},
-										"userProperties": [],
-										"typeProperties": {
-											"source": {
-												"type": "BinarySource",
-												"storeSettings": {
-													"type": "FileServerReadSettings",
-													"recursive": false,
-													"wildcardFileName": {
-														"value": "@{item().name}",
-														"type": "Expression"
-													}
-												}
-											},
-											"sink": {
-												"type": "BinarySink",
-												"storeSettings": {
-													"type": "AzureBlobStorageWriteSettings"
-												}
-											},
-											"enableStaging": false
-										},
-										"inputs": [
-											{
-												"referenceName": "BinaryDataSourceFileshareDirectory_MoveFile_ds",
-												"type": "DatasetReference"
-											}
-										],
-										"outputs": [
-											{
-												"referenceName": "BinaryDataDestinationBlob_MoveFile_ds",
-												"type": "DatasetReference",
-												"parameters": {
-													"filename": {
-														"value": "@{item().name}",
-														"type": "Expression"
-													}
-												}
-											}
-										]
-									},
-									{
-										"name": "DeleteFromFilestore",
+										"name": "DeleteInvalidRawFile",
 										"type": "Delete",
 										"dependsOn": [
 											{
-												"activity": "CopyFiromFilestoreToBlobstore",
+												"activity": "Copy data1",
 												"dependencyConditions": [
 													"Succeeded"
 												]
@@ -133,12 +90,12 @@
 										"userProperties": [],
 										"typeProperties": {
 											"dataset": {
-												"referenceName": "BinaryDataSourceFileshareDirectory_MoveFile_ds",
+												"referenceName": "BinaryDataBlobSourceLandingRaw_ds",
 												"type": "DatasetReference"
 											},
 											"enableLogging": false,
 											"storeSettings": {
-												"type": "FileServerReadSettings",
+												"type": "AzureBlobStorageReadSettings",
 												"recursive": false,
 												"wildcardFileName": {
 													"value": "@{item().name}",
@@ -146,8 +103,80 @@
 												}
 											}
 										}
+									},
+									{
+										"name": "Copy data1",
+										"type": "Copy",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "7.00:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "BinarySource",
+												"storeSettings": {
+													"type": "AzureBlobStorageReadSettings",
+													"recursive": true,
+													"wildcardFileName": {
+														"value": "@{item().name}",
+														"type": "Expression"
+													}
+												}
+											},
+											"sink": {
+												"type": "BinarySink",
+												"storeSettings": {
+													"type": "FileServerWriteSettings"
+												}
+											},
+											"enableStaging": false
+										},
+										"inputs": [
+											{
+												"referenceName": "BinaryDataBlobSourceLandingRaw_ds",
+												"type": "DatasetReference"
+											}
+										],
+										"outputs": [
+											{
+												"referenceName": "BinaryDataSoureFileShareErrorDump_ds",
+												"type": "DatasetReference"
+											}
+										]
 									}
 								]
+							}
+						},
+						{
+							"name": "LookupSourceRegisterTable",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "SELECT COUNT(*) AS TOTREC\n  FROM [log].[Source_Register_Table]\n  WHERE [ORIGINAL_BLOB_NAME] = '@{item().name}'\n  AND [ETL_IS_PROCESSED] = 'N'",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00"
+								},
+								"dataset": {
+									"referenceName": "SQLsourceRegisterTable_ds",
+									"type": "DatasetReference"
+								}
 							}
 						}
 					]
@@ -168,7 +197,7 @@
 				"userProperties": [],
 				"typeProperties": {
 					"items": {
-						"value": "@activity('GetFileList').output.childItems",
+						"value": "@activity('GetFileList').output.childitems",
 						"type": "Expression"
 					},
 					"condition": {
