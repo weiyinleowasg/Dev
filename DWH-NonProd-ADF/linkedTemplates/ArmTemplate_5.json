@@ -948,42 +948,6 @@
 			"dependsOn": []
 		},
 		{
-			"name": "[concat(parameters('factoryName'), '/LoadTxtToDBstaging')]",
-			"type": "Microsoft.DataFactory/factories/dataflows",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"type": "MappingDataFlow",
-				"typeProperties": {
-					"sources": [
-						{
-							"dataset": {
-								"referenceName": "DelimitedText_sourcelandingscrubbed_ds",
-								"type": "DatasetReference"
-							},
-							"name": "LoadFromDataLakeToStagingDB",
-							"typeProperties": {}
-						}
-					],
-					"sinks": [
-						{
-							"dataset": {
-								"referenceName": "SQLstagingfund_ds",
-								"type": "DatasetReference"
-							},
-							"name": "StagingDB"
-						}
-					],
-					"transformations": [
-						{
-							"name": "SelectSourceColumns"
-						}
-					],
-					"script": "\n\nsource(output(\n\t\tFund_ID as string,\n\t\tFund_Name as string,\n\t\tFund_master as string,\n\t\tFund_master_name as string,\n\t\tFund_ABN as string,\n\t\tFund_ARSN as string,\n\t\tFund_country as string,\n\t\tFund_Region as string,\n\t\tFund_State as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tpartitionBy('hash', 1)) ~> LoadFromDataLakeToStagingDB\nLoadFromDataLakeToStagingDB select(mapColumn(\n\t\tFund_ID,\n\t\tFund_Name,\n\t\tFund_master,\n\t\tFund_master_name,\n\t\tFund_ABN,\n\t\tFund_ARSN,\n\t\tFund_country,\n\t\tFund_Region,\n\t\tFund_State\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectSourceColumns\nSelectSourceColumns sink(input(\n\t\tFund_ID as string,\n\t\tCompany_Name as string,\n\t\tFund_Name as string,\n\t\tFund_Master as string,\n\t\tFund_master_Name as string,\n\t\tFund_Parent_Allocation_percentage as decimal(18,2),\n\t\tFund_ABN as string,\n\t\tFund_ARSN as string,\n\t\tFund_Country as string,\n\t\tFund_Region as string,\n\t\tFund_State as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tFund_ID,\n\t\tFund_Name,\n\t\tFund_Master = Fund_master,\n\t\tFund_master_Name = Fund_master_name,\n\t\tFund_ABN,\n\t\tFund_ARSN,\n\t\tFund_Country = Fund_country,\n\t\tFund_Region,\n\t\tFund_State\n\t)) ~> StagingDB"
-				}
-			},
-			"dependsOn": []
-		},
-		{
 			"name": "[concat(parameters('factoryName'), '/LoadTxtToDBstaging_adjustment_dfx')]",
 			"type": "Microsoft.DataFactory/factories/dataflows",
 			"apiVersion": "2018-06-01",
@@ -1496,6 +1460,51 @@
 						}
 					],
 					"script": "\n\nsource(output(\n\t\tVersion as string,\n\t\tFund as string,\n\t\tAsset as string,\n\t\tGLCode as string,\n\t\tGLDescription as string,\n\t\tBudgetDate as string,\n\t\tAmount as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> LoadFromScrubbedToStagingDB\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [Asset_ID]\\n      ,[Fund_ID]\\n  FROM [relational].[Asset]\\n  WHERE [record_deleted_flag] = 0',\n\tformat: 'query') ~> GetAssetMaster\nsource(output(\n\t\tGL_Code as string,\n\t\tCategory as string,\n\t\tCash_Flow_Code as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [GL_Code]\\n      ,[Category]\\n      ,[Cash_Flow_Code]\\n  FROM [relational].[Chart_of_Account]\\n  WHERE [record_deleted_flag] = 0',\n\tformat: 'query') ~> GetGLCodes\nLoadFromScrubbedToStagingDB select(mapColumn(\n\t\tVersion,\n\t\tFund,\n\t\tAsset,\n\t\tGLCode,\n\t\tGLDescription,\n\t\tBudgetDate,\n\t\tAmount\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectSourceColumns\nUnionAll derive(Debit_Credit = case(greaterOrEqual( iifNull(toDecimal(trim(Amount),18,2,'###,###.##'),toDecimal('0.00')) ,0),'DR','CR'),\n\t\tTrx_Amount = iifNull(abs(toDecimal(trim(Amount),18,2,'###,###.##')),toDecimal('0.00')),\n\t\tBudgetDate = iifNull(toTimestamp(concat('01-',BudgetDate),'dd-MMM-yy'), toTimestamp('9999-12-31 00:00:00')),\n\t\tBudget_Type = toString('Budget')) ~> SetDerivations\nSetDerivations select(mapColumn(\n\t\tFund_ID = Fund,\n\t\tAsset_ID = Asset,\n\t\tGL_Code = GLCode,\n\t\tBudget_Desc = GLDescription,\n\t\tBudget_Date = BudgetDate,\n\t\tDebit_Credit,\n\t\tBudget_value = Trx_Amount,\n\t\tBudget_Type,\n\t\tvalidation_error = Validation_Error,\n\t\tVersion_Name = Version\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectForTarget\nSelectSourceColumns, SelectFundColumns lookup(Asset == Relation_Asset_ID\n\t&& Fund == Relation_Fund_ID,\n\tbroadcast: 'none')~> LookupFundAndAsset\nGetAssetMaster select(mapColumn(\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_Fund_ID = Fund_ID\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectFundColumns\nSelectGLData, SelectCOAcolumns lookup(GLCode == Relation_GL_Code,\n\tbroadcast: 'none')~> LookupGLcode\nGetGLCodes select(mapColumn(\n\t\tRelation_GL_Code = GL_Code,\n\t\tRelation_Category = Category,\n\t\tRelation_Cash_Flow_Code = Cash_Flow_Code\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectCOAcolumns\nTransactionValidFundAsset@ValidFundAsset split(not(isNull(GLCode)),\n\tdisjoint: false) ~> TransactionTypeGL@(TransactionTypeGL, TransactionTypeCF)\nValidBudgetDate@ValidBudgetDate select(mapColumn(\n\t\tVersion,\n\t\tFund,\n\t\tAsset,\n\t\tGLCode,\n\t\tGLDescription,\n\t\tBudgetDate,\n\t\tAmount,\n\t\tRelation_Asset_ID,\n\t\tRelation_Fund_ID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectGLData\nDerivedColumnValidationGLCodeError select(mapColumn(\n\t\tVersion,\n\t\tFund,\n\t\tAsset,\n\t\tGLCode,\n\t\tGLDescription,\n\t\tBudgetDate,\n\t\tAmount,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectCasfFlowData\nLookupGLcode split(GLCode == Relation_GL_Code,\n\tdisjoint: false) ~> ConditionalSplitValidGL@(ValidGL, NotValidGL)\nLookupFundAndAsset split(not(isNull(Relation_Fund_ID)),\n\tdisjoint: false) ~> TransactionValidFundAsset@(ValidFundAsset, InvalidFundAsset)\nDerivedColumnValidationErrorFund select(mapColumn(\n\t\tVersion,\n\t\tFund,\n\t\tAsset,\n\t\tGLCode,\n\t\tGLDescription,\n\t\tBudgetDate,\n\t\tAmount,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidFundAssetData\nTransactionValidFundAsset@InvalidFundAsset derive(Validation_Error = toString('Invalid Fund or Asset')) ~> DerivedColumnValidationErrorFund\nConditionalSplitValidGL@NotValidGL derive(Validation_Error = toString('Invalid GL Code')) ~> DerivedColumnValidationErrorGL\nDerivedColumnValidationErrorGL select(mapColumn(\n\t\tVersion,\n\t\tFund,\n\t\tAsset,\n\t\tGLCode,\n\t\tGLDescription,\n\t\tBudgetDate,\n\t\tAmount,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidGLdata\nConditionalSplitValidGL@ValidGL select(mapColumn(\n\t\tFund,\n\t\tAsset,\n\t\tGLCode,\n\t\tGLDescription,\n\t\tBudgetDate,\n\t\tAmount,\n\t\tVersion\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectValidGLdata\nSelectValidGLdata, SelectInvalidGLdata, SelectCasfFlowData, SelectInvalidFundAssetData, SelectInvalidBudgetDate union(byName: true)~> UnionAll\nTransactionTypeGL@TransactionTypeGL derive(BudgetDateConvert = toTimestamp(concat('01-',BudgetDate),'dd-MMM-yy')) ~> ComputeBudgetDate\nComputeBudgetDate split(not(isNull(BudgetDateConvert)),\n\tdisjoint: false) ~> ValidBudgetDate@(ValidBudgetDate, InvalidBudgetDate)\nValidBudgetDate@InvalidBudgetDate derive(Validation_Error = toString('Invalid Budget Date')) ~> DerivedColumnInvalidBudgetDate\nDerivedColumnInvalidBudgetDate select(mapColumn(\n\t\tVersion,\n\t\tFund,\n\t\tAsset,\n\t\tGLCode,\n\t\tGLDescription,\n\t\tBudgetDate,\n\t\tAmount,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectInvalidBudgetDate\nTransactionTypeGL@TransactionTypeCF derive(Validation_Error = toString('GLCode cannot be null')) ~> DerivedColumnValidationGLCodeError\nSelectForTarget sink(input(\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tVersion_Name as string,\n\t\tDebit_Credit as string,\n\t\tBudget_Date as timestamp,\n\t\tBudget_Desc as string,\n\t\tBudget_value as decimal(18,2),\n\t\tBudget_Type as string,\n\t\tvalidation_error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tVersion_Name,\n\t\tDebit_Credit,\n\t\tBudget_Date,\n\t\tBudget_Desc,\n\t\tBudget_value,\n\t\tBudget_Type,\n\t\tvalidation_error\n\t)) ~> StagingDB"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadTxtToDBstaging_coa_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "DelimitedText_sourcelandingscrubbed_coa_ds",
+								"type": "DatasetReference"
+							},
+							"name": "LoadFromScrubbedToStagingDB",
+							"typeProperties": {}
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLstagingcoa_ds",
+								"type": "DatasetReference"
+							},
+							"name": "StagingDB"
+						}
+					],
+					"transformations": [
+						{
+							"name": "SelectSourceColumns"
+						},
+						{
+							"name": "DerivedColumn"
+						},
+						{
+							"name": "AnalyticsFunctionGroupFundID"
+						},
+						{
+							"name": "GetFirstRowFromAnalyticsFunction"
+						}
+					],
+					"script": "\n\nsource(output(\n\t\t{GL-Code} as string,\n\t\t{GL-Desc} as string,\n\t\tCategory as string,\n\t\t{Cash-Flow-Code} as string,\n\t\t{Parent-GL-Code} as string,\n\t\tLevel as string,\n\t\tDebit_Credit as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> LoadFromScrubbedToStagingDB\nDerivedColumn select(mapColumn(\n\t\t{GL-Code} = Derived_GL_Code,\n\t\t{GL-Desc},\n\t\tCategory,\n\t\t{Cash-Flow-Code},\n\t\t{Parent-GL-Code} = Derived_Parent_GL_Code,\n\t\tLevel,\n\t\tDebit_Credit\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectSourceColumns\nGetFirstRowFromAnalyticsFunction derive(Derived_GL_Code = trim({GL-Code}, '\\''),\n\t\tDerived_Parent_GL_Code = trim({Parent-GL-Code}, '\\'')) ~> DerivedColumn\nLoadFromScrubbedToStagingDB window(over({GL-Code}),\n\tasc({GL-Code}, false),\n\tRN = rowNumber()) ~> AnalyticsFunctionGroupFundID\nAnalyticsFunctionGroupFundID filter(RN==1) ~> GetFirstRowFromAnalyticsFunction\nSelectSourceColumns sink(input(\n\t\tGL_Code as string,\n\t\tGL_Desc as string,\n\t\tCategory as string,\n\t\tCash_Flow_Code as string,\n\t\tGL_Parent_Code as string,\n\t\tGL_Level_Code as integer,\n\t\tDebit_Credit as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tGL_Code = {GL-Code},\n\t\tGL_Desc = {GL-Desc},\n\t\tCategory,\n\t\tCash_Flow_Code = {Cash-Flow-Code},\n\t\tGL_Parent_Code = {Parent-GL-Code},\n\t\tGL_Level_Code = Level,\n\t\tDebit_Credit\n\t)) ~> StagingDB"
 				}
 			},
 			"dependsOn": []
