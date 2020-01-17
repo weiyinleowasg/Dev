@@ -1,0 +1,36 @@
+{
+	"name": "LoadStagingDBtoRelationDB_myob_actuals_delete_df",
+	"properties": {
+		"description": "",
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "SQLstagingmyobactuals_ds",
+						"type": "DatasetReference"
+					},
+					"name": "StagingDB"
+				}
+			],
+			"sinks": [
+				{
+					"dataset": {
+						"referenceName": "SQLrelationcoatrxcommon_ds",
+						"type": "DatasetReference"
+					},
+					"name": "DeleteRecords"
+				}
+			],
+			"transformations": [
+				{
+					"name": "SelectOutput"
+				},
+				{
+					"name": "AlterRowDelete"
+				}
+			],
+			"script": "\nparameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tTrx_Type as string,\n\t\tStart_Date_Tag as date,\n\t\tEnd_Date_Tag as date\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT [Fund_ID]\\n      ,[Asset_ID]\\n      ,[Trx_Type]\\n      ,[Start_Date_Tag]\\n      ,[End_Date_Tag]\\n  FROM [staging].[Myob_Actuals]\\n  WHERE [Trx_Type] = \\'Actual\\'',\n\tformat: 'query') ~> StagingDB\nStagingDB select(mapColumn(\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tStart_Date_Tag,\n\t\tEnd_Date_Tag\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectOutput\nSelectOutput alterRow(deleteIf(Trx_Type == 'Actual')) ~> AlterRowDelete\nAlterRowDelete sink(input(\n\t\tTrx_ID as long,\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Type as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Amount as decimal(18,2),\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string,\n\t\tStart_Date_Tag as date,\n\t\tEnd_Date_Tag as date\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:true,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:false,\n\tkeys:['Fund_ID','Asset_ID','Trx_Type','Start_Date_Tag','End_Date_Tag'],\n\tformat: 'table',\n\tmapColumn(\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tStart_Date_Tag,\n\t\tEnd_Date_Tag\n\t)) ~> DeleteRecords"
+		}
+	}
+}
