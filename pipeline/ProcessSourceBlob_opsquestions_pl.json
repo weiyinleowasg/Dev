@@ -267,7 +267,7 @@
 										"type": "Copy",
 										"dependsOn": [
 											{
-												"activity": "LoadStagingDBtoRelationDB_df",
+												"activity": "LoadStagingDBtoRelationDB_spl_df",
 												"dependencyConditions": [
 													"Succeeded"
 												]
@@ -342,50 +342,6 @@
 											"dataflow": {
 												"referenceName": "LoadTxtToDBstaging_opsquestions_df",
 												"type": "DataFlowReference"
-											},
-											"compute": {
-												"coreCount": 8,
-												"computeType": "General"
-											}
-										}
-									},
-									{
-										"name": "LoadStagingDBtoRelationDB_df",
-										"type": "ExecuteDataFlow",
-										"dependsOn": [
-											{
-												"activity": "LoadTxtToDBstaging_ds",
-												"dependencyConditions": [
-													"Succeeded"
-												]
-											}
-										],
-										"policy": {
-											"timeout": "7.00:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
-											"secureOutput": false,
-											"secureInput": false
-										},
-										"userProperties": [],
-										"typeProperties": {
-											"dataflow": {
-												"referenceName": "LoadStagingDBtoRelationDB_opsquestions_df",
-												"type": "DataFlowReference",
-												"parameters": {
-													"ProcessName": {
-														"value": "'@{pipeline().Pipeline}'",
-														"type": "Expression"
-													},
-													"FileName": {
-														"value": "'@{item().DATALAKE_FULL_PATHFILE}'",
-														"type": "Expression"
-													},
-													"Etl_Utc_Tag": {
-														"value": "'@{variables('Etl_Utc_Tag')}'",
-														"type": "Expression"
-													}
-												}
 											},
 											"compute": {
 												"coreCount": 8,
@@ -601,14 +557,7 @@
 									{
 										"name": "UpdateSourceRegisterFailedAbort_LoadDW",
 										"type": "SqlServerStoredProcedure",
-										"dependsOn": [
-											{
-												"activity": "LoadStagingDBtoRelationDB_df",
-												"dependencyConditions": [
-													"Failed"
-												]
-											}
-										],
+										"dependsOn": [],
 										"policy": {
 											"timeout": "7.00:00:00",
 											"retry": 0,
@@ -682,6 +631,26 @@
 										"linkedServiceName": {
 											"referenceName": "SQLdbConnection",
 											"type": "LinkedServiceReference"
+										}
+									},
+									{
+										"name": "LoadStagingDBtoRelationDB_spl_df",
+										"type": "ExecutePipeline",
+										"dependsOn": [
+											{
+												"activity": "LoadTxtToDBstaging_ds",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"userProperties": [],
+										"typeProperties": {
+											"pipeline": {
+												"referenceName": "ProcessSourceBlob_opsquestions_spl",
+												"type": "PipelineReference"
+											},
+											"waitOnCompletion": true
 										}
 									}
 								]
