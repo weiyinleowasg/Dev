@@ -163,7 +163,7 @@
 										"body": {
 											"dataFactoryName": "@pipeline().parameters.Parent_DataFactory",
 											"pipelineName": "@pipeline().parameters.Parent_Pipeline",
-											"messageHeader": "***MASTER PIPELINE SUCCESS***",
+											"messageHeader": "***MASTER PIPELINE SUB1 SUCCESS***",
 											"messageProcessed": "Pipelines completed successfully",
 											"messageNotProcessed": "",
 											"messageErrorDuringProcess": ""
@@ -193,7 +193,10 @@
 												"type": "String"
 											},
 											"RunMessage": {
-												"value": "Master Pipeline Completed OK",
+												"value": {
+													"value": "@pipeline().parameters.Run_Message_Success",
+													"type": "Expression"
+												},
 												"type": "String"
 											},
 											"RunStatus": {
@@ -271,7 +274,7 @@
 										"body": {
 											"dataFactoryName": "@pipeline().parameters.Parent_DataFactory",
 											"pipelineName": "@pipeline().parameters.Parent_Pipeline",
-											"messageHeader": "!!!MASTER PIPELINE FAILED!!!",
+											"messageHeader": "!!!MASTER PIPELINE SUB1 FAILED!!!",
 											"messageProcessed": "",
 											"messageNotProcessed": "",
 											"messageErrorDuringProcess": "@activity('GetErrorFiles').output.firstRow"
@@ -330,6 +333,12 @@
 						"type": "string"
 					},
 					"Master_Utc_Tag": {
+						"type": "string"
+					},
+					"Run_Message_Success": {
+						"type": "string"
+					},
+					"Run_Message_Fail": {
 						"type": "string"
 					}
 				},
@@ -769,7 +778,9 @@
 								"Master_Utc_Tag": {
 									"value": "@variables('MasterUTCtag')",
 									"type": "Expression"
-								}
+								},
+								"Run_Message_Success": "MasterPipeline_Sub1_pl run success",
+								"Run_Message_Fail": "MasterPipeline_Sub1_pl run fail"
 							}
 						}
 					},
@@ -27779,7 +27790,7 @@
 							"name": "GetFirstRowFromAnalyticsFunction"
 						}
 					],
-					"script": "\n\nsource(output(\n\t\t{GL-Code} as string,\n\t\t{GL-Desc} as string,\n\t\tCategory as string,\n\t\t{Cash-Flow-Code} as string,\n\t\t{Parent-GL-Code} as string,\n\t\tLevel as string,\n\t\tDebit_Credit as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> LoadFromScrubbedToStagingDB\nDerivedColumn select(mapColumn(\n\t\t{GL-Code} = Derived_GL_Code,\n\t\t{GL-Desc},\n\t\tCategory,\n\t\t{Cash-Flow-Code},\n\t\t{Parent-GL-Code} = Derived_Parent_GL_Code,\n\t\tLevel,\n\t\tDebit_Credit\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectSourceColumns\nGetFirstRowFromAnalyticsFunction derive(Derived_GL_Code = trim({GL-Code}, '\\''),\n\t\tDerived_Parent_GL_Code = trim({Parent-GL-Code}, '\\'')) ~> DerivedColumn\nLoadFromScrubbedToStagingDB window(over({GL-Code}),\n\tasc({GL-Code}, false),\n\tRN = rowNumber()) ~> AnalyticsFunctionGroupFundID\nAnalyticsFunctionGroupFundID filter(RN==1) ~> GetFirstRowFromAnalyticsFunction\nSelectSourceColumns sink(input(\n\t\tGL_Code as string,\n\t\tGL_Desc as string,\n\t\tCategory as string,\n\t\tCash_Flow_Code as string,\n\t\tGL_Parent_Code as string,\n\t\tGL_Level_Code as integer,\n\t\tDebit_Credit as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tGL_Code = {GL-Code},\n\t\tGL_Desc = {GL-Desc},\n\t\tCategory,\n\t\tCash_Flow_Code = {Cash-Flow-Code},\n\t\tGL_Parent_Code = {Parent-GL-Code},\n\t\tGL_Level_Code = Level,\n\t\tDebit_Credit\n\t)) ~> StagingDB"
+					"script": "\n\nsource(output(\n\t\t{GL-Code} as string,\n\t\t{GL-Desc} as string,\n\t\tCategory as string,\n\t\t{Cash-Flow-Code} as string,\n\t\t{Parent-GL-Code} as string,\n\t\tLevel as string,\n\t\tDebit_Credit as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> LoadFromScrubbedToStagingDB\nDerivedColumn select(mapColumn(\n\t\t{GL-Code} = Derived_GL_Code,\n\t\t{GL-Desc},\n\t\tCategory,\n\t\t{Cash-Flow-Code},\n\t\t{Parent-GL-Code} = Derived_Parent_GL_Code,\n\t\tLevel,\n\t\tDebit_Credit = Derived_Debit_Credit\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectSourceColumns\nGetFirstRowFromAnalyticsFunction derive(Derived_GL_Code = trim({GL-Code}, '\\''),\n\t\tDerived_Parent_GL_Code = trim({Parent-GL-Code}, '\\''),\n\t\tDerived_Debit_Credit = upper(Debit_Credit)) ~> DerivedColumn\nLoadFromScrubbedToStagingDB window(over({GL-Code}),\n\tasc({GL-Code}, false),\n\tRN = rowNumber()) ~> AnalyticsFunctionGroupFundID\nAnalyticsFunctionGroupFundID filter(RN==1) ~> GetFirstRowFromAnalyticsFunction\nSelectSourceColumns sink(input(\n\t\tGL_Code as string,\n\t\tGL_Desc as string,\n\t\tCategory as string,\n\t\tCash_Flow_Code as string,\n\t\tGL_Parent_Code as string,\n\t\tGL_Level_Code as integer,\n\t\tDebit_Credit as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tGL_Code = {GL-Code},\n\t\tGL_Desc = {GL-Desc},\n\t\tCategory,\n\t\tCash_Flow_Code = {Cash-Flow-Code},\n\t\tGL_Parent_Code = {Parent-GL-Code},\n\t\tGL_Level_Code = Level,\n\t\tDebit_Credit\n\t)) ~> StagingDB"
 				}
 			},
 			"dependsOn": [
