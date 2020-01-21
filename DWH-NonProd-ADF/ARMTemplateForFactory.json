@@ -7,6 +7,10 @@
 			"metadata": "Data Factory name",
 			"defaultValue": "DWH-NonProd-ADF"
 		},
+		"FileStore_nfdwhnonprodetlerror_password": {
+			"type": "secureString",
+			"metadata": "Secure string for 'password' of 'FileStore_nfdwhnonprodetlerror'"
+		},
 		"FileStore_nfdwhsource_errordump_password": {
 			"type": "secureString",
 			"metadata": "Secure string for 'password' of 'FileStore_nfdwhsource_errordump'"
@@ -38,6 +42,14 @@
 		"BlobStore_nfdwhstaging_properties_typeProperties_connectionString_secretName": {
 			"type": "string",
 			"defaultValue": "NFDWHNonProdBlobstagingConn"
+		},
+		"FileStore_nfdwhnonprodetlerror_properties_typeProperties_host": {
+			"type": "string",
+			"defaultValue": "\\\\nfdwhstagingnonprod.file.core.windows.net\\nfdwhnonprodetlerror"
+		},
+		"FileStore_nfdwhnonprodetlerror_properties_typeProperties_userId": {
+			"type": "string",
+			"defaultValue": "nfdwhstagingnonprod"
 		},
 		"FileStore_nfdwhsource_errordump_properties_typeProperties_host": {
 			"type": "string",
@@ -2708,6 +2720,194 @@
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/datasets/SQLsourceRegisterTable_ds')]",
 				"[concat(variables('factoryId'), '/datasets/DelimitedText_sourcelandingscrubbed_ds')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/PipelineCopyFailedBlobToFileshare_pl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Move files from one folder to another folder",
+				"activities": [
+					{
+						"name": "GetFileList",
+						"description": "Get the list of file",
+						"type": "GetMetadata",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataset": {
+								"referenceName": "BinaryDataBlobSourceLandingRaw_ds",
+								"type": "DatasetReference",
+								"parameters": {}
+							},
+							"fieldList": [
+								"childItems",
+								"lastModified"
+							],
+							"storeSettings": {
+								"type": "AzureBlobStorageReadSettings",
+								"recursive": true
+							}
+						}
+					},
+					{
+						"name": "ForEachFile",
+						"description": "Iterate each file, and move them one by one.",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "FilterFiles",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('FilterFiles').output.value",
+								"type": "Expression"
+							},
+							"isSequential": true,
+							"activities": [
+								{
+									"name": "CopyIfFileExist",
+									"type": "IfCondition",
+									"dependsOn": [
+										{
+											"activity": "LookupSourceRegisterTable",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"expression": {
+											"value": "@greater(activity('LookupSourceRegisterTable').output.firstRow.TOTREC,0)",
+											"type": "Expression"
+										},
+										"ifTrueActivities": [
+											{
+												"name": "CopyBlobErrorFileToFileshare",
+												"type": "Copy",
+												"dependsOn": [],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "BinarySource",
+														"storeSettings": {
+															"type": "AzureBlobStorageReadSettings",
+															"recursive": false,
+															"wildcardFileName": {
+																"value": "@{item().name}",
+																"type": "Expression"
+															}
+														}
+													},
+													"sink": {
+														"type": "BinarySink",
+														"storeSettings": {
+															"type": "FileServerWriteSettings"
+														}
+													},
+													"enableStaging": false
+												},
+												"inputs": [
+													{
+														"referenceName": "BinaryDataBlobSourceLandingRaw_ds",
+														"type": "DatasetReference",
+														"parameters": {}
+													}
+												],
+												"outputs": [
+													{
+														"referenceName": "BinaryDataSourceFileshareEtlError_ds",
+														"type": "DatasetReference",
+														"parameters": {}
+													}
+												]
+											}
+										]
+									}
+								},
+								{
+									"name": "LookupSourceRegisterTable",
+									"type": "Lookup",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "AzureSqlSource",
+											"sqlReaderQuery": {
+												"value": "SELECT COUNT(*) AS TOTREC\n  FROM [log].[Source_Register_Table]\n  WHERE [ORIGINAL_BLOB_NAME] = '@{item().name}'\n  AND [ETL_IS_PROCESSED] = 'N' AND ETL_RUN_STATUS = 'FAILED'",
+												"type": "Expression"
+											},
+											"queryTimeout": "02:00:00"
+										},
+										"dataset": {
+											"referenceName": "SQLsourceRegisterTable_ds",
+											"type": "DatasetReference",
+											"parameters": {}
+										}
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "FilterFiles",
+						"description": "Only files will be selected, the source-folders will not be selected.",
+						"type": "Filter",
+						"dependsOn": [
+							{
+								"activity": "GetFileList",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('GetFileList').output.childitems",
+								"type": "Expression"
+							},
+							"condition": {
+								"value": "@equals(item().type, 'File')",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/BinaryDataBlobSourceLandingRaw_ds')]",
+				"[concat(variables('factoryId'), '/datasets/SQLsourceRegisterTable_ds')]",
+				"[concat(variables('factoryId'), '/datasets/BinaryDataSourceFileshareEtlError_ds')]"
 			]
 		},
 		{
@@ -21980,6 +22180,27 @@
 			]
 		},
 		{
+			"name": "[concat(parameters('factoryName'), '/BinaryDataSourceFileshareEtlError_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "FileStore_nfdwhnonprodetlerror",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "Binary",
+				"typeProperties": {
+					"location": {
+						"type": "FileServerLocation"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/FileStore_nfdwhnonprodetlerror')]"
+			]
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/BinaryDataSource_File_bak')]",
 			"type": "Microsoft.DataFactory/factories/datasets",
 			"apiVersion": "2018-06-01",
@@ -26175,6 +26396,24 @@
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/linkedServices/NFDWHNonProdAKV_LS')]"
 			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/FileStore_nfdwhnonprodetlerror')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "FileServer",
+				"typeProperties": {
+					"host": "[parameters('FileStore_nfdwhnonprodetlerror_properties_typeProperties_host')]",
+					"userId": "[parameters('FileStore_nfdwhnonprodetlerror_properties_typeProperties_userId')]",
+					"password": {
+						"type": "SecureString",
+						"value": "[parameters('FileStore_nfdwhnonprodetlerror_password')]"
+					}
+				}
+			},
+			"dependsOn": []
 		},
 		{
 			"name": "[concat(parameters('factoryName'), '/FileStore_nfdwhsource_errordump')]",

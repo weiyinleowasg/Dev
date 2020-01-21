@@ -7,6 +7,10 @@
 			"metadata": "Data Factory name",
 			"defaultValue": "DWH-NonProd-ADF"
 		},
+		"FileStore_nfdwhnonprodetlerror_password": {
+			"type": "secureString",
+			"metadata": "Secure string for 'password' of 'FileStore_nfdwhnonprodetlerror'"
+		},
 		"FileStore_nfdwhsource_errordump_password": {
 			"type": "secureString",
 			"metadata": "Secure string for 'password' of 'FileStore_nfdwhsource_errordump'"
@@ -26,6 +30,14 @@
 		"Tigermoth_LS_connectionString": {
 			"type": "secureString",
 			"metadata": "Secure string for 'connectionString' of 'Tigermoth_LS'"
+		},
+		"FileStore_nfdwhnonprodetlerror_properties_typeProperties_host": {
+			"type": "string",
+			"defaultValue": "\\\\nfdwhstagingnonprod.file.core.windows.net\\nfdwhnonprodetlerror"
+		},
+		"FileStore_nfdwhnonprodetlerror_properties_typeProperties_userId": {
+			"type": "string",
+			"defaultValue": "nfdwhstagingnonprod"
 		},
 		"FileStore_nfdwhsource_errordump_properties_typeProperties_host": {
 			"type": "string",
@@ -141,6 +153,24 @@
 					}
 				},
 				"annotations": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/FileStore_nfdwhnonprodetlerror')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "FileServer",
+				"typeProperties": {
+					"host": "[parameters('FileStore_nfdwhnonprodetlerror_properties_typeProperties_host')]",
+					"userId": "[parameters('FileStore_nfdwhnonprodetlerror_properties_typeProperties_userId')]",
+					"password": {
+						"type": "SecureString",
+						"value": "[parameters('FileStore_nfdwhnonprodetlerror_password')]"
+					}
+				}
 			},
 			"dependsOn": []
 		},
@@ -270,6 +300,27 @@
 			},
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/linkedServices/FileStore_nfdwhsourcelandingraw')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/BinaryDataSourceFileshareEtlError_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "FileStore_nfdwhnonprodetlerror",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "Binary",
+				"typeProperties": {
+					"location": {
+						"type": "FileServerLocation"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/FileStore_nfdwhnonprodetlerror')]"
 			]
 		},
 		{
@@ -503,57 +554,6 @@
 			},
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/integrationRuntimes/IRVM1-SH-integrationRuntime')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/BinaryDataBlobSourceLandingRaw_ds')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"description": "It describes the destination store.",
-				"linkedServiceName": {
-					"referenceName": "BlobStore_nfdwhstaging",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "Binary",
-				"typeProperties": {
-					"location": {
-						"type": "AzureBlobStorageLocation",
-						"container": "sourcelandingraw"
-					}
-				}
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/linkedServices/BlobStore_nfdwhstaging')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/BinaryDataDestinationBlob_MoveFile_ds')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"description": "It describes the destination store.",
-				"linkedServiceName": {
-					"referenceName": "BlobStore_nfdwhstaging",
-					"type": "LinkedServiceReference"
-				},
-				"parameters": {
-					"filename": {
-						"type": "string"
-					}
-				},
-				"annotations": [],
-				"type": "Binary",
-				"typeProperties": {
-					"location": {
-						"type": "AzureBlobStorageLocation",
-						"container": "sourcelandingraw"
-					}
-				}
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/linkedServices/BlobStore_nfdwhstaging')]"
 			]
 		}
 	]
