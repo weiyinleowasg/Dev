@@ -389,7 +389,7 @@
 						}
 					},
 					{
-						"name": "RunPipelineMasterSub2",
+						"name": "RunPipelineMasterSub3",
 						"type": "ExecutePipeline",
 						"dependsOn": [
 							{
@@ -402,7 +402,7 @@
 						"userProperties": [],
 						"typeProperties": {
 							"pipeline": {
-								"referenceName": "MasterPipeline_Sub2_pl",
+								"referenceName": "MasterPipeline_Sub3_pl",
 								"type": "PipelineReference"
 							},
 							"waitOnCompletion": true,
@@ -430,11 +430,11 @@
 						}
 					},
 					{
-						"name": "SetVarMasterSub2",
+						"name": "SetVarMasterSub3",
 						"type": "SetVariable",
 						"dependsOn": [
 							{
-								"activity": "RunPipelineMasterSub2",
+								"activity": "RunPipelineMasterSub3",
 								"dependencyConditions": [
 									"Failed"
 								]
@@ -444,7 +444,7 @@
 						"typeProperties": {
 							"variableName": "PipelineName",
 							"value": {
-								"value": "@activity('RunPipelineMasterSub2').output",
+								"value": "@activity('RunPipelineMasterSub3').output",
 								"type": "Expression"
 							}
 						}
@@ -463,11 +463,11 @@
 						}
 					},
 					{
-						"name": "SendFailMail_MasterSub2",
+						"name": "SendFailMail_MasterSub3",
 						"type": "WebActivity",
 						"dependsOn": [
 							{
-								"activity": "UpdateMasterRunLog_MasterSub2",
+								"activity": "UpdateMasterRunLog_MasterSub3",
 								"dependencyConditions": [
 									"Completed"
 								]
@@ -537,7 +537,7 @@
 						"type": "ExecutePipeline",
 						"dependsOn": [
 							{
-								"activity": "RunPipelineMasterSub2",
+								"activity": "RunPipelineMasterSub3",
 								"dependencyConditions": [
 									"Succeeded"
 								]
@@ -569,11 +569,11 @@
 						}
 					},
 					{
-						"name": "UpdateMasterRunLog_MasterSub2",
+						"name": "UpdateMasterRunLog_MasterSub3",
 						"type": "SqlServerStoredProcedure",
 						"dependsOn": [
 							{
-								"activity": "SetVarMasterSub2",
+								"activity": "SetVarMasterSub3",
 								"dependencyConditions": [
 									"Completed"
 								]
@@ -858,11 +858,11 @@
 						}
 					},
 					{
-						"name": "RunPipeline_CopyFailedFileToFileshare2",
+						"name": "RunPipeline_CopyFailedFileToFileshare3",
 						"type": "ExecutePipeline",
 						"dependsOn": [
 							{
-								"activity": "SendFailMail_MasterSub2",
+								"activity": "SendFailMail_MasterSub3",
 								"dependencyConditions": [
 									"Completed"
 								]
@@ -893,7 +893,7 @@
 			},
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/pipelines/MasterPipeline_Sub1_pl')]",
-				"[concat(variables('factoryId'), '/pipelines/MasterPipeline_Sub2_pl')]",
+				"[concat(variables('factoryId'), '/pipelines/MasterPipeline_Sub3_pl')]",
 				"[concat(variables('factoryId'), '/pipelines/MasterPipelineSendMail_pl')]",
 				"[concat(variables('factoryId'), '/linkedServices/SQLdbConnection')]",
 				"[concat(variables('factoryId'), '/pipelines/PipelineMoveFiles_fileshare_to_blob_pl')]",
@@ -913,7 +913,7 @@
 						"type": "ExecutePipeline",
 						"dependsOn": [
 							{
-								"activity": "RunPipelineMoveFilesFromFileshareToBlobStore",
+								"activity": "MasterUTCtag",
 								"dependencyConditions": [
 									"Succeeded"
 								]
@@ -1916,132 +1916,6 @@
 								"messageErrorDuringProcess": ""
 							}
 						}
-					},
-					{
-						"name": "RunPipelineMoveFilesFromFileshareToBlobStore",
-						"type": "ExecutePipeline",
-						"dependsOn": [
-							{
-								"activity": "MasterUTCtag",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"pipeline": {
-								"referenceName": "PipelineMoveFiles_fileshare_to_blob_pl",
-								"type": "PipelineReference"
-							},
-							"waitOnCompletion": true,
-							"parameters": {}
-						}
-					},
-					{
-						"name": "SetVarMoveFiles",
-						"type": "SetVariable",
-						"dependsOn": [
-							{
-								"activity": "RunPipelineMoveFilesFromFileshareToBlobStore",
-								"dependencyConditions": [
-									"Failed"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"variableName": "PipelineName",
-							"value": {
-								"value": "@activity('RunPipelineMoveFilesFromFileshareToBlobStore').output",
-								"type": "Expression"
-							}
-						}
-					},
-					{
-						"name": "UpdateMasterRunLog_MoveFiles",
-						"type": "SqlServerStoredProcedure",
-						"dependsOn": [
-							{
-								"activity": "SetVarMoveFiles",
-								"dependencyConditions": [
-									"Completed"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"storedProcedureName": "[[log].[UpdateMasterRunLog]",
-							"storedProcedureParameters": {
-								"MasterUtcTag": {
-									"value": {
-										"value": "@variables('MasterUTCtag')",
-										"type": "Expression"
-									},
-									"type": "String"
-								},
-								"RunMessage": {
-									"value": {
-										"value": "@variables('PipelineName')",
-										"type": "Expression"
-									},
-									"type": "String"
-								},
-								"RunStatus": {
-									"value": {
-										"value": "FAILED",
-										"type": "Expression"
-									},
-									"type": "String"
-								}
-							}
-						},
-						"linkedServiceName": {
-							"referenceName": "SQLdbConnection",
-							"type": "LinkedServiceReference"
-						}
-					},
-					{
-						"name": "SendFailMail_MoveFIles",
-						"type": "WebActivity",
-						"dependsOn": [
-							{
-								"activity": "UpdateMasterRunLog_MoveFiles",
-								"dependencyConditions": [
-									"Completed"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"url": "https://prod-24.australiaeast.logic.azure.com:443/workflows/e28a90add06c495bbc9362b5109fb4c0/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=j2wEDAKOpnQ83iKkUa84aeGE6Nfb5604lp-z1-W4ek0",
-							"method": "POST",
-							"headers": {
-								"Content-Type": "application/json"
-							},
-							"body": {
-								"dataFactoryName": "@pipeline().DataFactory",
-								"pipelineName": "@pipeline().Pipeline",
-								"messageHeader": "!!!MASTER PIPELINE FAILED!!!",
-								"messageProcessed": "@variables('PipelineName')",
-								"messageNotProcessed": "",
-								"messageErrorDuringProcess": ""
-							}
-						}
 					}
 				],
 				"variables": {
@@ -2068,12 +1942,11 @@
 				"[concat(variables('factoryId'), '/pipelines/ProcessSourceBlob_glproduct_pl')]",
 				"[concat(variables('factoryId'), '/pipelines/ProcessSourceBlob_glallocate_pl')]",
 				"[concat(variables('factoryId'), '/pipelines/ProcessSourceBlob_fctrefasset_pl')]",
-				"[concat(variables('factoryId'), '/pipelines/ProcessTigermoth_Master_pl')]",
-				"[concat(variables('factoryId'), '/pipelines/PipelineMoveFiles_fileshare_to_blob_pl')]"
+				"[concat(variables('factoryId'), '/pipelines/ProcessTigermoth_Master_pl')]"
 			]
 		},
 		{
-			"name": "[concat(parameters('factoryName'), '/MasterPipeline_Sub2_pl')]",
+			"name": "[concat(parameters('factoryName'), '/MasterPipeline_Sub3_pl')]",
 			"type": "Microsoft.DataFactory/factories/pipelines",
 			"apiVersion": "2018-06-01",
 			"properties": {
