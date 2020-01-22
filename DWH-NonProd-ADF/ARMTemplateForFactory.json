@@ -20961,6 +20961,126 @@
 			"dependsOn": []
 		},
 		{
+			"name": "[concat(parameters('factoryName'), '/ProcessTigermoth_DeleteForecastDataVersion_pl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "GetForecastDataVersion",
+						"type": "Lookup",
+						"dependsOn": [
+							{
+								"activity": "SetEtlUtcTag",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": "SELECT VERSION_NAME, COUNT(*) AS TO_PROCESS\nFROM [relational].[Forecast_Asset_reference]\nWHERE record_deleted_flag = 0 AND IsProcessed = 0\nGROUP BY VERSION_NAME"
+							},
+							"dataset": {
+								"referenceName": "SQLrelationfctrefasset_ds",
+								"type": "DatasetReference",
+								"parameters": {}
+							},
+							"firstRowOnly": false
+						}
+					},
+					{
+						"name": "ProcessDeleteForecastData",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "GetForecastDataVersion",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('GetForecastDataVersion').output.value",
+								"type": "Expression"
+							},
+							"isSequential": true,
+							"activities": [
+								{
+									"name": "SPdelete_Version",
+									"type": "SqlServerStoredProcedure",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"storedProcedureName": "[[log].[Delete_Forecast_Data]",
+										"storedProcedureParameters": {
+											"Version_Name": {
+												"value": {
+													"value": "@{item().VERSION_NAME}",
+													"type": "Expression"
+												},
+												"type": "String"
+											}
+										}
+									},
+									"linkedServiceName": {
+										"referenceName": "SQLdbConnection",
+										"type": "LinkedServiceReference"
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "SetEtlUtcTag",
+						"type": "SetVariable",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "Etl_Utc_Tag",
+							"value": {
+								"value": "@utcnow()",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"variables": {
+					"Success_Fail_Header": {
+						"type": "String",
+						"defaultValue": "***SUCCESS***"
+					},
+					"Etl_Utc_Tag": {
+						"type": "String",
+						"defaultValue": "2019-10-22"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/SQLrelationfctrefasset_ds')]",
+				"[concat(variables('factoryId'), '/linkedServices/SQLdbConnection')]"
+			]
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/ProcessTigermoth_ExpireForecastAssetRef_pl')]",
 			"type": "Microsoft.DataFactory/factories/pipelines",
 			"apiVersion": "2018-06-01",
@@ -21031,126 +21151,6 @@
 									"userProperties": [],
 									"typeProperties": {
 										"storedProcedureName": "[[log].[Expire_Forecast_Asset_Ref]",
-										"storedProcedureParameters": {
-											"Version_Name": {
-												"value": {
-													"value": "@{item().VERSION_NAME}",
-													"type": "Expression"
-												},
-												"type": "String"
-											}
-										}
-									},
-									"linkedServiceName": {
-										"referenceName": "SQLdbConnection",
-										"type": "LinkedServiceReference"
-									}
-								}
-							]
-						}
-					},
-					{
-						"name": "SetEtlUtcTag",
-						"type": "SetVariable",
-						"dependsOn": [],
-						"userProperties": [],
-						"typeProperties": {
-							"variableName": "Etl_Utc_Tag",
-							"value": {
-								"value": "@utcnow()",
-								"type": "Expression"
-							}
-						}
-					}
-				],
-				"variables": {
-					"Success_Fail_Header": {
-						"type": "String",
-						"defaultValue": "***SUCCESS***"
-					},
-					"Etl_Utc_Tag": {
-						"type": "String",
-						"defaultValue": "2019-10-22"
-					}
-				},
-				"annotations": []
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/datasets/SQLrelationfctrefasset_ds')]",
-				"[concat(variables('factoryId'), '/linkedServices/SQLdbConnection')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/ProcessTigermoth_ExpireForecastDataVersion_pl')]",
-			"type": "Microsoft.DataFactory/factories/pipelines",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"activities": [
-					{
-						"name": "GetForecastDataVersion",
-						"type": "Lookup",
-						"dependsOn": [
-							{
-								"activity": "SetEtlUtcTag",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"source": {
-								"type": "AzureSqlSource",
-								"sqlReaderQuery": "SELECT VERSION_NAME, COUNT(*) AS TO_PROCESS\nFROM [relational].[Forecast_Asset_reference]\nWHERE record_deleted_flag = 0 AND IsProcessed = 0\nGROUP BY VERSION_NAME"
-							},
-							"dataset": {
-								"referenceName": "SQLrelationfctrefasset_ds",
-								"type": "DatasetReference",
-								"parameters": {}
-							},
-							"firstRowOnly": false
-						}
-					},
-					{
-						"name": "ProcessExpireForecastData",
-						"type": "ForEach",
-						"dependsOn": [
-							{
-								"activity": "GetForecastDataVersion",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"items": {
-								"value": "@activity('GetForecastDataVersion').output.value",
-								"type": "Expression"
-							},
-							"isSequential": true,
-							"activities": [
-								{
-									"name": "SPexpire_Version",
-									"type": "SqlServerStoredProcedure",
-									"dependsOn": [],
-									"policy": {
-										"timeout": "7.00:00:00",
-										"retry": 0,
-										"retryIntervalInSeconds": 30,
-										"secureOutput": false,
-										"secureInput": false
-									},
-									"userProperties": [],
-									"typeProperties": {
-										"storedProcedureName": "[[log].[Expire_Forecast_Data]",
 										"storedProcedureParameters": {
 											"Version_Name": {
 												"value": {
@@ -21879,7 +21879,7 @@
 						}
 					},
 					{
-						"name": "CheckToExpireVersion",
+						"name": "CheckToDeleteVersion",
 						"type": "IfCondition",
 						"dependsOn": [
 							{
@@ -21897,13 +21897,13 @@
 							},
 							"ifTrueActivities": [
 								{
-									"name": "PipelineExpireForecastDataVersion",
+									"name": "PipelineDeleteForecastDataVersion",
 									"type": "ExecutePipeline",
 									"dependsOn": [],
 									"userProperties": [],
 									"typeProperties": {
 										"pipeline": {
-											"referenceName": "ProcessTigermoth_ExpireForecastDataVersion_pl",
+											"referenceName": "ProcessTigermoth_DeleteForecastDataVersion_pl",
 											"type": "PipelineReference"
 										},
 										"waitOnCompletion": true,
@@ -21918,7 +21918,7 @@
 						"type": "SqlServerStoredProcedure",
 						"dependsOn": [
 							{
-								"activity": "CheckToExpireVersion",
+								"activity": "CheckToDeleteVersion",
 								"dependencyConditions": [
 									"Failed"
 								]
@@ -21958,7 +21958,7 @@
 						"type": "IfCondition",
 						"dependsOn": [
 							{
-								"activity": "CheckToExpireVersion",
+								"activity": "CheckToDeleteVersion",
 								"dependencyConditions": [
 									"Succeeded"
 								]
@@ -22266,7 +22266,7 @@
 				"[concat(variables('factoryId'), '/pipelines/ProcessTigermothBlob_MergeConsolidate_stagingForecastData_pl')]",
 				"[concat(variables('factoryId'), '/pipelines/ProcessTigermothBlob_MergeOther_stagingForecastData_pl')]",
 				"[concat(variables('factoryId'), '/pipelines/ProcessTigermothBlob_MergeParameter_stagingForecastParam_pl')]",
-				"[concat(variables('factoryId'), '/pipelines/ProcessTigermoth_ExpireForecastDataVersion_pl')]",
+				"[concat(variables('factoryId'), '/pipelines/ProcessTigermoth_DeleteForecastDataVersion_pl')]",
 				"[concat(variables('factoryId'), '/pipelines/ProcessTigermoth_LoadStagingToRelationDB_pl')]",
 				"[concat(variables('factoryId'), '/pipelines/ProcessTigermoth_Sendmail_OffsetError_pl')]",
 				"[concat(variables('factoryId'), '/pipelines/ProcessTigermoth_ExpireForecastAssetRef_pl')]",
@@ -24326,92 +24326,6 @@
 					{
 						"name": "End_Date_Tag",
 						"type": "date"
-					}
-				],
-				"typeProperties": {
-					"schema": "relational",
-					"table": "COA_Transactions"
-				}
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/linkedServices/SQLdbConnection')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/SQLrelationcoatrxcommon_ds1')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "SQLdbConnection",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "AzureSqlTable",
-				"schema": [
-					{
-						"name": "Trx_ID",
-						"type": "bigint",
-						"precision": 19
-					},
-					{
-						"name": "Trx_Code",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Fund_ID",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Asset_ID",
-						"type": "nvarchar"
-					},
-					{
-						"name": "GL_Code",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Cash_Flow_Code",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Debit_Credit",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Trx_Type",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Trx_Date",
-						"type": "datetime",
-						"precision": 23,
-						"scale": 3
-					},
-					{
-						"name": "Trx_Desc",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Trx_Amount",
-						"type": "decimal",
-						"precision": 18,
-						"scale": 0
-					},
-					{
-						"name": "Update_datetime",
-						"type": "datetime",
-						"precision": 23,
-						"scale": 3
-					},
-					{
-						"name": "record_deleted_flag",
-						"type": "int",
-						"precision": 10
-					},
-					{
-						"name": "process_name",
-						"type": "nvarchar"
 					}
 				],
 				"typeProperties": {
