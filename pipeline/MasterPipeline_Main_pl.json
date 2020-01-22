@@ -27,7 +27,7 @@
 				"type": "ExecutePipeline",
 				"dependsOn": [
 					{
-						"activity": "RunPipelineMasterSub1",
+						"activity": "RunPipelineMasterSub2",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -504,6 +504,96 @@
 						"type": "PipelineReference"
 					},
 					"waitOnCompletion": true
+				}
+			},
+			{
+				"name": "RunPipelineMasterSub2",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "RunPipelineMasterSub1",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "MasterPipeline_Sub2_pl",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true
+				}
+			},
+			{
+				"name": "SetVarMasterSub2",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "RunPipelineMasterSub2",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "PipelineName",
+					"value": {
+						"value": "@activity('RunPipelineMasterSub2').output",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "UpdateMasterRunLog_MasterSub2",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "SetVarMasterSub2",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[log].[UpdateMasterRunLog]",
+					"storedProcedureParameters": {
+						"MasterUtcTag": {
+							"value": {
+								"value": "@variables('MasterUTCtag')",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"RunMessage": {
+							"value": {
+								"value": "@variables('PipelineName')",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"RunStatus": {
+							"value": {
+								"value": "FAILED",
+								"type": "Expression"
+							},
+							"type": "String"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
 				}
 			}
 		],
