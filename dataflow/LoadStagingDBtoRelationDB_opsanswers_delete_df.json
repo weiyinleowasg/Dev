@@ -6,7 +6,7 @@
 			"sources": [
 				{
 					"dataset": {
-						"referenceName": "SQLstagingmyobactuals_ds",
+						"referenceName": "SQLstagingopsanswers_ds",
 						"type": "DatasetReference"
 					},
 					"name": "StagingDB"
@@ -15,7 +15,7 @@
 			"sinks": [
 				{
 					"dataset": {
-						"referenceName": "SQLrelationcoatrxcommon_ds",
+						"referenceName": "SQLrelationopsanswers_ds",
 						"type": "DatasetReference"
 					},
 					"name": "DeleteRecords"
@@ -27,9 +27,12 @@
 				},
 				{
 					"name": "AlterRowDelete"
+				},
+				{
+					"name": "ConvertDate"
 				}
 			],
-			"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tTrx_Type as string,\n\t\tStart_Date_Tag as date,\n\t\tEnd_Date_Tag as date\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT [Fund_ID]\\n      ,[Asset_ID]\\n      ,[Trx_Type]\\n      ,[Start_Date_Tag]\\n      ,[End_Date_Tag]\\n  FROM [staging].[Myob_Actuals]\\n  WHERE [Trx_Type] = \\'Actual\\'',\n\tformat: 'query') ~> StagingDB\nStagingDB select(mapColumn(\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tStart_Date_Tag,\n\t\tEnd_Date_Tag\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectOutput\nSelectOutput alterRow(deleteIf(Trx_Type=='Actual')) ~> AlterRowDelete\nAlterRowDelete sink(input(\n\t\tTrx_ID as long,\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Type as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Amount as decimal(18,2),\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string,\n\t\tStart_Date_Tag as date,\n\t\tEnd_Date_Tag as date\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:true,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:false,\n\tkeys:['Fund_ID','Asset_ID','Trx_Type','Start_Date_Tag','End_Date_Tag'],\n\tformat: 'table',\n\tmapColumn(\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tStart_Date_Tag,\n\t\tEnd_Date_Tag\n\t)) ~> DeleteRecords"
+			"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT [Asset_ID]\\n      ,[Fund_ID]\\n      ,[Reporting_Period]\\nFROM [staging].[OPS_Answers]',\n\tformat: 'query') ~> StagingDB\nConvertDate select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectOutput\nSelectOutput alterRow(deleteIf(not(isNull(Reporting_Period)))) ~> AlterRowDelete\nStagingDB derive(Reporting_Period = toDate(Reporting_Period,'dd/MM/yyyy')) ~> ConvertDate\nAlterRowDelete sink(input(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as date,\n\t\tUID as string,\n\t\tAttribute as string,\n\t\tAnswer_Number as integer,\n\t\tText_Response as string,\n\t\tNumeric_Response as decimal(19,4),\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:true,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:false,\n\tkeys:['Fund_ID','Asset_ID','Reporting_Period'],\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period\n\t)) ~> DeleteRecords"
 		}
 	}
 }
