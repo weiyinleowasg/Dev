@@ -267,7 +267,7 @@
 										"type": "Copy",
 										"dependsOn": [
 											{
-												"activity": "LoadStagingDBtoRelationDB_df",
+												"activity": "ProcessSourceBlob_fctrefasset_spl",
 												"dependencyConditions": [
 													"Succeeded"
 												]
@@ -342,46 +342,10 @@
 											"dataflow": {
 												"referenceName": "LoadTxtToDBstaging_fctasset_df",
 												"type": "DataFlowReference"
-											}
-										}
-									},
-									{
-										"name": "LoadStagingDBtoRelationDB_df",
-										"type": "ExecuteDataFlow",
-										"dependsOn": [
-											{
-												"activity": "LoadTxtToDBstaging_df",
-												"dependencyConditions": [
-													"Succeeded"
-												]
-											}
-										],
-										"policy": {
-											"timeout": "7.00:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
-											"secureOutput": false,
-											"secureInput": false
-										},
-										"userProperties": [],
-										"typeProperties": {
-											"dataflow": {
-												"referenceName": "LoadStagingDBtoRelationDB_fctasset_df",
-												"type": "DataFlowReference",
-												"parameters": {
-													"ProcessName": {
-														"value": "'@{pipeline().Pipeline}'",
-														"type": "Expression"
-													},
-													"FileName": {
-														"value": "'@{item().DATALAKE_FULL_PATHFILE}'",
-														"type": "Expression"
-													},
-													"Etl_Utc_Tag": {
-														"value": "'@{variables('Etl_Utc_Tag')}'",
-														"type": "Expression"
-													}
-												}
+											},
+											"compute": {
+												"coreCount": 8,
+												"computeType": "General"
 											}
 										}
 									},
@@ -595,7 +559,7 @@
 										"type": "SqlServerStoredProcedure",
 										"dependsOn": [
 											{
-												"activity": "LoadStagingDBtoRelationDB_df",
+												"activity": "ProcessSourceBlob_fctrefasset_spl",
 												"dependencyConditions": [
 													"Failed"
 												]
@@ -674,6 +638,36 @@
 										"linkedServiceName": {
 											"referenceName": "SQLdbConnection",
 											"type": "LinkedServiceReference"
+										}
+									},
+									{
+										"name": "ProcessSourceBlob_fctrefasset_spl",
+										"type": "ExecutePipeline",
+										"dependsOn": [
+											{
+												"activity": "LoadTxtToDBstaging_df",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"userProperties": [],
+										"typeProperties": {
+											"pipeline": {
+												"referenceName": "ProcessSourceBlob_fctrefasset_spl",
+												"type": "PipelineReference"
+											},
+											"waitOnCompletion": true,
+											"parameters": {
+												"ProcessName": {
+													"value": "@pipeline().Pipeline",
+													"type": "Expression"
+												},
+												"Etl_Utc_Tag": {
+													"value": "@variables('Etl_Utc_Tag')",
+													"type": "Expression"
+												}
+											}
 										}
 									}
 								]
