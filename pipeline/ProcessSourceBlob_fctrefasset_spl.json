@@ -1,0 +1,271 @@
+{
+	"name": "ProcessSourceBlob_fctrefasset_spl",
+	"properties": {
+		"activities": [
+			{
+				"name": "LookupStagingMyob",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "SELECT count(*) Total_Error\n  FROM [staging].[Myob_Actuals]\n  WHERE [validation_error] IS NOT NULL"
+					},
+					"dataset": {
+						"referenceName": "SQLstagingmyobactuals_ds",
+						"type": "DatasetReference"
+					}
+				}
+			},
+			{
+				"name": "If Condition1",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "LookupStagingMyob",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greater(activity('LookupStagingMyob').output.firstRow.TOTAL_ERROR,0)",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "LoadStagingDBtoRelationDB_myob_actuals_Insert_df",
+							"type": "ExecuteDataFlow",
+							"dependsOn": [
+								{
+									"activity": "LoadStagingDBtoRelationDB_myob_actuals_delete_df",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataflow": {
+									"referenceName": "LoadStagingDBtoRelationDB_myob_actuals_insert_df",
+									"type": "DataFlowReference",
+									"parameters": {
+										"ProcessName": {
+											"value": "'@{pipeline().parameters.ProcessName}'",
+											"type": "Expression"
+										},
+										"FileName": {
+											"value": "'@{pipeline().parameters.FileName}'",
+											"type": "Expression"
+										},
+										"Etl_Utc_Tag": {
+											"value": "'@{pipeline().parameters.Etl_Utc_Tag}'",
+											"type": "Expression"
+										}
+									}
+								},
+								"compute": {
+									"coreCount": 8,
+									"computeType": "General"
+								}
+							}
+						},
+						{
+							"name": "LoadStagingDBtoRelationDB_myob_actuals_delete_df",
+							"type": "ExecuteDataFlow",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataflow": {
+									"referenceName": "LoadStagingDBtoRelationDB_myob_actuals_delete_df",
+									"type": "DataFlowReference",
+									"parameters": {
+										"ProcessName": {
+											"value": "'@{pipeline().parameters.ProcessName}'",
+											"type": "Expression"
+										},
+										"FileName": {
+											"value": "'@{pipeline().parameters.FileName}'",
+											"type": "Expression"
+										},
+										"Etl_Utc_Tag": {
+											"value": "'@{pipeline().parameters.Etl_Utc_Tag}'",
+											"type": "Expression"
+										}
+									}
+								},
+								"compute": {
+									"coreCount": 8,
+									"computeType": "General"
+								}
+							}
+						},
+						{
+							"name": "UpdateSourceRegister_FailedAbort_Delete",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "LoadStagingDBtoRelationDB_myob_actuals_delete_df",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[log].[UpdateSourceRegisterFailedAbort]",
+								"storedProcedureParameters": {
+									"EtlUtcTag": {
+										"value": {
+											"value": "@pipeline().parameters.Etl_Utc_Tag",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"FileName": {
+										"value": {
+											"value": "@pipeline().parameters.FileName",
+											"type": "Expression"
+										},
+										"type": "String"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "SQLdbConnection",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "UpdateSourceRegister_FailedAbort_Insert",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "LoadStagingDBtoRelationDB_myob_actuals_Insert_df",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[log].[UpdateSourceRegisterFailedAbort]",
+								"storedProcedureParameters": {
+									"EtlUtcTag": {
+										"value": {
+											"value": "@pipeline().parameters.Etl_Utc_Tag",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"FileName": {
+										"value": {
+											"value": "@pipeline().parameters.FileName",
+											"type": "Expression"
+										},
+										"type": "String"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "SQLdbConnection",
+								"type": "LinkedServiceReference"
+							}
+						}
+					],
+					"ifTrueActivities": [
+						{
+							"name": "UpdateSourceRegisterTableAbort",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[log].[UpdateSourceRegisterFailedAbort]",
+								"storedProcedureParameters": {
+									"EtlUtcTag": {
+										"value": {
+											"value": "@pipeline().parameters.Etl_Utc_Tag",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"FileName": {
+										"value": {
+											"value": "@pipeline().parameters.OriginalBlobName",
+											"type": "Expression"
+										},
+										"type": "String"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "SQLdbConnection",
+								"type": "LinkedServiceReference"
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"ProcessName": {
+				"type": "string"
+			},
+			"FileName": {
+				"type": "string"
+			},
+			"Etl_Utc_Tag": {
+				"type": "string"
+			},
+			"OriginalBlobName": {
+				"type": "string"
+			}
+		},
+		"annotations": []
+	}
+}
