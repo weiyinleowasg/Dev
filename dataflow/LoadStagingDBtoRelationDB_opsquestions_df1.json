@@ -1,0 +1,72 @@
+{
+	"name": "LoadStagingDBtoRelationDB_opsquestions_df1",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "SQLstagingopsquestions_ds1",
+						"type": "DatasetReference"
+					},
+					"name": "StagingDB"
+				},
+				{
+					"dataset": {
+						"referenceName": "SQLrelationopsquestions_ds1",
+						"type": "DatasetReference"
+					},
+					"name": "RelationalSliQuestions"
+				}
+			],
+			"sinks": [
+				{
+					"dataset": {
+						"referenceName": "SQLrelationopsquestions_ds1",
+						"type": "DatasetReference"
+					},
+					"name": "UpserttRow"
+				}
+			],
+			"transformations": [
+				{
+					"name": "SelectStagingData"
+				},
+				{
+					"name": "AddAuditColumns"
+				},
+				{
+					"name": "GenerateRelationalChecksum"
+				},
+				{
+					"name": "SelectRelationalData"
+				},
+				{
+					"name": "GenerateStagingChecksum"
+				},
+				{
+					"name": "CompareUID"
+				},
+				{
+					"name": "ConditionalSplitNewAndExistingRecord"
+				},
+				{
+					"name": "UnionNewAndExisting"
+				},
+				{
+					"name": "SelectNewRecordData"
+				},
+				{
+					"name": "AlterRowUpsert"
+				},
+				{
+					"name": "ModifyAuditData"
+				},
+				{
+					"name": "SelectUpdatedExistingRecord"
+				}
+			],
+			"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tUID as string,\n\t\tSLI_ID as string,\n\t\tOps_Report_ID as string,\n\t\tMetric_Group as string,\n\t\tMetric_Sub_Group as string,\n\t\tMetric_Name as string,\n\t\tRequirement_Question as string,\n\t\tParent_UID as string,\n\t\tReference as string,\n\t\tDimension as string,\n\t\tReporting_Format as string,\n\t\tReport_Frequency as string,\n\t\tActive as string,\n\t\tForest as string,\n\t\tSaw_Mill as string,\n\t\tCarbon as string,\n\t\tAUS as string,\n\t\tNZ as string,\n\t\tUS as string,\n\t\tMalaysia as string,\n\t\tIndonesia as string,\n\t\tValidation_Error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> StagingDB\nsource(output(\n\t\tUID as string,\n\t\tSLI_ID as string,\n\t\tOps_Report_ID as string,\n\t\tMetric_Group as string,\n\t\tMetric_Sub_Group as string,\n\t\tMetric_Name as string,\n\t\tRequirement_Question as string,\n\t\tParent_UID as string,\n\t\tReference as string,\n\t\tDimension as string,\n\t\tReporting_Format as string,\n\t\tReport_Frequency as string,\n\t\tActive as string,\n\t\tForest as string,\n\t\tSaw_Mill as string,\n\t\tCarbon as string,\n\t\tAUS as string,\n\t\tNZ as string,\n\t\tUS as string,\n\t\tMalaysia as string,\n\t\tIndonesia as string,\n\t\tinsert_datetime as timestamp,\n\t\tupdate_datetime as timestamp,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> RelationalSliQuestions\nGenerateStagingChecksum select(mapColumn(\n\t\tUID,\n\t\tSLI_ID,\n\t\tOps_Report_ID,\n\t\tMetric_Group,\n\t\tMetric_Sub_Group,\n\t\tMetric_Name,\n\t\tRequirement_Question,\n\t\tParent_UID,\n\t\tReference,\n\t\tDimension,\n\t\tReporting_Format,\n\t\tReport_Frequency,\n\t\tActive,\n\t\tForest,\n\t\tSaw_Mill,\n\t\tCarbon,\n\t\tAUS,\n\t\tNZ,\n\t\tUS,\n\t\tMalaysia,\n\t\tIndonesia,\n\t\tStagingChecksum\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectStagingData\nSelectNewRecordData derive(insert_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> AddAuditColumns\nRelationalSliQuestions derive(RelationalChecksum = sha2(256, SLI_ID,Ops_Report_ID,Metric_Group,Metric_Sub_Group,Metric_Name,Requirement_Question,Parent_UID,Reference,Dimension,Reporting_Format,Report_Frequency,Active,Forest,Saw_Mill,Carbon,AUS,NZ,US,Malaysia,Indonesia)) ~> GenerateRelationalChecksum\nGenerateRelationalChecksum select(mapColumn(\n\t\tRelation_UID = UID,\n\t\tRelation_SLI_ID = SLI_ID,\n\t\tRelation_Ops_Report_ID = Ops_Report_ID,\n\t\tRelation_Metric_Group = Metric_Group,\n\t\tRelation_Metric_Sub_Group = Metric_Sub_Group,\n\t\tRelation_Metric_Name = Metric_Name,\n\t\tRelation_Requirement_Question = Requirement_Question,\n\t\tRelation_Parent_UID = Parent_UID,\n\t\tRelation_Reference = Reference,\n\t\tRelation_Dimension = Dimension,\n\t\tRelation_Reporting_Format = Reporting_Format,\n\t\tRelation_Report_Frequency = Report_Frequency,\n\t\tRelation_Active = Active,\n\t\tRelation_Forest = Forest,\n\t\tRelation_Saw_Mill = Saw_Mill,\n\t\tRelation_Carbon = Carbon,\n\t\tRelation_AUS = AUS,\n\t\tRelation_NZ = NZ,\n\t\tRelation_US = US,\n\t\tRelation_Malaysia = Malaysia,\n\t\tRelation_Indonesia = Indonesia,\n\t\tRelation_insert_datetime = insert_datetime,\n\t\tRelation_update_datetime = update_datetime,\n\t\tRelation_process_name = process_name,\n\t\tRelation_RelationalChecksum = RelationalChecksum\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRelationalData\nStagingDB derive(StagingChecksum = sha2(256, SLI_ID,Ops_Report_ID,Metric_Group,Metric_Sub_Group,Metric_Name,Requirement_Question,Parent_UID,Reference,Dimension,Reporting_Format,Report_Frequency,Active,Forest,Saw_Mill,Carbon,AUS,NZ,US,Malaysia,Indonesia)) ~> GenerateStagingChecksum\nSelectStagingData, SelectRelationalData lookup(UID == Relation_UID,\n\tbroadcast: 'none')~> CompareUID\nCompareUID split(isNull(Relation_RelationalChecksum),\n\tStagingChecksum!=Relation_RelationalChecksum,\n\tdisjoint: false) ~> ConditionalSplitNewAndExistingRecord@(NewUID, ModifiedUID, ExistingUID)\nAddAuditColumns, SelectUpdatedExistingRecord union(byName: true)~> UnionNewAndExisting\nConditionalSplitNewAndExistingRecord@NewUID select(mapColumn(\n\t\tUID,\n\t\tSLI_ID,\n\t\tOps_Report_ID,\n\t\tMetric_Group,\n\t\tMetric_Sub_Group,\n\t\tMetric_Name,\n\t\tRequirement_Question,\n\t\tParent_UID,\n\t\tReference,\n\t\tDimension,\n\t\tReporting_Format,\n\t\tReport_Frequency,\n\t\tActive,\n\t\tForest,\n\t\tSaw_Mill,\n\t\tCarbon,\n\t\tAUS,\n\t\tNZ,\n\t\tUS,\n\t\tMalaysia,\n\t\tIndonesia\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectNewRecordData\nUnionNewAndExisting alterRow(upsertIf(true())) ~> AlterRowUpsert\nConditionalSplitNewAndExistingRecord@ModifiedUID derive(update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tprocess_name = concatWS('-',$ProcessName,$FileName)) ~> ModifyAuditData\nModifyAuditData select(mapColumn(\n\t\tUID,\n\t\tSLI_ID,\n\t\tOps_Report_ID,\n\t\tMetric_Group,\n\t\tMetric_Sub_Group,\n\t\tMetric_Name,\n\t\tRequirement_Question,\n\t\tParent_UID,\n\t\tReference,\n\t\tDimension,\n\t\tReporting_Format,\n\t\tReport_Frequency,\n\t\tActive,\n\t\tForest,\n\t\tSaw_Mill,\n\t\tCarbon,\n\t\tAUS,\n\t\tNZ,\n\t\tUS,\n\t\tMalaysia,\n\t\tIndonesia,\n\t\tinsert_datetime = Relation_insert_datetime,\n\t\tupdate_datetime,\n\t\tprocess_name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectUpdatedExistingRecord\nAlterRowUpsert sink(input(\n\t\tUID as string,\n\t\tSLI_ID as string,\n\t\tOps_Report_ID as string,\n\t\tMetric_Group as string,\n\t\tMetric_Sub_Group as string,\n\t\tMetric_Name as string,\n\t\tRequirement_Question as string,\n\t\tParent_UID as string,\n\t\tReference as string,\n\t\tDimension as string,\n\t\tReporting_Format as string,\n\t\tReport_Frequency as string,\n\t\tActive as string,\n\t\tForest as string,\n\t\tSaw_Mill as string,\n\t\tCarbon as string,\n\t\tAUS as string,\n\t\tNZ as string,\n\t\tUS as string,\n\t\tMalaysia as string,\n\t\tIndonesia as string,\n\t\tinsert_datetime as timestamp,\n\t\tupdate_datetime as timestamp,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:true,\n\tkeys:['UID'],\n\tformat: 'table',\n\tmapColumn(\n\t\tUID,\n\t\tSLI_ID,\n\t\tOps_Report_ID,\n\t\tMetric_Group,\n\t\tMetric_Sub_Group,\n\t\tMetric_Name,\n\t\tRequirement_Question,\n\t\tParent_UID,\n\t\tReference,\n\t\tDimension,\n\t\tReporting_Format,\n\t\tReport_Frequency,\n\t\tActive,\n\t\tForest,\n\t\tSaw_Mill,\n\t\tCarbon,\n\t\tAUS,\n\t\tNZ,\n\t\tUS,\n\t\tMalaysia,\n\t\tIndonesia,\n\t\tinsert_datetime,\n\t\tupdate_datetime,\n\t\tprocess_name\n\t)) ~> UpserttRow"
+		}
+	}
+}
