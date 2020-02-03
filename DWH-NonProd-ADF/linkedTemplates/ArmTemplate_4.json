@@ -13,6 +13,52 @@
 	},
 	"resources": [
 		{
+			"name": "[concat(parameters('factoryName'), '/SQLstagingforex_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "Forex_Date",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					},
+					{
+						"name": "Base_Currency",
+						"type": "varchar"
+					},
+					{
+						"name": "Target_Currency",
+						"type": "varchar"
+					},
+					{
+						"name": "EOM_Rate",
+						"type": "decimal",
+						"precision": 18,
+						"scale": 4
+					},
+					{
+						"name": "Avg_Mon_Rate",
+						"type": "decimal",
+						"precision": 18,
+						"scale": 4
+					}
+				],
+				"typeProperties": {
+					"schema": "staging",
+					"table": "Forex_Rate"
+				}
+			},
+			"dependsOn": []
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/SQLstagingfund_ds')]",
 			"type": "Microsoft.DataFactory/factories/datasets",
 			"apiVersion": "2018-06-01",
@@ -528,6 +574,70 @@
 				"typeProperties": {
 					"schema": "staging",
 					"table": "OPS_QUESTIONS"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SQLstagingopsrelatedpartytrx_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "Asset_ID",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Fund_ID",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Transaction_ID",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Reporting_Period",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Transaction_Date",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Related_Parties_Involved",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Transaction_Description",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Transaction_Size",
+						"type": "nvarchar"
+					},
+					{
+						"name": "How_Managed",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Mutual_Benefit",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Validation_Error",
+						"type": "nvarchar"
+					}
+				],
+				"typeProperties": {
+					"schema": "staging",
+					"table": "OPS_Related_Party_Transaction"
 				}
 			},
 			"dependsOn": []
@@ -1337,366 +1447,6 @@
 					},
 					"Run_Message_Fail": {
 						"type": "string"
-					}
-				},
-				"annotations": []
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/PipelineCleanupContainer_raw_pl')]",
-			"type": "Microsoft.DataFactory/factories/pipelines",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"description": "Move files from one folder to another folder",
-				"activities": [
-					{
-						"name": "GetFileList",
-						"description": "Get the list of file",
-						"type": "GetMetadata",
-						"dependsOn": [],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"dataset": {
-								"referenceName": "BinaryDataBlobSourceLandingRaw_ds",
-								"type": "DatasetReference",
-								"parameters": {}
-							},
-							"fieldList": [
-								"childItems",
-								"lastModified"
-							],
-							"storeSettings": {
-								"type": "AzureBlobStorageReadSettings",
-								"recursive": true
-							}
-						}
-					},
-					{
-						"name": "ForEachFile",
-						"description": "Iterate each file, and move them one by one.",
-						"type": "ForEach",
-						"dependsOn": [
-							{
-								"activity": "FilterFiles",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"items": {
-								"value": "@activity('FilterFiles').output.value",
-								"type": "Expression"
-							},
-							"isSequential": true,
-							"activities": [
-								{
-									"name": "If Condition1",
-									"type": "IfCondition",
-									"dependsOn": [
-										{
-											"activity": "LookupSourceRegisterTable",
-											"dependencyConditions": [
-												"Succeeded"
-											]
-										}
-									],
-									"userProperties": [],
-									"typeProperties": {
-										"expression": {
-											"value": "@greater(activity('LookupSourceRegisterTable').output.firstRow.TOTREC,0)",
-											"type": "Expression"
-										},
-										"ifFalseActivities": [
-											{
-												"name": "DeleteInvalidRawFile",
-												"type": "Delete",
-												"dependsOn": [
-													{
-														"activity": "CopyToFileshareErrorDump",
-														"dependencyConditions": [
-															"Succeeded"
-														]
-													}
-												],
-												"policy": {
-													"timeout": "7.00:00:00",
-													"retry": 0,
-													"retryIntervalInSeconds": 30,
-													"secureOutput": false,
-													"secureInput": false
-												},
-												"userProperties": [],
-												"typeProperties": {
-													"dataset": {
-														"referenceName": "BinaryDataBlobSourceLandingRaw_ds",
-														"type": "DatasetReference",
-														"parameters": {}
-													},
-													"enableLogging": false,
-													"storeSettings": {
-														"type": "AzureBlobStorageReadSettings",
-														"recursive": false,
-														"wildcardFileName": {
-															"value": "@{item().name}",
-															"type": "Expression"
-														}
-													}
-												}
-											},
-											{
-												"name": "CopyToFileshareErrorDump",
-												"type": "Copy",
-												"dependsOn": [],
-												"policy": {
-													"timeout": "7.00:00:00",
-													"retry": 0,
-													"retryIntervalInSeconds": 30,
-													"secureOutput": false,
-													"secureInput": false
-												},
-												"userProperties": [],
-												"typeProperties": {
-													"source": {
-														"type": "BinarySource",
-														"storeSettings": {
-															"type": "AzureBlobStorageReadSettings",
-															"recursive": true,
-															"wildcardFileName": {
-																"value": "@{item().name}",
-																"type": "Expression"
-															}
-														}
-													},
-													"sink": {
-														"type": "BinarySink",
-														"storeSettings": {
-															"type": "FileServerWriteSettings"
-														}
-													},
-													"enableStaging": false
-												},
-												"inputs": [
-													{
-														"referenceName": "BinaryDataBlobSourceLandingRaw_ds",
-														"type": "DatasetReference",
-														"parameters": {}
-													}
-												],
-												"outputs": [
-													{
-														"referenceName": "BinaryDataSoureFileShareErrorDump_ds",
-														"type": "DatasetReference",
-														"parameters": {}
-													}
-												]
-											}
-										]
-									}
-								},
-								{
-									"name": "LookupSourceRegisterTable",
-									"type": "Lookup",
-									"dependsOn": [],
-									"policy": {
-										"timeout": "7.00:00:00",
-										"retry": 0,
-										"retryIntervalInSeconds": 30,
-										"secureOutput": false,
-										"secureInput": false
-									},
-									"userProperties": [],
-									"typeProperties": {
-										"source": {
-											"type": "AzureSqlSource",
-											"sqlReaderQuery": {
-												"value": "SELECT COUNT(*) AS TOTREC\n  FROM [log].[Source_Register_Table]\n  WHERE [ORIGINAL_BLOB_NAME] = '@{item().name}'\n  AND [ETL_IS_PROCESSED] = 'N'",
-												"type": "Expression"
-											},
-											"queryTimeout": "02:00:00"
-										},
-										"dataset": {
-											"referenceName": "SQLsourceRegisterTable_ds",
-											"type": "DatasetReference",
-											"parameters": {}
-										}
-									}
-								}
-							]
-						}
-					},
-					{
-						"name": "FilterFiles",
-						"description": "Only files will be selected, the source-folders will not be selected.",
-						"type": "Filter",
-						"dependsOn": [
-							{
-								"activity": "GetFileList",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"items": {
-								"value": "@activity('GetFileList').output.childitems",
-								"type": "Expression"
-							},
-							"condition": {
-								"value": "@equals(item().type, 'File')",
-								"type": "Expression"
-							}
-						}
-					}
-				],
-				"annotations": []
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/PipelineCleanupContainer_scrubbed_pl')]",
-			"type": "Microsoft.DataFactory/factories/pipelines",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"activities": [
-					{
-						"name": "LookupSoureRegisterTableError",
-						"type": "Lookup",
-						"dependsOn": [],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"source": {
-								"type": "AzureSqlSource",
-								"sqlReaderQuery": "SELECT ORIGINAL_BLOB_NAME AS TARGET_BLOB_NAME \nFROM LOG.SOURCE_REGISTER_TABLE \nWHERE ETL_IS_PROCESSED = 'E'\nAND DATEDIFF(DAY,INSERT_TIMESTAMP,CONVERT(smalldatetime,CONVERT(datetimeoffset, SYSDATETIME()) AT TIME ZONE 'AUS Eastern Standard Time')) < 60"
-							},
-							"dataset": {
-								"referenceName": "SQLsourceRegisterTable_ds",
-								"type": "DatasetReference",
-								"parameters": {}
-							},
-							"firstRowOnly": false
-						}
-					},
-					{
-						"name": "ForEachSourceRegisterTableError",
-						"type": "ForEach",
-						"dependsOn": [
-							{
-								"activity": "LookupSoureRegisterTableError",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"items": {
-								"value": "@activity('LookupSoureRegisterTableError').output.value",
-								"type": "Expression"
-							},
-							"isSequential": true,
-							"activities": [
-								{
-									"name": "GetFileNameFromScrubbed",
-									"type": "GetMetadata",
-									"dependsOn": [],
-									"policy": {
-										"timeout": "7.00:00:00",
-										"retry": 0,
-										"retryIntervalInSeconds": 30,
-										"secureOutput": false,
-										"secureInput": false
-									},
-									"userProperties": [],
-									"typeProperties": {
-										"dataset": {
-											"referenceName": "DelimitedText_sourcelandingscrubbed_ds",
-											"type": "DatasetReference",
-											"parameters": {}
-										},
-										"fieldList": [
-											"itemName",
-											"exists"
-										],
-										"storeSettings": {
-											"type": "AzureBlobStorageReadSettings",
-											"recursive": true
-										},
-										"formatSettings": {
-											"type": "DelimitedTextReadSettings"
-										}
-									}
-								},
-								{
-									"name": "IsFileExist",
-									"type": "IfCondition",
-									"dependsOn": [
-										{
-											"activity": "GetFileNameFromScrubbed",
-											"dependencyConditions": [
-												"Succeeded"
-											]
-										}
-									],
-									"userProperties": [],
-									"typeProperties": {
-										"expression": {
-											"value": "@activity('GetFileNameFromScrubbed').output.exists",
-											"type": "Expression"
-										},
-										"ifTrueActivities": [
-											{
-												"name": "DeleteScrubbedFile",
-												"type": "Delete",
-												"dependsOn": [],
-												"policy": {
-													"timeout": "7.00:00:00",
-													"retry": 0,
-													"retryIntervalInSeconds": 30,
-													"secureOutput": false,
-													"secureInput": false
-												},
-												"userProperties": [],
-												"typeProperties": {
-													"dataset": {
-														"referenceName": "DelimitedText_sourcelandingscrubbed_ds",
-														"type": "DatasetReference",
-														"parameters": {}
-													},
-													"enableLogging": false,
-													"storeSettings": {
-														"type": "AzureBlobStorageReadSettings",
-														"recursive": false
-													}
-												}
-											}
-										]
-									}
-								}
-							]
-						}
-					}
-				],
-				"variables": {
-					"myVAR": {
-						"type": "String"
 					}
 				},
 				"annotations": []
