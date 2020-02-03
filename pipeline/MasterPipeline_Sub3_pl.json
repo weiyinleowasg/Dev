@@ -170,7 +170,7 @@
 				"type": "ExecutePipeline",
 				"dependsOn": [
 					{
-						"activity": "RunPipelineOpsIncident",
+						"activity": "RunPipelineOpsCertification",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -397,6 +397,256 @@
 				"dependsOn": [
 					{
 						"activity": "UpdateMasterRunLog_OpsIncident",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"url": "https://prod-24.australiaeast.logic.azure.com:443/workflows/e28a90add06c495bbc9362b5109fb4c0/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=j2wEDAKOpnQ83iKkUa84aeGE6Nfb5604lp-z1-W4ek0",
+					"method": "POST",
+					"headers": {
+						"Content-Type": "application/json"
+					},
+					"body": {
+						"dataFactoryName": "@pipeline().DataFactory",
+						"pipelineName": "@pipeline().Pipeline",
+						"messageHeader": "!!!MASTER PIPELINE FAILED!!!",
+						"messageProcessed": "@variables('PipelineName')",
+						"messageNotProcessed": "",
+						"messageErrorDuringProcess": ""
+					}
+				}
+			},
+			{
+				"name": "RunPipelineOpsRiskOpportunity",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "RunPipelineOpsIncident",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "ProcessSourceBlob_opsriskopportunityreg_pl",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true
+				}
+			},
+			{
+				"name": "SetVarOpsRskOpportunity",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "RunPipelineOpsRiskOpportunity",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "PipelineName",
+					"value": {
+						"value": "@activity('RunPipelineOpsRiskOpportunity').output",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "UpdateMasterRunLog_OpsRiskOpportunty",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "SetVarOpsRskOpportunity",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[log].[UpdateMasterRunLog]",
+					"storedProcedureParameters": {
+						"MasterUtcTag": {
+							"value": {
+								"value": "@variables('MasterUTCtag')",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"RunMessage": {
+							"value": {
+								"value": "@variables('PipelineName')",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"RunStatus": {
+							"value": {
+								"value": "FAILED",
+								"type": "Expression"
+							},
+							"type": "String"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "SendFailMail_OpsRiskOpportunity",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "UpdateMasterRunLog_OpsRiskOpportunty",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"url": "https://prod-24.australiaeast.logic.azure.com:443/workflows/e28a90add06c495bbc9362b5109fb4c0/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=j2wEDAKOpnQ83iKkUa84aeGE6Nfb5604lp-z1-W4ek0",
+					"method": "POST",
+					"headers": {
+						"Content-Type": "application/json"
+					},
+					"body": {
+						"dataFactoryName": "@pipeline().DataFactory",
+						"pipelineName": "@pipeline().Pipeline",
+						"messageHeader": "!!!MASTER PIPELINE FAILED!!!",
+						"messageProcessed": "@variables('PipelineName')",
+						"messageNotProcessed": "",
+						"messageErrorDuringProcess": ""
+					}
+				}
+			},
+			{
+				"name": "RunPipelineOpsCertification",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "RunPipelineOpsRiskOpportunity",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "ProcessSourceBlob_opscertification_pl",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true
+				}
+			},
+			{
+				"name": "SetVarOpsRskCertification",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "RunPipelineOpsCertification",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "PipelineName",
+					"value": {
+						"value": "@activity('RunPipelineOpsCertification').output",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "UpdateMasterRunLog_OpsCertification",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "SetVarOpsRskCertification",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[log].[UpdateMasterRunLog]",
+					"storedProcedureParameters": {
+						"MasterUtcTag": {
+							"value": {
+								"value": "@variables('MasterUTCtag')",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"RunMessage": {
+							"value": {
+								"value": "@variables('PipelineName')",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"RunStatus": {
+							"value": {
+								"value": "FAILED",
+								"type": "Expression"
+							},
+							"type": "String"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "SendFailMail_OpsCertification",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "UpdateMasterRunLog_OpsCertification",
 						"dependencyConditions": [
 							"Completed"
 						]
