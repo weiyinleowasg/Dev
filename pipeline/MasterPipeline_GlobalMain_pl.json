@@ -1,0 +1,92 @@
+{
+	"name": "MasterPipeline_GlobalMain_pl",
+	"properties": {
+		"activities": [
+			{
+				"name": "MasterUTCtag",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "MasterUTCtag",
+					"value": {
+						"value": "@utcnow()",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "RunPipelineMainMaster",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "MasterUTCtag",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "MasterPipeline_Main_pl",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true
+				}
+			},
+			{
+				"name": "RunPipelineCleanupContainerRaw",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "RunPipelineMainMaster",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PipelineCleanupContainer_raw_pl",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true
+				}
+			},
+			{
+				"name": "RunPipelineCleanupContainerScrubbed",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "RunPipelineCleanupContainerRaw",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PipelineCleanupContainer_scrubbed_pl",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true
+				}
+			}
+		],
+		"variables": {
+			"PipelineName": {
+				"type": "String",
+				"defaultValue": "MasterPipeline_pl"
+			},
+			"MasterUTCtag": {
+				"type": "String",
+				"defaultValue": "2019-11-07"
+			}
+		},
+		"annotations": []
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}
