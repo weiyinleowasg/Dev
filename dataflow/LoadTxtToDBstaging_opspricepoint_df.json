@@ -10,12 +10,6 @@
 						"type": "DatasetReference"
 					},
 					"name": "LoadFromScrubbedToStagingDB"
-				},
-				{
-					"name": "RelationalAsset"
-				},
-				{
-					"name": "RelationalIncidentType"
 				}
 			],
 			"sinks": [
@@ -35,19 +29,13 @@
 					"name": "SelectValidRecord"
 				},
 				{
-					"name": "ValidatedIncidentIDandDate"
+					"name": "ValidatedPricePointCode"
 				},
 				{
-					"name": "ConvertDateAndIncidentID"
+					"name": "SelectInvalidPricePointCode"
 				},
 				{
-					"name": "SelectInvalidDateOrIncidentID"
-				},
-				{
-					"name": "InvalidDateOrIncidentIDerrormessage"
-				},
-				{
-					"name": "SelectRelationalAsset"
+					"name": "InvalidPricePointCodeerrormessage"
 				},
 				{
 					"name": "ValidatedAsset"
@@ -65,9 +53,6 @@
 					"name": "LookupRelationalIncidentType"
 				},
 				{
-					"name": "SelectRelationalIncidentType"
-				},
-				{
 					"name": "IsValidIncidentType"
 				},
 				{
@@ -77,7 +62,7 @@
 					"name": "SelectInvalidIncidentType"
 				}
 			],
-			"script": "source(output(\n\t\tPrice_Point_Code as string,\n\t\tPrice_Point as string,\n\t\tActive_YN as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> LoadFromScrubbedToStagingDB\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> RelationalAsset\nsource(output(\n\t\tIncident_Type_Code as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> RelationalIncidentType\nValidatedIncidentIDandDate@ValidDateAndIncidentID, SelectRelationalAsset lookup(Asset_ID == Relation_Asset_ID\n\t&& Fund_ID == Relation_Fund_ID,\n\tmultiple: true,\n\tbroadcast: 'none')~> LookupRelationAsset\nIsValidIncidentType@ValidIncidentType select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tIncident_Id,\n\t\tReporting_Period,\n\t\tIncident_Type_Code,\n\t\tIncident_Severity,\n\t\tIncident_Description,\n\t\tInvestigation_Undertaken,\n\t\tIncident_Findings,\n\t\tIncident_Date\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectValidRecord\nConvertDateAndIncidentID split(not(isNull(Derived_Incident_Id)) && not(isNull(Derived_Reporting_Period)) && not(isNull(Incident_Date)),\n\tdisjoint: false) ~> ValidatedIncidentIDandDate@(ValidDateAndIncidentID, InvalidDateOrIncidentID)\nLoadFromScrubbedToStagingDB derive(Derived_Reporting_Period = toDate(Reporting_Period,\"dd/MM/yyyy\"),\n\t\tDerived_Incident_Date = toDate(Incident_Date,\"dd/MM/yyyy\"),\n\t\tDerived_Incident_Id = toInteger(Incident_Id)) ~> ConvertDateAndIncidentID\nInvalidDateOrIncidentIDerrormessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tIncident_Id,\n\t\tReporting_Period,\n\t\tIncident_Type_Code,\n\t\tIncident_Severity,\n\t\tIncident_Description,\n\t\tInvestigation_Undertaken,\n\t\tIncident_Findings,\n\t\tIncident_Date,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidDateOrIncidentID\nValidatedIncidentIDandDate@InvalidDateOrIncidentID derive(Validation_Error = toString(\"Invalid Reporting Period / Incident Date / Incident ID\")) ~> InvalidDateOrIncidentIDerrormessage\nRelationalAsset select(mapColumn(\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_Fund_ID = Fund_ID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRelationalAsset\nLookupRelationAsset split(not(isNull(Relation_Asset_ID)),\n\tdisjoint: false) ~> ValidatedAsset@(ValidFundAndAsset, InvalidFundOrAsset)\nValidatedAsset@InvalidFundOrAsset derive(Validation_Error = toString(\"Invalid Fund Or Asset\")) ~> InvalidFundOrAsseterrormessage\nInvalidFundOrAsseterrormessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tIncident_Id,\n\t\tReporting_Period,\n\t\tIncident_Type_Code,\n\t\tIncident_Severity,\n\t\tIncident_Description,\n\t\tInvestigation_Undertaken,\n\t\tIncident_Findings,\n\t\tIncident_Date,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidFundOrAsset\nSelectValidRecord, SelectInvalidDateOrIncidentID, SelectInvalidFundOrAsset, SelectInvalidIncidentType union(byName: true)~> UnionAll\nValidatedAsset@ValidFundAndAsset, SelectRelationalIncidentType lookup(Incident_Type_Code == Relation_Incident_Type_Code,\n\tmultiple: true,\n\tbroadcast: 'none')~> LookupRelationalIncidentType\nRelationalIncidentType select(mapColumn(\n\t\tRelation_Incident_Type_Code = Incident_Type_Code\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRelationalIncidentType\nLookupRelationalIncidentType split(not(isNull(Relation_Incident_Type_Code)),\n\tdisjoint: false) ~> IsValidIncidentType@(ValidIncidentType, InvalidIncidentType)\nIsValidIncidentType@InvalidIncidentType derive(Validation_Error = toString(\"Invalid Incident Type Code\")) ~> InvalidIncidentTypeerrormessage\nInvalidIncidentTypeerrormessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tIncident_Id,\n\t\tReporting_Period,\n\t\tIncident_Type_Code,\n\t\tIncident_Severity,\n\t\tIncident_Description,\n\t\tInvestigation_Undertaken,\n\t\tIncident_Findings,\n\t\tIncident_Date,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidIncidentType\nUnionAll sink(input(\n\t\tPrice_Point_Code as string,\n\t\tPrice_Point as string,\n\t\tActive_YN as string,\n\t\tValidation_Error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tIncident_Id,\n\t\tReporting_Period,\n\t\tIncident_Type_Code,\n\t\tIncident_Severity,\n\t\tIncident_Description,\n\t\tInvestigation_Undertaken,\n\t\tIncident_Findings,\n\t\tIncident_Date,\n\t\tValidation_Error\n\t)) ~> StagingDB"
+			"script": "source(output(\n\t\tPrice_Point_Code as string,\n\t\tPrice_Point as string,\n\t\tActive_YN as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> LoadFromScrubbedToStagingDB\nValidatedPricePointCode@ValidPricePointCode lookup(Asset_ID == Asset_ID\n\t&& Fund_ID == Fund_ID,\n\tmultiple: true,\n\tbroadcast: 'none')~> LookupRelationAsset\nIsValidIncidentType@ValidIncidentType select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tIncident_Id,\n\t\tReporting_Period,\n\t\tIncident_Type_Code,\n\t\tIncident_Severity,\n\t\tIncident_Description,\n\t\tInvestigation_Undertaken,\n\t\tIncident_Findings,\n\t\tIncident_Date\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectValidRecord\nLoadFromScrubbedToStagingDB split(not(isNull(Price_Point_Code)) && trim(Price_Point_Code) != '',\n\tdisjoint: false) ~> ValidatedPricePointCode@(ValidPricePointCode, InvalidPricePointCode)\nInvalidPricePointCodeerrormessage select(mapColumn(\n\t\tPrice_Point_Code,\n\t\tPrice_Point,\n\t\tActive_YN,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidPricePointCode\nValidatedPricePointCode@InvalidPricePointCode derive(Validation_Error = toString(\"Invalid Price Pint Code\")) ~> InvalidPricePointCodeerrormessage\nLookupRelationAsset split(not(isNull(Asset_ID)),\n\tdisjoint: false) ~> ValidatedAsset@(ValidFundAndAsset, InvalidFundOrAsset)\nValidatedAsset@InvalidFundOrAsset derive(Validation_Error = toString(\"Invalid Fund Or Asset\")) ~> InvalidFundOrAsseterrormessage\nInvalidFundOrAsseterrormessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tIncident_Id,\n\t\tReporting_Period,\n\t\tIncident_Type_Code,\n\t\tIncident_Severity,\n\t\tIncident_Description,\n\t\tInvestigation_Undertaken,\n\t\tIncident_Findings,\n\t\tIncident_Date,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidFundOrAsset\nSelectValidRecord, SelectInvalidPricePointCode, SelectInvalidFundOrAsset, SelectInvalidIncidentType union(byName: true)~> UnionAll\nValidatedAsset@ValidFundAndAsset lookup(Incident_Type_Code == Incident_Type_Code,\n\tmultiple: true,\n\tbroadcast: 'none')~> LookupRelationalIncidentType\nLookupRelationalIncidentType split(not(isNull(Incident_Type_Code)),\n\tdisjoint: false) ~> IsValidIncidentType@(ValidIncidentType, InvalidIncidentType)\nIsValidIncidentType@InvalidIncidentType derive(Validation_Error = toString(\"Invalid Incident Type Code\")) ~> InvalidIncidentTypeerrormessage\nInvalidIncidentTypeerrormessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tIncident_Id,\n\t\tReporting_Period,\n\t\tIncident_Type_Code,\n\t\tIncident_Severity,\n\t\tIncident_Description,\n\t\tInvestigation_Undertaken,\n\t\tIncident_Findings,\n\t\tIncident_Date,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidIncidentType\nUnionAll sink(input(\n\t\tPrice_Point_Code as string,\n\t\tPrice_Point as string,\n\t\tActive_YN as string,\n\t\tValidation_Error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tIncident_Id,\n\t\tReporting_Period,\n\t\tIncident_Type_Code,\n\t\tIncident_Severity,\n\t\tIncident_Description,\n\t\tInvestigation_Undertaken,\n\t\tIncident_Findings,\n\t\tIncident_Date,\n\t\tValidation_Error\n\t)) ~> StagingDB"
 		}
 	}
 }
