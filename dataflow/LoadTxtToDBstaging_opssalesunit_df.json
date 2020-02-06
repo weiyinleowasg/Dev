@@ -1,0 +1,44 @@
+{
+	"name": "LoadTxtToDBstaging_opssalesunit_df",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "DelimitedText_sourcelandingscrubbed_opssalesunit_ds",
+						"type": "DatasetReference"
+					},
+					"name": "LoadFromScrubbedToStagingDB"
+				}
+			],
+			"sinks": [
+				{
+					"dataset": {
+						"referenceName": "SQLstagingopssalesunit_ds",
+						"type": "DatasetReference"
+					},
+					"name": "StagingDB"
+				}
+			],
+			"transformations": [
+				{
+					"name": "SelectValidRecord"
+				},
+				{
+					"name": "ValidatedSalesUnitCode"
+				},
+				{
+					"name": "SelectInvalidSalesUnitCode"
+				},
+				{
+					"name": "InvalidSalesUnitCodeerrormessage"
+				},
+				{
+					"name": "UnionAll"
+				}
+			],
+			"script": "source(output(\n\t\tSales_Unit_Code as string,\n\t\tSales_Unit as string,\n\t\tActive_YN as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> LoadFromScrubbedToStagingDB\nValidatedSalesUnitCode@ValidSalesUnitCode select(mapColumn(\n\t\tSales_Unit_Code,\n\t\tSales_Unit,\n\t\tActive_YN\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectValidRecord\nLoadFromScrubbedToStagingDB split(not(isNull(Sales_Unit_Code)) && trim(Sales_Unit_Code) != '',\n\tdisjoint: false) ~> ValidatedSalesUnitCode@(ValidSalesUnitCode, InvalidSalesUnitCode)\nInvalidSalesUnitCodeerrormessage select(mapColumn(\n\t\tSales_Unit_Code,\n\t\tSales_Unit,\n\t\tActive_YN,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidSalesUnitCode\nValidatedSalesUnitCode@InvalidSalesUnitCode derive(Validation_Error = toString(\"Invalid Sales Unit Code\")) ~> InvalidSalesUnitCodeerrormessage\nSelectValidRecord, SelectInvalidSalesUnitCode union(byName: true)~> UnionAll\nUnionAll sink(input(\n\t\tSales_Unit_Code as string,\n\t\tSales_Unit as string,\n\t\tActive_YN as string,\n\t\tValidation_Error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tSales_Unit_Code,\n\t\tSales_Unit,\n\t\tActive_YN,\n\t\tValidation_Error\n\t)) ~> StagingDB"
+		}
+	}
+}

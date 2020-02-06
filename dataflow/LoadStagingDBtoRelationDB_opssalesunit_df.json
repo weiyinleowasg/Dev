@@ -1,0 +1,72 @@
+{
+	"name": "LoadStagingDBtoRelationDB_opssalesunit_df",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "SQLstagingopssalesunit_ds",
+						"type": "DatasetReference"
+					},
+					"name": "StagingDB"
+				},
+				{
+					"dataset": {
+						"referenceName": "SQLrelationopssales_unit_ds",
+						"type": "DatasetReference"
+					},
+					"name": "RelationalSalesUnit"
+				}
+			],
+			"sinks": [
+				{
+					"dataset": {
+						"referenceName": "SQLrelationopssales_unit_ds",
+						"type": "DatasetReference"
+					},
+					"name": "UpserttRow"
+				}
+			],
+			"transformations": [
+				{
+					"name": "SelectStagingData"
+				},
+				{
+					"name": "AddAuditColumns"
+				},
+				{
+					"name": "GenerateRelationalChecksum"
+				},
+				{
+					"name": "SelectRelationalData"
+				},
+				{
+					"name": "GenerateStagingChecksum"
+				},
+				{
+					"name": "CompareKeys"
+				},
+				{
+					"name": "UnionNewAndExisting"
+				},
+				{
+					"name": "SelectNewRecordData"
+				},
+				{
+					"name": "AlterRowUpsert"
+				},
+				{
+					"name": "NewAndExistingSalesUnitCode"
+				},
+				{
+					"name": "ChangedAddAuditData"
+				},
+				{
+					"name": "SelectChangeRecord"
+				}
+			],
+			"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tSales_Unit_Code as string,\n\t\tSales_Unit as string,\n\t\tActive_YN as string,\n\t\tValidation_Error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> StagingDB\nsource(output(\n\t\tSales_Unit_Code as string,\n\t\tSales_Unit as string,\n\t\tActive_YN as string,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> RelationalSalesUnit\nGenerateStagingChecksum select(mapColumn(\n\t\tSales_Unit_Code,\n\t\tSales_Unit,\n\t\tActive_YN,\n\t\tValidation_Error,\n\t\tStagingChecksum\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectStagingData\nSelectNewRecordData derive(insert_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> AddAuditColumns\nRelationalSalesUnit derive(RelationalChecksum = sha2(256, Sales_Unit,Active_YN)) ~> GenerateRelationalChecksum\nGenerateRelationalChecksum select(mapColumn(\n\t\tRelation_Sales_Unit_Code = Sales_Unit_Code,\n\t\tRelation_Sales_Unit = Sales_Unit,\n\t\tRelation_Active_YN = Active_YN,\n\t\tRelation_Insert_Datetime = Insert_Datetime,\n\t\tRelation_Update_Datetime = Update_Datetime,\n\t\tRelation_Process_Name = Process_Name,\n\t\tRelation_RelationalChecksum = RelationalChecksum\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRelationalData\nStagingDB derive(StagingChecksum = sha2(256, Sales_Unit,Active_YN)) ~> GenerateStagingChecksum\nSelectStagingData, SelectRelationalData lookup(Sales_Unit_Code == Relation_Sales_Unit_Code,\n\tmultiple: true,\n\tbroadcast: 'none')~> CompareKeys\nAddAuditColumns, SelectChangeRecord union(byName: true)~> UnionNewAndExisting\nNewAndExistingSalesUnitCode@NewSalesUnitCode select(mapColumn(\n\t\tSales_Unit_Code,\n\t\tSales_Unit,\n\t\tActive_YN\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectNewRecordData\nUnionNewAndExisting alterRow(upsertIf(true())) ~> AlterRowUpsert\nCompareKeys split(isNull(Relation_RelationalChecksum),\n\tStagingChecksum != Relation_RelationalChecksum,\n\tdisjoint: false) ~> NewAndExistingSalesUnitCode@(NewSalesUnitCode, ChangedSalesUnitCode, ExistingNoChange)\nNewAndExistingSalesUnitCode@ChangedSalesUnitCode derive(update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> ChangedAddAuditData\nChangedAddAuditData select(mapColumn(\n\t\tSales_Unit_Code = Relation_Sales_Unit_Code,\n\t\tSales_Unit,\n\t\tActive_YN,\n\t\tinsert_datetime = Relation_Insert_Datetime,\n\t\tupdate_datetime,\n\t\tprocess_name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectChangeRecord\nAlterRowUpsert sink(input(\n\t\tSales_Unit_Code as string,\n\t\tSales_Unit as string,\n\t\tActive_YN as string,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:true,\n\tkeys:['Sales_Unit_Code'],\n\tformat: 'table',\n\tmapColumn(\n\t\tSales_Unit_Code,\n\t\tSales_Unit,\n\t\tActive_YN,\n\t\tInsert_Datetime = insert_datetime,\n\t\tUpdate_Datetime = update_datetime,\n\t\tProcess_Name = process_name\n\t)) ~> UpserttRow"
+		}
+	}
+}
