@@ -1,0 +1,44 @@
+{
+	"name": "LoadTxtToDBstaging_opspricepoint_df",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "DelimitedText_sourcelandingscrubbed_opspricepoint_ds",
+						"type": "DatasetReference"
+					},
+					"name": "LoadFromScrubbedToStagingDB"
+				}
+			],
+			"sinks": [
+				{
+					"dataset": {
+						"referenceName": "SQLstagingopspricepoint_ds",
+						"type": "DatasetReference"
+					},
+					"name": "StagingDB"
+				}
+			],
+			"transformations": [
+				{
+					"name": "SelectValidRecord"
+				},
+				{
+					"name": "ValidatedPricePointCode"
+				},
+				{
+					"name": "SelectInvalidPricePointCode"
+				},
+				{
+					"name": "InvalidPricePointCodeerrormessage"
+				},
+				{
+					"name": "UnionAll"
+				}
+			],
+			"script": "source(output(\n\t\tPrice_Point_Code as string,\n\t\tPrice_Point as string,\n\t\tActive_YN as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> LoadFromScrubbedToStagingDB\nValidatedPricePointCode@ValidPricePointCode select(mapColumn(\n\t\tPrice_Point_Code,\n\t\tPrice_Point,\n\t\tActive_YN\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectValidRecord\nLoadFromScrubbedToStagingDB split(not(isNull(Price_Point_Code)) && trim(Price_Point_Code) != '',\n\tdisjoint: false) ~> ValidatedPricePointCode@(ValidPricePointCode, InvalidPricePointCode)\nInvalidPricePointCodeerrormessage select(mapColumn(\n\t\tPrice_Point_Code,\n\t\tPrice_Point,\n\t\tActive_YN,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidPricePointCode\nValidatedPricePointCode@InvalidPricePointCode derive(Validation_Error = toString(\"Invalid Price Pint Code\")) ~> InvalidPricePointCodeerrormessage\nSelectValidRecord, SelectInvalidPricePointCode union(byName: true)~> UnionAll\nUnionAll sink(input(\n\t\tPrice_Point_Code as string,\n\t\tPrice_Point as string,\n\t\tActive_YN as string,\n\t\tValidation_Error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tPrice_Point_Code,\n\t\tPrice_Point,\n\t\tActive_YN,\n\t\tValidation_Error\n\t)) ~> StagingDB"
+		}
+	}
+}
