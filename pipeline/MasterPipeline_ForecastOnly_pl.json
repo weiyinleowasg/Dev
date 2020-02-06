@@ -16,81 +16,6 @@
 				}
 			},
 			{
-				"name": "RunPipelineBudget",
-				"type": "ExecutePipeline",
-				"dependsOn": [
-					{
-						"activity": "MasterUTCtag",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"userProperties": [],
-				"typeProperties": {
-					"pipeline": {
-						"referenceName": "ProcessSourceBlob_budget_pl",
-						"type": "PipelineReference"
-					},
-					"waitOnCompletion": true
-				}
-			},
-			{
-				"name": "SetVarBudget",
-				"type": "SetVariable",
-				"dependsOn": [
-					{
-						"activity": "RunPipelineBudget",
-						"dependencyConditions": [
-							"Failed"
-						]
-					}
-				],
-				"userProperties": [],
-				"typeProperties": {
-					"variableName": "PipelineName",
-					"value": {
-						"value": "@activity('RunPipelineBudget').output",
-						"type": "Expression"
-					}
-				}
-			},
-			{
-				"name": "SendFailMail_Budget",
-				"type": "WebActivity",
-				"dependsOn": [
-					{
-						"activity": "UpdateMasterRunLog_Budget",
-						"dependencyConditions": [
-							"Completed"
-						]
-					}
-				],
-				"policy": {
-					"timeout": "7.00:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"url": "https://prod-12.australiaeast.logic.azure.com:443/workflows/f7a9fbbc810043f28c16fd6bcf3b2f68/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=8yphnNtSS85GDIgCI8OiOwpDghciKo7S9hRjuy5ITI4",
-					"method": "POST",
-					"headers": {
-						"Content-Type": "application/json"
-					},
-					"body": {
-						"dataFactoryName": "@pipeline().DataFactory",
-						"pipelineName": "@pipeline().Pipeline",
-						"messageHeader": "!!!MASTER PIPELINE FAILED!!!",
-						"messageProcessed": "@variables('PipelineName')",
-						"messageNotProcessed": "",
-						"messageErrorDuringProcess": ""
-					}
-				}
-			},
-			{
 				"name": "MasterPipelineSendMailAndLogStatus",
 				"type": "ExecutePipeline",
 				"dependsOn": [
@@ -127,63 +52,13 @@
 				}
 			},
 			{
-				"name": "UpdateMasterRunLog_Budget",
-				"type": "SqlServerStoredProcedure",
-				"dependsOn": [
-					{
-						"activity": "SetVarBudget",
-						"dependencyConditions": [
-							"Completed"
-						]
-					}
-				],
-				"policy": {
-					"timeout": "7.00:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"storedProcedureName": "[log].[UpdateMasterRunLog]",
-					"storedProcedureParameters": {
-						"MasterUtcTag": {
-							"value": {
-								"value": "@variables('MasterUTCtag')",
-								"type": "Expression"
-							},
-							"type": "String"
-						},
-						"RunMessage": {
-							"value": {
-								"value": "@variables('PipelineName')",
-								"type": "Expression"
-							},
-							"type": "String"
-						},
-						"RunStatus": {
-							"value": {
-								"value": "FAILED",
-								"type": "Expression"
-							},
-							"type": "String"
-						}
-					}
-				},
-				"linkedServiceName": {
-					"referenceName": "SQLdbConnection",
-					"type": "LinkedServiceReference"
-				}
-			},
-			{
 				"name": "RunPipelineGLPRODUCT",
 				"type": "ExecutePipeline",
 				"dependsOn": [
 					{
-						"activity": "RunPipelineGLALLOCATE",
+						"activity": "RunPipelineForecastReferenceAsset",
 						"dependencyConditions": [
-							"Completed"
+							"Succeeded"
 						]
 					}
 				],
@@ -222,81 +97,6 @@
 				"dependsOn": [
 					{
 						"activity": "UpdateMasterRunLog_GLPRODUCT",
-						"dependencyConditions": [
-							"Completed"
-						]
-					}
-				],
-				"policy": {
-					"timeout": "7.00:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"url": "https://prod-12.australiaeast.logic.azure.com:443/workflows/f7a9fbbc810043f28c16fd6bcf3b2f68/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=8yphnNtSS85GDIgCI8OiOwpDghciKo7S9hRjuy5ITI4",
-					"method": "POST",
-					"headers": {
-						"Content-Type": "application/json"
-					},
-					"body": {
-						"dataFactoryName": "@pipeline().DataFactory",
-						"pipelineName": "@pipeline().Pipeline",
-						"messageHeader": "!!!MASTER PIPELINE FAILED!!!",
-						"messageProcessed": "@variables('PipelineName')",
-						"messageNotProcessed": "",
-						"messageErrorDuringProcess": ""
-					}
-				}
-			},
-			{
-				"name": "RunPipelineGLALLOCATE",
-				"type": "ExecutePipeline",
-				"dependsOn": [
-					{
-						"activity": "RunPipelineBudget",
-						"dependencyConditions": [
-							"Completed"
-						]
-					}
-				],
-				"userProperties": [],
-				"typeProperties": {
-					"pipeline": {
-						"referenceName": "ProcessSourceBlob_glallocate_pl",
-						"type": "PipelineReference"
-					},
-					"waitOnCompletion": true
-				}
-			},
-			{
-				"name": "SetVarGLALLOCATE",
-				"type": "SetVariable",
-				"dependsOn": [
-					{
-						"activity": "RunPipelineGLALLOCATE",
-						"dependencyConditions": [
-							"Failed"
-						]
-					}
-				],
-				"userProperties": [],
-				"typeProperties": {
-					"variableName": "PipelineName",
-					"value": {
-						"value": "@activity('RunPipelineGLALLOCATE').output",
-						"type": "Expression"
-					}
-				}
-			},
-			{
-				"name": "SendFailMail_GLALLOCATE",
-				"type": "WebActivity",
-				"dependsOn": [
-					{
-						"activity": "UpdateMasterRunLog_GLALLOCATE",
 						"dependencyConditions": [
 							"Completed"
 						]
@@ -527,56 +327,6 @@
 				}
 			},
 			{
-				"name": "UpdateMasterRunLog_GLALLOCATE",
-				"type": "SqlServerStoredProcedure",
-				"dependsOn": [
-					{
-						"activity": "SetVarGLALLOCATE",
-						"dependencyConditions": [
-							"Completed"
-						]
-					}
-				],
-				"policy": {
-					"timeout": "7.00:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"storedProcedureName": "[log].[UpdateMasterRunLog]",
-					"storedProcedureParameters": {
-						"MasterUtcTag": {
-							"value": {
-								"value": "@variables('MasterUTCtag')",
-								"type": "Expression"
-							},
-							"type": "String"
-						},
-						"RunMessage": {
-							"value": {
-								"value": "@variables('PipelineName')",
-								"type": "Expression"
-							},
-							"type": "String"
-						},
-						"RunStatus": {
-							"value": {
-								"value": "FAILED",
-								"type": "Expression"
-							},
-							"type": "String"
-						}
-					}
-				},
-				"linkedServiceName": {
-					"referenceName": "SQLdbConnection",
-					"type": "LinkedServiceReference"
-				}
-			},
-			{
 				"name": "UpdateMasterRunLog_FCTREFASSET",
 				"type": "SqlServerStoredProcedure",
 				"dependsOn": [
@@ -674,6 +424,131 @@
 				"linkedServiceName": {
 					"referenceName": "SQLdbConnection",
 					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "RunPipelineForecastReferenceAsset",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "MasterUTCtag",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "ProcessSourceBlob_fctrefasset_pl",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true
+				}
+			},
+			{
+				"name": "SetVarForecastReferenceAsset",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "RunPipelineForecastReferenceAsset",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "PipelineName",
+					"value": {
+						"value": "@activity('RunPipelineForecastReferenceAsset').output",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "UpdateMasterRunLog_ForecastReferenceAsset",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "SetVarForecastReferenceAsset",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[log].[UpdateMasterRunLog]",
+					"storedProcedureParameters": {
+						"MasterUtcTag": {
+							"value": {
+								"value": "@variables('MasterUTCtag')",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"RunMessage": {
+							"value": {
+								"value": "@variables('PipelineName')",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"RunStatus": {
+							"value": {
+								"value": "FAILED",
+								"type": "Expression"
+							},
+							"type": "String"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "SendFailMail_ForecastReferenceAsset",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "UpdateMasterRunLog_ForecastReferenceAsset",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"url": "https://prod-12.australiaeast.logic.azure.com:443/workflows/f7a9fbbc810043f28c16fd6bcf3b2f68/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=8yphnNtSS85GDIgCI8OiOwpDghciKo7S9hRjuy5ITI4",
+					"method": "POST",
+					"headers": {
+						"Content-Type": "application/json"
+					},
+					"body": {
+						"dataFactoryName": "@pipeline().DataFactory",
+						"pipelineName": "@pipeline().Pipeline",
+						"messageHeader": "!!!MASTER FORECAST FAILED!!!",
+						"messageProcessed": "@variables('PipelineName')",
+						"messageNotProcessed": "",
+						"messageErrorDuringProcess": ""
+					}
 				}
 			}
 		],
