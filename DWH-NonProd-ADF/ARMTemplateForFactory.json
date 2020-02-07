@@ -1043,12 +1043,48 @@
 							"waitOnCompletion": true,
 							"parameters": {}
 						}
+					},
+					{
+						"name": "RunMasterPipelineSendMail",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineCleanupContainerScrubbed",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "MasterPipelineSendMail_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"Parent_DataFactory": {
+									"value": "@pipeline().DataFactory",
+									"type": "Expression"
+								},
+								"Parent_Pipeline": {
+									"value": "@pipeline().Pipeline",
+									"type": "Expression"
+								},
+								"Master_Utc_Tag": {
+									"value": "@variables('MasterUTCtag')",
+									"type": "Expression"
+								},
+								"Run_Message_Success": "Global Pipeline completed successfully",
+								"Run_Message_Fail": "Global Pipeline failed"
+							}
+						}
 					}
 				],
 				"variables": {
 					"PipelineName": {
 						"type": "String",
-						"defaultValue": "MasterPipeline_pl"
+						"defaultValue": "MasterPipeline_Global_pl"
 					},
 					"MasterUTCtag": {
 						"type": "String",
@@ -1061,7 +1097,8 @@
 				"[concat(variables('factoryId'), '/pipelines/MasterPipeline_Main_pl')]",
 				"[concat(variables('factoryId'), '/pipelines/PipelineCleanupContainer_raw_pl')]",
 				"[concat(variables('factoryId'), '/pipelines/PipelineCleanupContainer_scrubbed_pl')]",
-				"[concat(variables('factoryId'), '/pipelines/PipelineCopyFailedBlobToFileshare_pl')]"
+				"[concat(variables('factoryId'), '/pipelines/PipelineCopyFailedBlobToFileshare_pl')]",
+				"[concat(variables('factoryId'), '/pipelines/MasterPipelineSendMail_pl')]"
 			]
 		},
 		{
@@ -1498,48 +1535,6 @@
 						}
 					},
 					{
-						"name": "RunPipeline_CopyFailedFileToFileshare1",
-						"type": "ExecutePipeline",
-						"dependsOn": [
-							{
-								"activity": "SendFailMail_MasterSub1",
-								"dependencyConditions": [
-									"Completed"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"pipeline": {
-								"referenceName": "PipelineCopyFailedBlobToFileshare_pl",
-								"type": "PipelineReference"
-							},
-							"waitOnCompletion": true,
-							"parameters": {}
-						}
-					},
-					{
-						"name": "RunPipeline_CopyFailedFileToFileshare3",
-						"type": "ExecutePipeline",
-						"dependsOn": [
-							{
-								"activity": "SendFailMail_MasterSub3",
-								"dependencyConditions": [
-									"Completed"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"pipeline": {
-								"referenceName": "PipelineCopyFailedBlobToFileshare_pl",
-								"type": "PipelineReference"
-							},
-							"waitOnCompletion": true,
-							"parameters": {}
-						}
-					},
-					{
 						"name": "RunPipelineMasterSub2",
 						"type": "ExecutePipeline",
 						"dependsOn": [
@@ -1664,27 +1659,6 @@
 								"messageErrorDuringProcess": ""
 							}
 						}
-					},
-					{
-						"name": "RunPipeline_CopyFailedFileToFileshare2",
-						"type": "ExecutePipeline",
-						"dependsOn": [
-							{
-								"activity": "SendFailMail_MasterSub2",
-								"dependencyConditions": [
-									"Completed"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"pipeline": {
-								"referenceName": "PipelineCopyFailedBlobToFileshare_pl",
-								"type": "PipelineReference"
-							},
-							"waitOnCompletion": true,
-							"parameters": {}
-						}
 					}
 				],
 				"variables": {
@@ -1705,7 +1679,6 @@
 				"[concat(variables('factoryId'), '/pipelines/MasterPipelineSendMail_pl')]",
 				"[concat(variables('factoryId'), '/linkedServices/SQLdbConnection')]",
 				"[concat(variables('factoryId'), '/pipelines/PipelineMoveFiles_fileshare_to_blob_pl')]",
-				"[concat(variables('factoryId'), '/pipelines/PipelineCopyFailedBlobToFileshare_pl')]",
 				"[concat(variables('factoryId'), '/pipelines/MasterPipeline_Sub2_pl')]"
 			]
 		},
@@ -4359,7 +4332,7 @@
 						"typeProperties": {
 							"source": {
 								"type": "AzureSqlSource",
-								"sqlReaderQuery": "SELECT ORIGINAL_BLOB_NAME AS TARGET_BLOB_NAME \nFROM LOG.SOURCE_REGISTER_TABLE \nWHERE ETL_IS_PROCESSED = 'E'\nAND DATEDIFF(DAY,INSERT_TIMESTAMP,CONVERT(smalldatetime,CONVERT(datetimeoffset, SYSDATETIME()) AT TIME ZONE 'AUS Eastern Standard Time')) < 60"
+								"sqlReaderQuery": "SELECT ORIGINAL_BLOB_NAME AS TARGET_BLOB_NAME \nFROM LOG.SOURCE_REGISTER_TABLE \nWHERE ETL_IS_PROCESSED = 'E'\nAND DATEDIFF(DAY,INSERT_TIMESTAMP,CONVERT(smalldatetime,CONVERT(datetimeoffset, SYSDATETIME()) AT TIME ZONE 'AUS Eastern Standard Time')) < 8"
 							},
 							"dataset": {
 								"referenceName": "SQLsourceRegisterTable_ds",
