@@ -13,6 +13,212 @@
 	},
 	"resources": [
 		{
+			"name": "[concat(parameters('factoryName'), '/LoadStagingDBtoRelationDB_fctrefasset_delete_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "SQLstagingfctrefasset_ds",
+								"type": "DatasetReference"
+							},
+							"name": "StagingDB",
+							"typeProperties": {}
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLrelationfctrefasset_ds",
+								"type": "DatasetReference"
+							},
+							"name": "DeleteRecords"
+						}
+					],
+					"transformations": [
+						{
+							"name": "SelectOutput"
+						},
+						{
+							"name": "AlterRowDelete"
+						}
+					],
+					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tVersion_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT \\n      [Version_name]\\nFROM [staging].[Forecast_Asset_reference]',\n\tformat: 'query') ~> StagingDB\nStagingDB select(mapColumn(\n\t\tVersion_name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectOutput\nSelectOutput alterRow(deleteIf(not(isNull(Version_name)))) ~> AlterRowDelete\nAlterRowDelete sink(input(\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tDatabaseName as string,\n\t\tGroup_ID as integer,\n\t\tAttribute_id as integer,\n\t\tOrigin_id as integer,\n\t\tAsset_Offset as integer,\n\t\tVersion_name as string,\n\t\tIsProcessed as integer,\n\t\tstart_datetime as timestamp,\n\t\tend_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:true,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:false,\n\tkeys:['Version_name'],\n\tformat: 'table',\n\tmapColumn(\n\t\tVersion_name\n\t)) ~> DeleteRecords"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadStagingDBtoRelationDB_fctrefasset_insert_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "SQLstagingfctrefasset_ds",
+								"type": "DatasetReference"
+							},
+							"name": "StagingDB",
+							"typeProperties": {}
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLrelationfctrefasset_ds",
+								"type": "DatasetReference"
+							},
+							"name": "InsertRecords"
+						}
+					],
+					"transformations": [
+						{
+							"name": "SelectNewStagingRow"
+						},
+						{
+							"name": "SelectOutput"
+						},
+						{
+							"name": "AddAuditColumns"
+						},
+						{
+							"name": "AlterRowInsert"
+						}
+					],
+					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tDatabaseName as string,\n\t\tGroup_ID as integer,\n\t\tAttribute_id as integer,\n\t\tOrigin_id as integer,\n\t\tAsset_Offset as integer,\n\t\tVersion_name as string,\n\t\tValidation_Error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> StagingDB\nStagingDB select(mapColumn(\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tDatabaseName,\n\t\tGroup_ID,\n\t\tAttribute_id,\n\t\tOrigin_id,\n\t\tAsset_Offset,\n\t\tVersion_name\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectNewStagingRow\nAddAuditColumns select(mapColumn(\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tDatabaseName,\n\t\tGroup_ID,\n\t\tAttribute_id,\n\t\tOrigin_id,\n\t\tAsset_Offset,\n\t\tVersion_name,\n\t\tIsProcessed,\n\t\tstart_datetime,\n\t\tend_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectOutput\nSelectNewStagingRow derive(IsProcessed = toInteger('0'),\n\t\tstart_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tend_datetime = toTimestamp('9999-12-31 00:00:00'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> AddAuditColumns\nSelectOutput alterRow(insertIf(record_deleted_flag==0)) ~> AlterRowInsert\nAlterRowInsert sink(input(\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tDatabaseName as string,\n\t\tGroup_ID as integer,\n\t\tAttribute_id as integer,\n\t\tOrigin_id as integer,\n\t\tAsset_Offset as integer,\n\t\tVersion_name as string,\n\t\tIsProcessed as integer,\n\t\tstart_datetime as timestamp,\n\t\tend_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tDatabaseName,\n\t\tGroup_ID,\n\t\tAttribute_id,\n\t\tOrigin_id,\n\t\tAsset_Offset,\n\t\tVersion_name,\n\t\tIsProcessed,\n\t\tstart_datetime,\n\t\tend_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t)) ~> InsertRecords"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadStagingDBtoRelationDB_forecastdata_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "SQLstagingasset_ds",
+								"type": "DatasetReference"
+							},
+							"name": "StagingDB",
+							"typeProperties": {}
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLrelationforecastdata_ds",
+								"type": "DatasetReference"
+							},
+							"name": "InsertUpdateRow"
+						}
+					],
+					"transformations": [
+						{
+							"name": "SelectNewStagingRow"
+						},
+						{
+							"name": "AddAuditColumns"
+						},
+						{
+							"name": "AlterRowInsert"
+						}
+					],
+					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tPeriod_Date as timestamp,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tStatus as string,\n\t\tProduct as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tPerpetual_Amount as decimal(25,10),\n\t\tCurrent_Amount as decimal(25,10),\n\t\tFuture_Amount as decimal(25,10),\n\t\tDebit_Credit as string,\n\t\tForecast_Type as string,\n\t\tVersion_name as string,\n\t\tUOM as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT \\n --REF.ASSET_OFFSET AS REF_ASSET_OFFSET , PAR.ASSET_OFFSET AS PAR_ASSET_OFFSET, PAR.DESC_YEAR, DAT.PERIOD,\\n CASE WHEN REF.ASSET_OFFSET = PAR.ASSET_OFFSET \\n          THEN DATEADD(YEAR,CAST(DAT.PERIOD AS INT)-(CAST(REF.ASSET_OFFSET AS INT)-CAST(PAR.ASSET_OFFSET AS INT))-1,CAST(CONCAT(PAR.DESC_YEAR,\\'-01-01\\') AS DATETIME)) \\n          ELSE DATEADD(YEAR,CAST(DAT.PERIOD AS INT)-(CAST(REF.ASSET_OFFSET AS INT)-CAST(PAR.ASSET_OFFSET AS INT)),CAST(CONCAT(PAR.DESC_YEAR,\\'-01-01\\') AS DATETIME)) \\n END AS Period_Date,\\n REF.FUND_ID AS Fund_ID,\\n REF.ASSET_ID AS Asset_ID,\\n DAT.STATUS AS Status, \\n DAT.PRODUCT AS Product, \\n CASE WHEN PRD.GL_CODE IS NULL THEN \\'IGNORE\\' ELSE PRD.GL_CODE END AS GL_Code,\\n CAST(NULL AS VARCHAR(100)) AS Cash_Flow_Code,\\n ABS(( CAST(CAST(DAT.CURENT_AMOUNT AS FLOAT) + CAST(DAT.FUTURE_AMOUNT AS FLOAT) AS DECIMAL(25,10)) )) AS Perpetual_Amount,\\n CAST(CAST(DAT.CURENT_AMOUNT AS FLOAT) AS DECIMAL(25,10)) AS Current_Amount, \\n CAST(CAST(DAT.FUTURE_AMOUNT AS FLOAT) AS DECIMAL(25,10)) AS Future_Amount,\\n CASE WHEN UPPER(COA.DEBIT_CREDIT) = \\'DR\\' AND ( CAST(CAST(DAT.CURENT_AMOUNT AS FLOAT) + CAST(DAT.FUTURE_AMOUNT AS FLOAT) AS DECIMAL(25,10)) ) >= 0 THEN \\'DR\\'\\n      WHEN UPPER(COA.DEBIT_CREDIT) = \\'DR\\' AND ( CAST(CAST(DAT.CURENT_AMOUNT AS FLOAT) + CAST(DAT.FUTURE_AMOUNT AS FLOAT) AS DECIMAL(25,10)) ) < 0 THEN \\'CR\\'\\n\t  WHEN UPPER(COA.DEBIT_CREDIT) = \\'CR\\' AND ( CAST(CAST(DAT.CURENT_AMOUNT AS FLOAT) + CAST(DAT.FUTURE_AMOUNT AS FLOAT) AS DECIMAL(25,10)) ) >= 0 THEN \\'CR\\'\\n\t  WHEN UPPER(COA.DEBIT_CREDIT) = \\'CR\\' AND ( CAST(CAST(DAT.CURENT_AMOUNT AS FLOAT) + CAST(DAT.FUTURE_AMOUNT AS FLOAT) AS DECIMAL(25,10)) ) < 0 THEN \\'DR\\'\\n\t  WHEN COA.DEBIT_CREDIT IS NULL AND ( CAST(CAST(DAT.CURENT_AMOUNT AS FLOAT) + CAST(DAT.FUTURE_AMOUNT AS FLOAT) AS DECIMAL(25,10)) ) >= 0 THEN \\'DR\\'\\n\t  ELSE \\'CR\\'\\n END AS Debit_Credit,\\n-- CASE WHEN ( CAST(CAST(DAT.CURENT_AMOUNT AS FLOAT) + CAST(DAT.FUTURE_AMOUNT AS FLOAT) AS DECIMAL(25,10)) ) >= 0 THEN \\'DR\\' ElSE \\'CR\\' END AS Debit_Credit,\\n \\'Forecast\\' AS Forecast_Type,\\n REF.VERSION_NAME AS Version_name,\\n DAT.UOM\\nFROM RELATIONAL.FORECAST_ASSET_REFERENCE REF\\nJOIN STAGING.FORECAST_PARAM PAR\\nON REF.FUND_ID = PAR.FUND_ID AND REF.ASSET_ID = PAR.ASSET_ID AND REF.VERSION_NAME = PAR.VERSION_NAME \\nJOIN STAGING.FORECAST_DATA DAT\\nON REF.FUND_ID = DAT.FUND_ID AND REF.ASSET_ID = DAT.ASSET_ID AND REF.VERSION_NAME = DAT.VERSION_NAME \\nLEFT JOIN RELATIONAL.FORECAST_GL_PRODUCT_MAP PRD\\nON DAT.FUND_ID = PRD.FUND_ID AND DAT.ASSET_ID = PRD.ASSET_ID AND DAT.STATUS = PRD.STATUS AND DAT.PRODUCT = PRD.Product AND PRD.RECORD_DELETED_FLAG = 0\\nLEFT JOIN RELATIONAL.CHART_OF_ACCOUNT COA\\nON PRD.GL_CODE = COA.GL_CODE AND COA.RECORD_DELETED_FLAG = 0\\nWHERE REF.ISPROCESSED = 0 AND REF.RECORD_DELETED_FLAG = 0 \\nAND DAT.STATUS != \\'\\' AND DAT.STATUS IS NOT NULL\\nAND CAST(REF.ASSET_OFFSET AS INT) >= CAST(PAR.ASSET_OFFSET AS INT)\\nAND CAST(DAT.PERIOD AS INT) >= CASE WHEN (CAST(REF.ASSET_OFFSET AS INT) - CAST(PAR.ASSET_OFFSET AS INT)) = 0 \\n    THEN 1 ELSE (CAST(REF.ASSET_OFFSET AS INT) - CAST(PAR.ASSET_OFFSET AS INT)) END',\n\tformat: 'query') ~> StagingDB\nStagingDB select(mapColumn(\n\t\tPeriod_Date,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tStatus,\n\t\tProduct,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tPerpetual_Amount,\n\t\tCurrent_Amount,\n\t\tFuture_Amount,\n\t\tDebit_Credit,\n\t\tForecast_Type,\n\t\tVersion_name,\n\t\tUOM\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectNewStagingRow\nSelectNewStagingRow derive(Update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> AddAuditColumns\nAddAuditColumns alterRow(insertIf(record_deleted_flag==toInteger(0))) ~> AlterRowInsert\nAlterRowInsert sink(input(\n\t\tPeriod_Date as timestamp,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tStatus as string,\n\t\tProduct as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tPerpetual_Amount as decimal(25,10),\n\t\tCurrent_Amount as decimal(25,10),\n\t\tFuture_Amount as decimal(25,10),\n\t\tDebit_Credit as string,\n\t\tForecast_Type as string,\n\t\tVersion_name as string,\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string,\n\t\tUOM as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tkeys:['Asset_ID','Fund_ID'],\n\tformat: 'table',\n\tmapColumn(\n\t\tPeriod_Date,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tStatus,\n\t\tProduct,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tPerpetual_Amount,\n\t\tCurrent_Amount,\n\t\tFuture_Amount,\n\t\tDebit_Credit,\n\t\tForecast_Type,\n\t\tVersion_name,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name,\n\t\tUOM\n\t)) ~> InsertUpdateRow"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadStagingDBtoRelationDB_forex_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "SQLstagingforex_ds",
+								"type": "DatasetReference"
+							},
+							"name": "StagingDB",
+							"typeProperties": {}
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLrelationforex_ds",
+								"type": "DatasetReference"
+							},
+							"name": "RelationDB",
+							"typeProperties": {}
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLrelationforex_ds",
+								"type": "DatasetReference"
+							},
+							"name": "InsertUpdateRow"
+						}
+					],
+					"transformations": [
+						{
+							"name": "StagingAddChecksum"
+						},
+						{
+							"name": "LookupRelationalStream"
+						},
+						{
+							"name": "RelationalAddChecksum"
+						},
+						{
+							"name": "ConditionalSplitNewOrExpire"
+						},
+						{
+							"name": "RelationRenameColumns"
+						},
+						{
+							"name": "SelectNewStagingRow"
+						},
+						{
+							"name": "AddAuditColumns"
+						},
+						{
+							"name": "AlterRowInsertUpdateExpire"
+						},
+						{
+							"name": "UpdateAddAuditAttributes"
+						},
+						{
+							"name": "AddExpiredAttributes"
+						},
+						{
+							"name": "UpdateSelectForInsert"
+						},
+						{
+							"name": "UnionForDB"
+						},
+						{
+							"name": "UpdateSelectForExpire"
+						}
+					],
+					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tForex_Date as timestamp,\n\t\tBase_Currency as string,\n\t\tTarget_Currency as string,\n\t\tEOM_Rate as decimal(18,4),\n\t\tAvg_Mon_Rate as decimal(18,4)\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> StagingDB\nsource(output(\n\t\tForex_Date as timestamp,\n\t\tBase_Currency as string,\n\t\tTarget_Currency as string,\n\t\tEOM_Rate as decimal(18,4),\n\t\tAvg_Mon_Rate as decimal(18,4),\n\t\tstart_datetime as timestamp,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [Forex_Date]\\n      ,[Base_Currency]\\n      ,[Target_Currency]\\n      ,[EOM_Rate]\\n      ,[Avg_Mon_Rate]\\n      ,[start_datetime]\\n      ,[process_name]\\nFROM [relational].[Forex_Rate]\\nWHERE [record_deleted_flag] = 0',\n\tformat: 'query') ~> RelationDB\nStagingDB derive(StagingChecksum = sha2(256, Forex_Date,Base_Currency,Target_Currency)) ~> StagingAddChecksum\nStagingAddChecksum, RelationRenameColumns lookup(Forex_Date == Relation_Forex_Date\n\t&& Base_Currency == Relation_Base_Currency\n\t&& Target_Currency == Relation_Target_Currency,\n\tmultiple: true,\n\tbroadcast: 'none')~> LookupRelationalStream\nRelationDB derive(RelationalChecksum = sha2(256, Forex_Date,Base_Currency,Target_Currency)) ~> RelationalAddChecksum\nLookupRelationalStream split(isNull(Relation_RelationalChecksum),\n\tEOM_Rate!=Relation_EOM_Rate||Avg_Mon_Rate!=Relation_Avg_Mon_Rate,\n\tdisjoint: false) ~> ConditionalSplitNewOrExpire@(StagingNewRow, StagingChangedRow, IgnoreNoChange)\nRelationalAddChecksum select(mapColumn(\n\t\tRelation_Forex_Date = Forex_Date,\n\t\tRelation_Base_Currency = Base_Currency,\n\t\tRelation_Target_Currency = Target_Currency,\n\t\tRelation_EOM_Rate = EOM_Rate,\n\t\tRelation_Avg_Mon_Rate = Avg_Mon_Rate,\n\t\tRelation_start_datetime = start_datetime,\n\t\tRelation_process_name = process_name,\n\t\tRelation_RelationalChecksum = RelationalChecksum\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> RelationRenameColumns\nConditionalSplitNewOrExpire@StagingNewRow select(mapColumn(\n\t\tForex_Date,\n\t\tBase_Currency,\n\t\tTarget_Currency,\n\t\tEOM_Rate,\n\t\tAvg_Mon_Rate\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectNewStagingRow\nSelectNewStagingRow derive(start_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tend_datetime = toTimestamp('9999-12-31 00:00:00'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> AddAuditColumns\nUnionForDB alterRow(insertIf(record_deleted_flag==toInteger(0)),\n\tupdateIf(record_deleted_flag==toInteger(1))) ~> AlterRowInsertUpdateExpire\nConditionalSplitNewOrExpire@StagingChangedRow derive(start_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tend_datetime = toTimestamp('9999-12-31 00:00:00'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> UpdateAddAuditAttributes\nConditionalSplitNewOrExpire@StagingChangedRow derive(end_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\trecord_deleted_flag = toInteger(1)) ~> AddExpiredAttributes\nUpdateAddAuditAttributes select(mapColumn(\n\t\tForex_Date,\n\t\tBase_Currency,\n\t\tTarget_Currency,\n\t\tEOM_Rate,\n\t\tAvg_Mon_Rate,\n\t\tstart_datetime,\n\t\tend_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> UpdateSelectForInsert\nAddAuditColumns, UpdateSelectForInsert, UpdateSelectForExpire union(byName: true)~> UnionForDB\nAddExpiredAttributes select(mapColumn(\n\t\tForex_Date = Relation_Forex_Date,\n\t\tBase_Currency = Relation_Base_Currency,\n\t\tTarget_Currency = Relation_Target_Currency,\n\t\tEOM_Rate = Relation_EOM_Rate,\n\t\tAvg_Mon_Rate = Relation_Avg_Mon_Rate,\n\t\tstart_datetime = Relation_start_datetime,\n\t\tprocess_name = Relation_process_name,\n\t\tend_datetime,\n\t\trecord_deleted_flag\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> UpdateSelectForExpire\nAlterRowInsertUpdateExpire sink(input(\n\t\tForex_Date as timestamp,\n\t\tBase_Currency as string,\n\t\tTarget_Currency as string,\n\t\tEOM_Rate as decimal(18,4),\n\t\tAvg_Mon_Rate as decimal(18,4),\n\t\tstart_datetime as timestamp,\n\t\tend_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:true,\n\tupsertable:false,\n\tkeys:['Forex_Date','Base_Currency','Target_Currency'],\n\tformat: 'table',\n\tmapColumn(\n\t\tForex_Date,\n\t\tBase_Currency,\n\t\tTarget_Currency,\n\t\tEOM_Rate,\n\t\tAvg_Mon_Rate,\n\t\tstart_datetime,\n\t\tend_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t)) ~> InsertUpdateRow"
+				}
+			},
+			"dependsOn": []
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/LoadStagingDBtoRelationDB_fund_df')]",
 			"type": "Microsoft.DataFactory/factories/dataflows",
 			"apiVersion": "2018-06-01",
@@ -981,6 +1187,86 @@
 			"dependsOn": []
 		},
 		{
+			"name": "[concat(parameters('factoryName'), '/LoadStagingDBtoRelationDB_opssalesother_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "SQLstagingopssalesother",
+								"type": "DatasetReference"
+							},
+							"name": "StagingDB",
+							"typeProperties": {}
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLrelationopssalesother_ds",
+								"type": "DatasetReference"
+							},
+							"name": "RelationalSalesOther",
+							"typeProperties": {}
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLrelationopssalesother_ds",
+								"type": "DatasetReference"
+							},
+							"name": "UpserttRow"
+						}
+					],
+					"transformations": [
+						{
+							"name": "SelectStagingData"
+						},
+						{
+							"name": "AddAuditColumns"
+						},
+						{
+							"name": "GenerateRelationalChecksum"
+						},
+						{
+							"name": "SelectRelationalData"
+						},
+						{
+							"name": "GenerateStagingChecksum"
+						},
+						{
+							"name": "CompareKeys"
+						},
+						{
+							"name": "UnionNewAndExisting"
+						},
+						{
+							"name": "SelectNewRecordData"
+						},
+						{
+							"name": "AlterRowUpsert"
+						},
+						{
+							"name": "ConvertDatesAndIdAndNumbers"
+						},
+						{
+							"name": "NewAndExistingSalesOther"
+						},
+						{
+							"name": "ChangedAddAuditData"
+						},
+						{
+							"name": "SelectChangeRecord"
+						}
+					],
+					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tOther_Sale_Id as string,\n\t\tReporting_Period as string,\n\t\tSale_Type_Code as string,\n\t\tSales_UOM as string,\n\t\tSales_Point as string,\n\t\tTotal_Units_Sold as string,\n\t\tSales_revenue as string,\n\t\tSales_Cost as string,\n\t\tSales_Net_Revenue as string,\n\t\tSales_Net_Revenue_Per_Unit as string,\n\t\tCurrency_Code as string,\n\t\tValidation_Error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> StagingDB\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tOther_Sale_Id as integer,\n\t\tReporting_Period as date,\n\t\tSale_Type_Code as string,\n\t\tSales_UOM as string,\n\t\tSales_Point as string,\n\t\tTotal_Units_Sold as decimal(19,4),\n\t\tSales_Revenue as decimal(19,4),\n\t\tSales_Cost as decimal(19,4),\n\t\tSales_Net_Revenue as decimal(19,4),\n\t\tSales_Net_Revenue_Per_Unit as decimal(19,4),\n\t\tCurrency_Code as string,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> RelationalSalesOther\nGenerateStagingChecksum select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tOther_Sale_Id,\n\t\tReporting_Period,\n\t\tSale_Type_Code,\n\t\tSales_UOM,\n\t\tSales_Point,\n\t\tTotal_Units_Sold,\n\t\tSales_revenue,\n\t\tSales_Cost,\n\t\tSales_Net_Revenue,\n\t\tSales_Net_Revenue_Per_Unit,\n\t\tCurrency_Code,\n\t\tStagingChecksum\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectStagingData\nSelectNewRecordData derive(insert_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> AddAuditColumns\nRelationalSalesOther derive(RelationalChecksum = sha2(256, Reporting_Period,Sale_Type_Code,Sales_UOM,Sales_Point,Total_Units_Sold,Sales_Revenue,Sales_Cost,Sales_Net_Revenue,Sales_Net_Revenue_Per_Unit,Currency_Code)) ~> GenerateRelationalChecksum\nGenerateRelationalChecksum select(mapColumn(\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_Fund_ID = Fund_ID,\n\t\tRelation_Other_Sale_Id = Other_Sale_Id,\n\t\tRelation_Reporting_Period = Reporting_Period,\n\t\tRelation_Sale_Type_Code = Sale_Type_Code,\n\t\tRelation_Sales_UOM = Sales_UOM,\n\t\tRelation_Sales_Point = Sales_Point,\n\t\tRelation_Total_Units_Sold = Total_Units_Sold,\n\t\tRelation_Sales_Revenue = Sales_Revenue,\n\t\tRelation_Sales_Cost = Sales_Cost,\n\t\tRelation_Sales_Net_Revenue = Sales_Net_Revenue,\n\t\tRelation_Sales_Net_Revenue_Per_Unit = Sales_Net_Revenue_Per_Unit,\n\t\tRelation_Currency_Code = Currency_Code,\n\t\tRelation_Insert_Datetime = Insert_Datetime,\n\t\tRelation_Update_Datetime = Update_Datetime,\n\t\tRelation_Process_Name = Process_Name,\n\t\tRelation_RelationalChecksum = RelationalChecksum\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRelationalData\nConvertDatesAndIdAndNumbers derive(StagingChecksum = sha2(256, Reporting_Period,Sale_Type_Code,Sales_UOM,Sales_Point,Total_Units_Sold,Sales_revenue,Sales_Cost,Sales_Net_Revenue,Sales_Net_Revenue_Per_Unit,Currency_Code)) ~> GenerateStagingChecksum\nSelectStagingData, SelectRelationalData lookup(Asset_ID == Relation_Asset_ID\n\t&& Fund_ID == Relation_Fund_ID\n\t&& Other_Sale_Id == Relation_Other_Sale_Id,\n\tmultiple: true,\n\tbroadcast: 'none')~> CompareKeys\nAddAuditColumns, SelectChangeRecord union(byName: true)~> UnionNewAndExisting\nNewAndExistingSalesOther@NewSalesOther select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tOther_Sale_Id,\n\t\tReporting_Period,\n\t\tSale_Type_Code,\n\t\tSales_UOM,\n\t\tSales_Point,\n\t\tTotal_Units_Sold,\n\t\tSales_revenue,\n\t\tSales_Cost,\n\t\tSales_Net_Revenue,\n\t\tSales_Net_Revenue_Per_Unit,\n\t\tCurrency_Code\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectNewRecordData\nUnionNewAndExisting alterRow(upsertIf(true())) ~> AlterRowUpsert\nStagingDB derive(Reporting_Period = toDate(Reporting_Period, \"dd/MM/yyyy\"),\n\t\tOther_Sale_Id = toInteger(Other_Sale_Id),\n\t\tTotal_Units_Sold = toDecimal(Total_Units_Sold, 19, 4, \"###,###.####\"),\n\t\tSales_revenue = toDecimal(Sales_revenue, 19, 4, \"###,###.####\"),\n\t\tSales_Cost = toDecimal(Sales_Cost, 19, 4, \"###,###.####\"),\n\t\tSales_Net_Revenue = toDecimal(Sales_Net_Revenue, 19, 4, \"###,###.####\"),\n\t\tSales_Net_Revenue_Per_Unit = toDecimal(Sales_Net_Revenue_Per_Unit, 19, 4, \"###,###.####\")) ~> ConvertDatesAndIdAndNumbers\nCompareKeys split(isNull(Relation_RelationalChecksum),\n\tStagingChecksum != Relation_RelationalChecksum,\n\tdisjoint: false) ~> NewAndExistingSalesOther@(NewSalesOther, ChangedSalesOther, ExistingNoChange)\nNewAndExistingSalesOther@ChangedSalesOther derive(update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> ChangedAddAuditData\nChangedAddAuditData select(mapColumn(\n\t\tAsset_ID = Relation_Asset_ID,\n\t\tFund_ID = Relation_Fund_ID,\n\t\tOther_Sale_Id = Relation_Other_Sale_Id,\n\t\tReporting_Period,\n\t\tSale_Type_Code,\n\t\tSales_UOM,\n\t\tSales_Point,\n\t\tTotal_Units_Sold,\n\t\tSales_revenue,\n\t\tSales_Cost,\n\t\tSales_Net_Revenue,\n\t\tSales_Net_Revenue_Per_Unit,\n\t\tCurrency_Code,\n\t\tinsert_datetime = Relation_Insert_Datetime,\n\t\tupdate_datetime,\n\t\tprocess_name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectChangeRecord\nAlterRowUpsert sink(input(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tOther_Sale_Id as integer,\n\t\tReporting_Period as date,\n\t\tSale_Type_Code as string,\n\t\tSales_UOM as string,\n\t\tSales_Point as string,\n\t\tTotal_Units_Sold as decimal(19,4),\n\t\tSales_Revenue as decimal(19,4),\n\t\tSales_Cost as decimal(19,4),\n\t\tSales_Net_Revenue as decimal(19,4),\n\t\tSales_Net_Revenue_Per_Unit as decimal(19,4),\n\t\tCurrency_Code as string,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:true,\n\tkeys:['Asset_ID','Fund_ID','Other_Sale_Id'],\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tOther_Sale_Id,\n\t\tReporting_Period,\n\t\tSale_Type_Code,\n\t\tSales_UOM,\n\t\tSales_Point,\n\t\tTotal_Units_Sold,\n\t\tSales_Revenue = Sales_revenue,\n\t\tSales_Cost,\n\t\tSales_Net_Revenue,\n\t\tSales_Net_Revenue_Per_Unit,\n\t\tCurrency_Code,\n\t\tInsert_Datetime = insert_datetime,\n\t\tUpdate_Datetime = update_datetime,\n\t\tProcess_Name = process_name\n\t)) ~> UpserttRow"
+				}
+			},
+			"dependsOn": []
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/LoadStagingDBtoRelationDB_opssalesunit_df')]",
 			"type": "Microsoft.DataFactory/factories/dataflows",
 			"apiVersion": "2018-06-01",
@@ -1053,257 +1339,6 @@
 						}
 					],
 					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tSales_Unit_Code as string,\n\t\tSales_Unit as string,\n\t\tActive_YN as string,\n\t\tValidation_Error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> StagingDB\nsource(output(\n\t\tSales_Unit_Code as string,\n\t\tSales_Unit as string,\n\t\tActive_YN as string,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> RelationalSalesUnit\nGenerateStagingChecksum select(mapColumn(\n\t\tSales_Unit_Code,\n\t\tSales_Unit,\n\t\tActive_YN,\n\t\tValidation_Error,\n\t\tStagingChecksum\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectStagingData\nSelectNewRecordData derive(insert_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> AddAuditColumns\nRelationalSalesUnit derive(RelationalChecksum = sha2(256, Sales_Unit,Active_YN)) ~> GenerateRelationalChecksum\nGenerateRelationalChecksum select(mapColumn(\n\t\tRelation_Sales_Unit_Code = Sales_Unit_Code,\n\t\tRelation_Sales_Unit = Sales_Unit,\n\t\tRelation_Active_YN = Active_YN,\n\t\tRelation_Insert_Datetime = Insert_Datetime,\n\t\tRelation_Update_Datetime = Update_Datetime,\n\t\tRelation_Process_Name = Process_Name,\n\t\tRelation_RelationalChecksum = RelationalChecksum\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRelationalData\nStagingDB derive(StagingChecksum = sha2(256, Sales_Unit,Active_YN)) ~> GenerateStagingChecksum\nSelectStagingData, SelectRelationalData lookup(Sales_Unit_Code == Relation_Sales_Unit_Code,\n\tmultiple: true,\n\tbroadcast: 'none')~> CompareKeys\nAddAuditColumns, SelectChangeRecord union(byName: true)~> UnionNewAndExisting\nNewAndExistingSalesUnitCode@NewSalesUnitCode select(mapColumn(\n\t\tSales_Unit_Code,\n\t\tSales_Unit,\n\t\tActive_YN\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectNewRecordData\nUnionNewAndExisting alterRow(upsertIf(true())) ~> AlterRowUpsert\nCompareKeys split(isNull(Relation_RelationalChecksum),\n\tStagingChecksum != Relation_RelationalChecksum,\n\tdisjoint: false) ~> NewAndExistingSalesUnitCode@(NewSalesUnitCode, ChangedSalesUnitCode, ExistingNoChange)\nNewAndExistingSalesUnitCode@ChangedSalesUnitCode derive(update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> ChangedAddAuditData\nChangedAddAuditData select(mapColumn(\n\t\tSales_Unit_Code = Relation_Sales_Unit_Code,\n\t\tSales_Unit,\n\t\tActive_YN,\n\t\tinsert_datetime = Relation_Insert_Datetime,\n\t\tupdate_datetime,\n\t\tprocess_name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectChangeRecord\nAlterRowUpsert sink(input(\n\t\tSales_Unit_Code as string,\n\t\tSales_Unit as string,\n\t\tActive_YN as string,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:true,\n\tkeys:['Sales_Unit_Code'],\n\tformat: 'table',\n\tmapColumn(\n\t\tSales_Unit_Code,\n\t\tSales_Unit,\n\t\tActive_YN,\n\t\tInsert_Datetime = insert_datetime,\n\t\tUpdate_Datetime = update_datetime,\n\t\tProcess_Name = process_name\n\t)) ~> UpserttRow"
-				}
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/LoadStagingDBtoRelationDB_opstimbersales_df')]",
-			"type": "Microsoft.DataFactory/factories/dataflows",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"type": "MappingDataFlow",
-				"typeProperties": {
-					"sources": [
-						{
-							"dataset": {
-								"referenceName": "SQLstagingopstimbersales_ds",
-								"type": "DatasetReference"
-							},
-							"name": "StagingDB",
-							"typeProperties": {}
-						},
-						{
-							"dataset": {
-								"referenceName": "SQLrelationopstimbersales_ds",
-								"type": "DatasetReference"
-							},
-							"name": "RelationalOpsTimberSales",
-							"typeProperties": {}
-						}
-					],
-					"sinks": [
-						{
-							"dataset": {
-								"referenceName": "SQLrelationopstimbersales_ds",
-								"type": "DatasetReference"
-							},
-							"name": "UpserttRow"
-						}
-					],
-					"transformations": [
-						{
-							"name": "SelectStagingData"
-						},
-						{
-							"name": "AddAuditColumns"
-						},
-						{
-							"name": "GenerateRelationalChecksum"
-						},
-						{
-							"name": "SelectRelationalData"
-						},
-						{
-							"name": "GenerateStagingChecksum"
-						},
-						{
-							"name": "CompareKeys"
-						},
-						{
-							"name": "UnionNewAndExisting"
-						},
-						{
-							"name": "SelectNewRecordData"
-						},
-						{
-							"name": "AlterRowUpsert"
-						},
-						{
-							"name": "NewAndExistingTimberSales"
-						},
-						{
-							"name": "ChangedAddAuditData"
-						},
-						{
-							"name": "SelectChangeRecord"
-						}
-					],
-					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tTimber_Sale_ID as integer,\n\t\tReporting_Period as date,\n\t\tSpecies_Code as string,\n\t\tCustomer as string,\n\t\tDomestic_Export as string,\n\t\tProduct_Type_Code as string,\n\t\tPrice_Point_Code as string,\n\t\tSales_Unit_Code as string,\n\t\tSales_Quantity as decimal(19,4),\n\t\tSales_Revenue as decimal(19,4),\n\t\tProduction_Cost as decimal(19,4),\n\t\tStumpage as decimal(19,4),\n\t\tUnit_Stumpage as decimal(19,4),\n\t\tCurrency_Code as string,\n\t\tValidation_Error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> StagingDB\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tTimber_Sale_ID as integer,\n\t\tReporting_Period as date,\n\t\tSpecies_Code as string,\n\t\tCustomer as string,\n\t\tDomestic_Export as string,\n\t\tProduct_Type_Code as string,\n\t\tPrice_Point_Code as string,\n\t\tSales_Unit_Code as string,\n\t\tSales_Quantity as decimal(19,4),\n\t\tSales_Revenue as decimal(19,4),\n\t\tProduction_Cost as decimal(19,4),\n\t\tStumpage as decimal(19,4),\n\t\tUnit_Stumpage as decimal(19,4),\n\t\tCurrency_Code as string,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> RelationalOpsTimberSales\nGenerateStagingChecksum select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tTimber_Sale_ID,\n\t\tReporting_Period,\n\t\tSpecies_Code,\n\t\tCustomer,\n\t\tDomestic_Export,\n\t\tProduct_Type_Code,\n\t\tPrice_Point_Code,\n\t\tSales_Unit_Code,\n\t\tSales_Quantity,\n\t\tSales_Revenue,\n\t\tProduction_Cost,\n\t\tStumpage,\n\t\tUnit_Stumpage,\n\t\tCurrency_Code,\n\t\tStagingChecksum\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectStagingData\nSelectNewRecordData derive(insert_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> AddAuditColumns\nRelationalOpsTimberSales derive(RelationalChecksum = sha2(256, Reporting_Period,Species_Code,Customer,Domestic_Export,Product_Type_Code,Price_Point_Code,Sales_Unit_Code,Sales_Quantity,Sales_Revenue,Production_Cost,Stumpage,Unit_Stumpage,Currency_Code)) ~> GenerateRelationalChecksum\nGenerateRelationalChecksum select(mapColumn(\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_Fund_ID = Fund_ID,\n\t\tRelation_Timber_Sale_ID = Timber_Sale_ID,\n\t\tRelation_Reporting_Period = Reporting_Period,\n\t\tRelation_Species_Code = Species_Code,\n\t\tRelation_Customer = Customer,\n\t\tRelation_Domestic_Export = Domestic_Export,\n\t\tRelation_Product_Type_Code = Product_Type_Code,\n\t\tRelation_Price_Point_Code = Price_Point_Code,\n\t\tRelation_Sales_Unit_Code = Sales_Unit_Code,\n\t\tRelation_Sales_Quantity = Sales_Quantity,\n\t\tRelation_Sales_Revenue = Sales_Revenue,\n\t\tRelation_Production_Cost = Production_Cost,\n\t\tRelation_Stumpage = Stumpage,\n\t\tRelation_Unit_Stumpage = Unit_Stumpage,\n\t\tRelation_Currency_Code = Currency_Code,\n\t\tRelation_Insert_Datetime = Insert_Datetime,\n\t\tRelation_Update_Datetime = Update_Datetime,\n\t\tRelation_Process_Name = Process_Name,\n\t\tRelation_RelationalChecksum = RelationalChecksum\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRelationalData\nStagingDB derive(StagingChecksum = sha2(256, Reporting_Period,Species_Code,Customer,Domestic_Export,Product_Type_Code,Price_Point_Code,Sales_Unit_Code,Sales_Quantity,Sales_Revenue,Production_Cost,Stumpage,Unit_Stumpage,Currency_Code)) ~> GenerateStagingChecksum\nSelectStagingData, SelectRelationalData lookup(Asset_ID == Relation_Asset_ID\n\t&& Fund_ID == Relation_Fund_ID\n\t&& Timber_Sale_ID == Relation_Timber_Sale_ID,\n\tmultiple: true,\n\tbroadcast: 'none')~> CompareKeys\nAddAuditColumns, SelectChangeRecord union(byName: true)~> UnionNewAndExisting\nNewAndExistingTimberSales@NewTimberSales select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tTimber_Sale_ID,\n\t\tReporting_Period,\n\t\tSpecies_Code,\n\t\tCustomer,\n\t\tDomestic_Export,\n\t\tProduct_Type_Code,\n\t\tPrice_Point_Code,\n\t\tSales_Unit_Code,\n\t\tSales_Quantity,\n\t\tSales_Revenue,\n\t\tProduction_Cost,\n\t\tStumpage,\n\t\tUnit_Stumpage,\n\t\tCurrency_Code\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectNewRecordData\nUnionNewAndExisting alterRow(upsertIf(true())) ~> AlterRowUpsert\nCompareKeys split(isNull(Relation_RelationalChecksum),\n\tStagingChecksum != Relation_RelationalChecksum,\n\tdisjoint: false) ~> NewAndExistingTimberSales@(NewTimberSales, ChangedTimberSales, ExistingNoChange)\nNewAndExistingTimberSales@ChangedTimberSales derive(update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> ChangedAddAuditData\nChangedAddAuditData select(mapColumn(\n\t\tAsset_ID = Relation_Asset_ID,\n\t\tFund_ID = Relation_Fund_ID,\n\t\tTimber_Sale_ID = Relation_Timber_Sale_ID,\n\t\tReporting_Period,\n\t\tSpecies_Code,\n\t\tCustomer,\n\t\tDomestic_Export,\n\t\tProduct_Type_Code,\n\t\tPrice_Point_Code,\n\t\tSales_Unit_Code,\n\t\tSales_Quantity,\n\t\tSales_Revenue,\n\t\tProduction_Cost,\n\t\tStumpage,\n\t\tUnit_Stumpage,\n\t\tCurrency_Code,\n\t\tinsert_datetime = Relation_Insert_Datetime,\n\t\tupdate_datetime,\n\t\tprocess_name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectChangeRecord\nAlterRowUpsert sink(input(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tTimber_Sale_ID as integer,\n\t\tReporting_Period as date,\n\t\tSpecies_Code as string,\n\t\tCustomer as string,\n\t\tDomestic_Export as string,\n\t\tProduct_Type_Code as string,\n\t\tPrice_Point_Code as string,\n\t\tSales_Unit_Code as string,\n\t\tSales_Quantity as decimal(19,4),\n\t\tSales_Revenue as decimal(19,4),\n\t\tProduction_Cost as decimal(19,4),\n\t\tStumpage as decimal(19,4),\n\t\tUnit_Stumpage as decimal(19,4),\n\t\tCurrency_Code as string,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:true,\n\tkeys:['Asset_ID','Fund_ID','Timber_Sale_ID'],\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tTimber_Sale_ID,\n\t\tReporting_Period,\n\t\tSpecies_Code,\n\t\tCustomer,\n\t\tDomestic_Export,\n\t\tProduct_Type_Code,\n\t\tPrice_Point_Code,\n\t\tSales_Unit_Code,\n\t\tSales_Quantity,\n\t\tSales_Revenue,\n\t\tProduction_Cost,\n\t\tStumpage,\n\t\tUnit_Stumpage,\n\t\tCurrency_Code,\n\t\tInsert_Datetime = insert_datetime,\n\t\tUpdate_Datetime = update_datetime,\n\t\tProcess_Name = process_name\n\t)) ~> UpserttRow"
-				}
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/LoadTxtAdjustmentLoadReadyToDBinsert_coa_trx_dfx')]",
-			"type": "Microsoft.DataFactory/factories/dataflows",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"type": "MappingDataFlow",
-				"typeProperties": {
-					"sources": [
-						{
-							"dataset": {
-								"referenceName": "DelimitedText_adjustment_loadready_dsx",
-								"type": "DatasetReference"
-							},
-							"name": "LoadReadyFile",
-							"typeProperties": {}
-						}
-					],
-					"sinks": [
-						{
-							"dataset": {
-								"referenceName": "SQLrelationcoatrxcommon_ds",
-								"type": "DatasetReference"
-							},
-							"name": "DatabaseTarget"
-						}
-					],
-					"transformations": [
-						{
-							"name": "SelectInsert"
-						},
-						{
-							"name": "FilterInsert"
-						},
-						{
-							"name": "ConvertTrxAmountAvoidRounding"
-						}
-					],
-					"script": "source(output(\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Type as string,\n\t\tTrx_Amount as string,\n\t\tTrx_ID as long,\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string,\n\t\tinsert_update_flag as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\twildcardPaths:['AdjustmentLoadReadyFile.txt']) ~> LoadReadyFile\nConvertTrxAmountAvoidRounding select(mapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Type,\n\t\tTrx_Amount,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInsert\nLoadReadyFile filter(insert_update_flag==toString('I')) ~> FilterInsert\nFilterInsert derive(Trx_Amount = toDecimal(Trx_Amount, 18, 2)) ~> ConvertTrxAmountAvoidRounding\nSelectInsert sink(input(\n\t\tTrx_ID as long,\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Type as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Amount as decimal(18,2),\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string,\n\t\tStart_Date_Tag as date,\n\t\tEnd_Date_Tag as date\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tTrx_Type,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Amount,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t)) ~> DatabaseTarget"
-				}
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/LoadTxtAdjustmentLoadReadyToDBupdate_coa_trx_dfx')]",
-			"type": "Microsoft.DataFactory/factories/dataflows",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"type": "MappingDataFlow",
-				"typeProperties": {
-					"sources": [
-						{
-							"dataset": {
-								"referenceName": "DelimitedText_adjustment_loadready_dsx",
-								"type": "DatasetReference"
-							},
-							"name": "LoadReadyFile",
-							"typeProperties": {}
-						}
-					],
-					"sinks": [
-						{
-							"dataset": {
-								"referenceName": "SQLrelationcoatrxcommon_ds",
-								"type": "DatasetReference"
-							},
-							"name": "DatabaseTarget"
-						}
-					],
-					"transformations": [
-						{
-							"name": "SelectUpdate"
-						},
-						{
-							"name": "FilterUpdate"
-						},
-						{
-							"name": "AlterRowUpdateExpire"
-						},
-						{
-							"name": "ConvertTrxAmountAvoidRounding"
-						}
-					],
-					"script": "source(output(\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Type as string,\n\t\tTrx_Amount as string,\n\t\tTrx_ID as long,\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string,\n\t\tinsert_update_flag as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\twildcardPaths:['AdjustmentLoadReadyFile.txt']) ~> LoadReadyFile\nConvertTrxAmountAvoidRounding select(mapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Type,\n\t\tTrx_Amount,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name,\n\t\tTrx_ID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectUpdate\nLoadReadyFile filter(insert_update_flag==toString('U')) ~> FilterUpdate\nSelectUpdate alterRow(updateIf(record_deleted_flag==1)) ~> AlterRowUpdateExpire\nFilterUpdate derive(Trx_Amount = toDecimal(Trx_Amount, 18, 2)) ~> ConvertTrxAmountAvoidRounding\nAlterRowUpdateExpire sink(input(\n\t\tTrx_ID as long,\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Type as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Amount as decimal(18,2),\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string,\n\t\tStart_Date_Tag as date,\n\t\tEnd_Date_Tag as date\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:false,\n\tupdateable:true,\n\tupsertable:false,\n\tkeys:['Trx_ID'],\n\tformat: 'table',\n\tmapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tTrx_Type,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Amount,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name,\n\t\tTrx_ID\n\t)) ~> DatabaseTarget"
-				}
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/LoadTxtLoadReadyToDBinsert_budget_dfx')]",
-			"type": "Microsoft.DataFactory/factories/dataflows",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"type": "MappingDataFlow",
-				"typeProperties": {
-					"sources": [
-						{
-							"dataset": {
-								"referenceName": "DelimitedText_budget_loadready_ds",
-								"type": "DatasetReference"
-							},
-							"name": "LoadReadyFile",
-							"typeProperties": {}
-						}
-					],
-					"sinks": [
-						{
-							"dataset": {
-								"referenceName": "SQLrelationbudget_ds",
-								"type": "DatasetReference"
-							},
-							"name": "DatabaseTarget"
-						}
-					],
-					"transformations": [
-						{
-							"name": "SelectInsert"
-						},
-						{
-							"name": "FilterInsert"
-						},
-						{
-							"name": "ConvertBudgetValueAvoidRounding"
-						}
-					],
-					"script": "source(output(\n\t\tVersion_Name as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tBudget_Date as timestamp,\n\t\tBudget_Desc as string,\n\t\tBudget_value as string,\n\t\tBudget_Type as string,\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string,\n\t\tinsert_update_flag as string,\n\t\tBudget_ID as long\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\twildcardPaths:['BudgetLoadReadyFile.txt']) ~> LoadReadyFile\nConvertBudgetValueAvoidRounding select(mapColumn(\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tBudget_Date,\n\t\tBudget_Desc,\n\t\tBudget_value,\n\t\tBudget_Type,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name,\n\t\tinsert_update_flag,\n\t\tVersion_Name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInsert\nLoadReadyFile filter(insert_update_flag==toString('I')) ~> FilterInsert\nFilterInsert derive(Budget_value = toDecimal(Budget_value, 18, 2)) ~> ConvertBudgetValueAvoidRounding\nSelectInsert sink(input(\n\t\tBudget_ID as long,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tVersion_Name as string,\n\t\tDebit_Credit as string,\n\t\tBudget_Type as string,\n\t\tBudget_Date as timestamp,\n\t\tBudget_Desc as string,\n\t\tBudget_value as decimal(18,2),\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tVersion_Name,\n\t\tDebit_Credit,\n\t\tBudget_Type,\n\t\tBudget_Date,\n\t\tBudget_Desc,\n\t\tBudget_value,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t)) ~> DatabaseTarget"
-				}
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/LoadTxtLoadReadyToDBupdate_budget_dfx')]",
-			"type": "Microsoft.DataFactory/factories/dataflows",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"type": "MappingDataFlow",
-				"typeProperties": {
-					"sources": [
-						{
-							"dataset": {
-								"referenceName": "DelimitedText_budget_loadready_ds",
-								"type": "DatasetReference"
-							},
-							"name": "LoadReadyFile",
-							"typeProperties": {}
-						}
-					],
-					"sinks": [
-						{
-							"dataset": {
-								"referenceName": "SQLrelationbudget_ds",
-								"type": "DatasetReference"
-							},
-							"name": "DatabaseTarget"
-						}
-					],
-					"transformations": [
-						{
-							"name": "SelectUpdate"
-						},
-						{
-							"name": "FilterUpdate"
-						},
-						{
-							"name": "AlterRowUpdateExpire"
-						},
-						{
-							"name": "ConvertBudgetValueAvoidRounding"
-						}
-					],
-					"script": "source(output(\n\t\tVersion_Name as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tBudget_Date as timestamp,\n\t\tBudget_Desc as string,\n\t\tBudget_value as string,\n\t\tBudget_Type as string,\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string,\n\t\tinsert_update_flag as string,\n\t\tBudget_ID as long\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\twildcardPaths:['BudgetLoadReadyFile.txt']) ~> LoadReadyFile\nConvertBudgetValueAvoidRounding select(mapColumn(\n\t\tVersion_Name,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tBudget_Date,\n\t\tBudget_Desc,\n\t\tBudget_value,\n\t\tBudget_Type,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name,\n\t\tinsert_update_flag,\n\t\tBudget_ID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectUpdate\nLoadReadyFile filter(insert_update_flag==toString('U')) ~> FilterUpdate\nSelectUpdate alterRow(updateIf(record_deleted_flag==1)) ~> AlterRowUpdateExpire\nFilterUpdate derive(Budget_value = toDecimal(Budget_value, 18, 2)) ~> ConvertBudgetValueAvoidRounding\nAlterRowUpdateExpire sink(input(\n\t\tBudget_ID as long,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tVersion_Name as string,\n\t\tDebit_Credit as string,\n\t\tBudget_Type as string,\n\t\tBudget_Date as timestamp,\n\t\tBudget_Desc as string,\n\t\tBudget_value as decimal(18,2),\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:false,\n\tupdateable:true,\n\tupsertable:false,\n\tkeys:['Budget_ID'],\n\tformat: 'table',\n\tmapColumn(\n\t\tBudget_ID,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tVersion_Name,\n\t\tDebit_Credit,\n\t\tBudget_Type,\n\t\tBudget_Date,\n\t\tBudget_Desc,\n\t\tBudget_value,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t)) ~> DatabaseTarget"
 				}
 			},
 			"dependsOn": []
