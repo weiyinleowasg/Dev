@@ -13,6 +13,369 @@
 	},
 	"resources": [
 		{
+			"name": "[concat(parameters('factoryName'), '/LoadStagingDBtoRelationDB_glallocate_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "SQLstagingglallocate_ds",
+								"type": "DatasetReference"
+							},
+							"name": "StagingDB",
+							"typeProperties": {}
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLrelationglallocate_ds",
+								"type": "DatasetReference"
+							},
+							"name": "RelationDB",
+							"typeProperties": {}
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLrelationglallocate_ds",
+								"type": "DatasetReference"
+							},
+							"name": "InsertUpdateRow"
+						}
+					],
+					"transformations": [
+						{
+							"name": "StatgingAddChecksum"
+						},
+						{
+							"name": "LookupRelationalStream"
+						},
+						{
+							"name": "RelationalAddChecksum"
+						},
+						{
+							"name": "ConditionalSplitNewOrExpire"
+						},
+						{
+							"name": "RelationRenameColumns"
+						},
+						{
+							"name": "SelectNewStagingRow"
+						},
+						{
+							"name": "AddAuditColumns"
+						},
+						{
+							"name": "AlterRowInsertUpdateExpire"
+						},
+						{
+							"name": "UpdateAddAuditAttributes"
+						},
+						{
+							"name": "AddExpiredAttributes"
+						},
+						{
+							"name": "UpdateSelectForInsert"
+						},
+						{
+							"name": "UnionForDB"
+						},
+						{
+							"name": "UpdateSelectForExpire"
+						}
+					],
+					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tGL_Code as string,\n\t\tGL_Desc as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tAllocation_percent as decimal(18,4)\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT COA.[GL_Code]\\n      ,STA.[GL_Desc]\\n      ,ASS.[Fund_ID]\\n      ,ASS.[Asset_ID]\\n      ,[Allocation_percent]\\nFROM [staging].[Forecast_GL_Allocation] STA\\nLEFT JOIN [relational].Asset ASS\\nON STA.Fund_ID = ASS.Fund_ID AND STA.Asset_ID = ASS.Asset_ID AND ASS.record_deleted_flag = 0\\nLEFT JOIN [relational].Chart_of_Account COA\\nON STA.GL_Code = COA.GL_Code AND COA.record_deleted_flag = 0',\n\tformat: 'query') ~> StagingDB\nsource(output(\n\t\tGL_Code as string,\n\t\tGL_Desc as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tAllocation_percent as decimal(18,4),\n\t\tstart_datetime as timestamp,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [GL_Code]\\n      ,[GL_Desc]\\n      ,[Fund_ID]\\n      ,[Asset_ID]\\n      ,[Allocation_percent]\\n      ,[start_datetime]\\n      ,[process_name]\\nFROM [relational].[Forecast_GL_Allocation]\\nWHERE [record_deleted_flag] = 0',\n\tformat: 'query') ~> RelationDB\nStagingDB derive(StagingChecksum = sha2(256, GL_Code,GL_Desc,Fund_ID,Asset_ID,Allocation_percent)) ~> StatgingAddChecksum\nStatgingAddChecksum, RelationRenameColumns lookup(Asset_ID == Relation_Asset_ID\n\t&& Fund_ID == Relation_Fund_ID\n\t&& GL_Code == Relation_GL_Code,\n\tmultiple: true,\n\tbroadcast: 'none')~> LookupRelationalStream\nRelationDB derive(RelationalChecksum = sha2(256, GL_Code,GL_Desc,Fund_ID,Asset_ID,Allocation_percent)) ~> RelationalAddChecksum\nLookupRelationalStream split(isNull(Relation_RelationalChecksum),\n\tStagingChecksum != Relation_RelationalChecksum,\n\tdisjoint: false) ~> ConditionalSplitNewOrExpire@(StagingNewRow, StagingChangedRow, IgnoreNoChange)\nRelationalAddChecksum select(mapColumn(\n\t\tRelation_GL_Code = GL_Code,\n\t\tRelation_GL_Desc = GL_Desc,\n\t\tRelation_Fund_ID = Fund_ID,\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_Allocation_percent = Allocation_percent,\n\t\tRelation_start_datetime = start_datetime,\n\t\tRelation_process_name = process_name,\n\t\tRelation_RelationalChecksum = RelationalChecksum\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> RelationRenameColumns\nConditionalSplitNewOrExpire@StagingNewRow select(mapColumn(\n\t\tGL_Code,\n\t\tGL_Desc,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tAllocation_percent\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectNewStagingRow\nSelectNewStagingRow derive(start_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tend_datetime = toTimestamp('9999-12-31 00:00:00'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> AddAuditColumns\nUnionForDB alterRow(insertIf(record_deleted_flag==toInteger(0)),\n\tupdateIf(record_deleted_flag==toInteger(1))) ~> AlterRowInsertUpdateExpire\nConditionalSplitNewOrExpire@StagingChangedRow derive(start_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tend_datetime = toTimestamp('9999-12-31 00:00:00'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> UpdateAddAuditAttributes\nConditionalSplitNewOrExpire@StagingChangedRow derive(end_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\trecord_deleted_flag = toInteger(1)) ~> AddExpiredAttributes\nUpdateAddAuditAttributes select(mapColumn(\n\t\tGL_Code,\n\t\tGL_Desc,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tAllocation_percent,\n\t\tstart_datetime,\n\t\tend_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> UpdateSelectForInsert\nAddAuditColumns, UpdateSelectForInsert, UpdateSelectForExpire union(byName: true)~> UnionForDB\nAddExpiredAttributes select(mapColumn(\n\t\tGL_Code = Relation_GL_Code,\n\t\tGL_Desc = Relation_GL_Desc,\n\t\tFund_ID = Relation_Fund_ID,\n\t\tAsset_ID = Relation_Asset_ID,\n\t\tAllocation_percent = Relation_Allocation_percent,\n\t\tstart_datetime = Relation_start_datetime,\n\t\tprocess_name = Relation_process_name,\n\t\tend_datetime,\n\t\trecord_deleted_flag\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> UpdateSelectForExpire\nAlterRowInsertUpdateExpire sink(input(\n\t\tGL_Code as string,\n\t\tGL_Desc as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tAllocation_percent as decimal(18,4),\n\t\tstart_datetime as timestamp,\n\t\tend_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:true,\n\tupsertable:false,\n\tkeys:['Asset_ID','Fund_ID','GL_Code'],\n\tformat: 'table',\n\tmapColumn(\n\t\tGL_Code,\n\t\tGL_Desc,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tAllocation_percent,\n\t\tstart_datetime,\n\t\tend_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t)) ~> InsertUpdateRow"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadStagingDBtoRelationDB_glproduct_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "SQLstagingglproduct_ds",
+								"type": "DatasetReference"
+							},
+							"name": "StagingDB",
+							"typeProperties": {}
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLrelationglproduct_ds",
+								"type": "DatasetReference"
+							},
+							"name": "RelationDB",
+							"typeProperties": {}
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLrelationglproduct_ds",
+								"type": "DatasetReference"
+							},
+							"name": "InsertUpdateRow"
+						}
+					],
+					"transformations": [
+						{
+							"name": "StatgingAddChecksum"
+						},
+						{
+							"name": "LookupRelationalStream"
+						},
+						{
+							"name": "RelationalAddChecksum"
+						},
+						{
+							"name": "ConditionalSplitNewOrExpire"
+						},
+						{
+							"name": "RelationRenameColumns"
+						},
+						{
+							"name": "SelectNewStagingRow"
+						},
+						{
+							"name": "AddAuditColumns"
+						},
+						{
+							"name": "AlterRowInsertUpdateExpire"
+						},
+						{
+							"name": "UpdateAddAuditAttributes"
+						},
+						{
+							"name": "AddExpiredAttributes"
+						},
+						{
+							"name": "UpdateSelectForInsert"
+						},
+						{
+							"name": "UnionForDB"
+						},
+						{
+							"name": "UpdateSelectForExpire"
+						}
+					],
+					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tStatus as string,\n\t\tProduct as string,\n\t\tGL_Code as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT ASS.[Fund_ID]\\n      ,ASS.[Asset_ID]\\n      ,[Status]\\n      ,[Product]\\n      ,COA.[GL_Code]\\nFROM [staging].[Forecast_GL_Product_Map] STA\\nLEFT JOIN [relational].Asset ASS\\nON STA.Fund_ID = ASS.Fund_ID AND STA.Asset_ID = ASS.Asset_ID AND ASS.record_deleted_flag = 0\\nLEFT JOIN [relational].Chart_of_Account COA\\nON STA.GL_Code = COA.GL_Code AND COA.record_deleted_flag = 0',\n\tformat: 'query') ~> StagingDB\nsource(output(\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tStatus as string,\n\t\tProduct as string,\n\t\tGL_Code as string,\n\t\tstart_datetime as timestamp,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [Fund_ID]\\n      ,[Asset_ID]\\n      ,[Status]\\n      ,[Product]\\n      ,[GL_Code]\\n\t  ,[start_datetime]\\n\t  ,[process_name]\\n  FROM [relational].[Forecast_GL_Product_Map]\\nWHERE [record_deleted_flag] = 0',\n\tformat: 'query') ~> RelationDB\nStagingDB derive(StagingChecksum = sha2(256, Fund_ID,Asset_ID,Status,Product,GL_Code)) ~> StatgingAddChecksum\nStatgingAddChecksum, RelationRenameColumns lookup(Asset_ID == Relation_Asset_ID\n\t&& Fund_ID == Relation_Fund_ID\n\t&& Status == Relation_Status\n\t&& Product == Relation_Product,\n\tmultiple: true,\n\tbroadcast: 'none')~> LookupRelationalStream\nRelationDB derive(RelationalChecksum = sha2(256, Fund_ID,Asset_ID,Status,Product,GL_Code)) ~> RelationalAddChecksum\nLookupRelationalStream split(isNull(Relation_RelationalChecksum),\n\tStagingChecksum != Relation_RelationalChecksum,\n\tdisjoint: false) ~> ConditionalSplitNewOrExpire@(StagingNewRow, StagingChangedRow, IgnoreNoChange)\nRelationalAddChecksum select(mapColumn(\n\t\tRelation_Fund_ID = Fund_ID,\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_Status = Status,\n\t\tRelation_Product = Product,\n\t\tRelation_GL_Code = GL_Code,\n\t\tRelation_start_datetime = start_datetime,\n\t\tRelation_process_name = process_name,\n\t\tRelation_RelationalChecksum = RelationalChecksum\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> RelationRenameColumns\nConditionalSplitNewOrExpire@StagingNewRow select(mapColumn(\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tStatus,\n\t\tProduct,\n\t\tGL_Code\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectNewStagingRow\nSelectNewStagingRow derive(start_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tend_datetime = toTimestamp('9999-12-31 00:00:00'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> AddAuditColumns\nUnionForDB alterRow(insertIf(record_deleted_flag==toInteger(0)),\n\tupdateIf(record_deleted_flag==toInteger(1))) ~> AlterRowInsertUpdateExpire\nConditionalSplitNewOrExpire@StagingChangedRow derive(start_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tend_datetime = toTimestamp('9999-12-31 00:00:00'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> UpdateAddAuditAttributes\nConditionalSplitNewOrExpire@StagingChangedRow derive(end_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\trecord_deleted_flag = toInteger(1)) ~> AddExpiredAttributes\nUpdateAddAuditAttributes select(mapColumn(\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tStatus,\n\t\tProduct,\n\t\tGL_Code,\n\t\tstart_datetime,\n\t\tend_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> UpdateSelectForInsert\nAddAuditColumns, UpdateSelectForInsert, UpdateSelectForExpire union(byName: true)~> UnionForDB\nAddExpiredAttributes select(mapColumn(\n\t\tFund_ID = Relation_Fund_ID,\n\t\tAsset_ID = Relation_Asset_ID,\n\t\tStatus = Relation_Status,\n\t\tProduct = Relation_Product,\n\t\tGL_Code = Relation_GL_Code,\n\t\tstart_datetime = Relation_start_datetime,\n\t\tend_datetime,\n\t\tprocess_name = Relation_process_name,\n\t\trecord_deleted_flag\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> UpdateSelectForExpire\nAlterRowInsertUpdateExpire sink(input(\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tStatus as string,\n\t\tProduct as string,\n\t\tGL_Code as string,\n\t\tstart_datetime as timestamp,\n\t\tend_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:true,\n\tupsertable:false,\n\tkeys:['Asset_ID','Fund_ID','Status','Product'],\n\tformat: 'table',\n\tmapColumn(\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tStatus,\n\t\tProduct,\n\t\tGL_Code,\n\t\tstart_datetime,\n\t\tend_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t)) ~> InsertUpdateRow"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadStagingDBtoRelationDB_myob_actuals_delete_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "SQLstagingmyobactuals_ds",
+								"type": "DatasetReference"
+							},
+							"name": "StagingDB",
+							"typeProperties": {}
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLrelationcoatrxcommon_ds",
+								"type": "DatasetReference"
+							},
+							"name": "DeleteRecords"
+						}
+					],
+					"transformations": [
+						{
+							"name": "SelectOutput"
+						},
+						{
+							"name": "AlterRowDelete"
+						}
+					],
+					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tTrx_Type as string,\n\t\tStart_Date_Tag as date,\n\t\tEnd_Date_Tag as date\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT [Fund_ID]\\n      ,[Asset_ID]\\n      ,[Trx_Type]\\n      ,[Start_Date_Tag]\\n      ,[End_Date_Tag]\\n  FROM [staging].[Myob_Actuals]',\n\tformat: 'query') ~> StagingDB\nStagingDB select(mapColumn(\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tStart_Date_Tag,\n\t\tEnd_Date_Tag\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectOutput\nSelectOutput alterRow(deleteIf(true())) ~> AlterRowDelete\nAlterRowDelete sink(input(\n\t\tTrx_ID as long,\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Type as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Amount as decimal(18,2),\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string,\n\t\tStart_Date_Tag as date,\n\t\tEnd_Date_Tag as date\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:true,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:false,\n\tkeys:['Fund_ID','Asset_ID','Trx_Type','Start_Date_Tag','End_Date_Tag'],\n\tformat: 'table',\n\tmapColumn(\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tStart_Date_Tag,\n\t\tEnd_Date_Tag\n\t)) ~> DeleteRecords"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadStagingDBtoRelationDB_myob_actuals_insert_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "SQLstagingmyobactuals_ds",
+								"type": "DatasetReference"
+							},
+							"name": "StagingDB",
+							"typeProperties": {}
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLrelationcoatrxcommon_ds",
+								"type": "DatasetReference"
+							},
+							"name": "InsertRecords"
+						}
+					],
+					"transformations": [
+						{
+							"name": "SelectNewStagingRow"
+						},
+						{
+							"name": "SelectOutput"
+						},
+						{
+							"name": "AddAuditColumns"
+						},
+						{
+							"name": "AlterRowInsert"
+						}
+					],
+					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Type as string,\n\t\tTrx_Amount as decimal(18,2),\n\t\tStart_Date_Tag as date,\n\t\tEnd_Date_Tag as date,\n\t\tvalidation_error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> StagingDB\nStagingDB select(mapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Type,\n\t\tTrx_Amount,\n\t\tStart_Date_Tag,\n\t\tEnd_Date_Tag\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectNewStagingRow\nAddAuditColumns select(mapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Type,\n\t\tTrx_Amount,\n\t\tStart_Date_Tag,\n\t\tEnd_Date_Tag,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectOutput\nSelectNewStagingRow derive(Update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> AddAuditColumns\nSelectOutput alterRow(insertIf(record_deleted_flag==0)) ~> AlterRowInsert\nAlterRowInsert sink(input(\n\t\tTrx_ID as long,\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Type as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Amount as decimal(18,2),\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string,\n\t\tStart_Date_Tag as date,\n\t\tEnd_Date_Tag as date\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tTrx_Type,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Amount,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name,\n\t\tStart_Date_Tag,\n\t\tEnd_Date_Tag\n\t)) ~> InsertRecords"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadStagingDBtoRelationDB_opsanswers_delete_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "SQLstagingopsanswers_ds",
+								"type": "DatasetReference"
+							},
+							"name": "StagingDB",
+							"typeProperties": {}
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLrelationopsanswers_ds",
+								"type": "DatasetReference"
+							},
+							"name": "DeleteRecords"
+						}
+					],
+					"transformations": [
+						{
+							"name": "SelectOutput"
+						},
+						{
+							"name": "AlterRowDelete"
+						},
+						{
+							"name": "ConvertDate"
+						}
+					],
+					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT [Asset_ID]\\n      ,[Fund_ID]\\n      ,[Reporting_Period]\\nFROM [staging].[OPS_Answers]',\n\tformat: 'query') ~> StagingDB\nConvertDate select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectOutput\nSelectOutput alterRow(deleteIf(not(isNull(Reporting_Period)))) ~> AlterRowDelete\nStagingDB derive(Reporting_Period = toDate(Reporting_Period,'dd/MM/yyyy')) ~> ConvertDate\nAlterRowDelete sink(input(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as date,\n\t\tUID as string,\n\t\tAttribute as string,\n\t\tAnswer_Number as integer,\n\t\tText_Response as string,\n\t\tNumeric_Response as decimal(19,4),\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:true,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:false,\n\tkeys:['Fund_ID','Asset_ID','Reporting_Period'],\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period\n\t)) ~> DeleteRecords"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadStagingDBtoRelationDB_opsanswers_dfx')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "SQLstagingopsanswers_ds",
+								"type": "DatasetReference"
+							},
+							"name": "StagingDB",
+							"typeProperties": {}
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLrelationopsanswers_ds",
+								"type": "DatasetReference"
+							},
+							"name": "RelationDB",
+							"typeProperties": {}
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLrelationopsanswers_ds",
+								"type": "DatasetReference"
+							},
+							"name": "InsertUpdateRow"
+						}
+					],
+					"transformations": [
+						{
+							"name": "StatgingAddChecksum"
+						},
+						{
+							"name": "LookupRelationalStream"
+						},
+						{
+							"name": "RelationalAddChecksum"
+						},
+						{
+							"name": "ConditionalSplitNewOrExpire"
+						},
+						{
+							"name": "RelationRenameColumns"
+						},
+						{
+							"name": "SelectNewStagingRow"
+						},
+						{
+							"name": "AddAuditColumns"
+						},
+						{
+							"name": "UpdateAddAuditAttributes"
+						},
+						{
+							"name": "UpdateSelectForUpdate"
+						},
+						{
+							"name": "UnionForDB"
+						},
+						{
+							"name": "AlterRowForUpsert"
+						},
+						{
+							"name": "ConvertDataType"
+						}
+					],
+					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as string,\n\t\tUID as string,\n\t\tAttribute as string,\n\t\tAnswer_Number as string,\n\t\tText_Response as string,\n\t\tNumeric_Response as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [Asset_ID]\\n      ,[Fund_ID]\\n      ,[Reporting_Period]\\n      ,[UID]\\n      ,[Attribute]\\n\t  ,[Answer_Number]\\n      ,[Text_Response]\\n      ,[Numeric_Response]\\n FROM [staging].[OPS_Answers]',\n\tformat: 'query') ~> StagingDB\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as date,\n\t\tUID as string,\n\t\tAttribute as string,\n\t\tAnswer_Number as integer,\n\t\tText_Response as string,\n\t\tNumeric_Response as decimal(19,4),\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> RelationDB\nConvertDataType derive(StagingChecksum = sha2(256, Asset_ID,Fund_ID,Reporting_Period,UID,Attribute,Answer_Number,Text_Response,Numeric_Response)) ~> StatgingAddChecksum\nStatgingAddChecksum, RelationRenameColumns lookup(UID == Relation_UID\n\t&& Reporting_Period == Relation_Reporting_Period\n\t&& Fund_ID == Relation_Fund_ID\n\t&& Asset_ID == Relation_Asset_ID\n\t&& Answer_Number == Relation_Answer_Number,\n\tmultiple: true,\n\tbroadcast: 'none')~> LookupRelationalStream\nRelationDB derive(RelationalChecksum = sha2(256, Asset_ID,Fund_ID,Reporting_Period,UID,Attribute,Answer_Number,Text_Response,Numeric_Response)) ~> RelationalAddChecksum\nLookupRelationalStream split(isNull(Relation_RelationalChecksum),\n\tStagingChecksum != Relation_RelationalChecksum,\n\tdisjoint: false) ~> ConditionalSplitNewOrExpire@(StagingNewRow, StagingChangedRow, IgnoreNoChange)\nRelationalAddChecksum select(mapColumn(\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_Fund_ID = Fund_ID,\n\t\tRelation_Reporting_Period = Reporting_Period,\n\t\tRelation_UID = UID,\n\t\tRelation_Attribute = Attribute,\n\t\tRelation_Answer_Number = Answer_Number,\n\t\tRelation_Text_Response = Text_Response,\n\t\tRelation_Numeric_Response = Numeric_Response,\n\t\tRelation_Insert_Datetime = Insert_Datetime,\n\t\tRelation_Update_Datetime = Update_Datetime,\n\t\tRelation_Process_Name = Process_Name,\n\t\tRelation_RelationalChecksum = RelationalChecksum\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> RelationRenameColumns\nConditionalSplitNewOrExpire@StagingNewRow select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tUID,\n\t\tAttribute,\n\t\tAnswer_Number,\n\t\tText_Response,\n\t\tNumeric_Response\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectNewStagingRow\nSelectNewStagingRow derive(insert_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> AddAuditColumns\nConditionalSplitNewOrExpire@StagingChangedRow derive(update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> UpdateAddAuditAttributes\nUpdateAddAuditAttributes select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tUID,\n\t\tAttribute,\n\t\tAnswer_Number,\n\t\tText_Response,\n\t\tNumeric_Response,\n\t\tinsert_datetime = Relation_Insert_Datetime,\n\t\tupdate_datetime,\n\t\tprocess_name\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> UpdateSelectForUpdate\nAddAuditColumns, UpdateSelectForUpdate union(byName: true)~> UnionForDB\nUnionForDB alterRow(upsertIf(true())) ~> AlterRowForUpsert\nStagingDB derive(Reporting_Period = toDate(Reporting_Period,\"dd/MM/yyyy\"),\n\t\tNumeric_Response = toDecimal(Numeric_Response,19,4),\n\t\tAnswer_Number = toInteger(Answer_Number)) ~> ConvertDataType\nAlterRowForUpsert sink(input(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as date,\n\t\tUID as string,\n\t\tAttribute as string,\n\t\tAnswer_Number as integer,\n\t\tText_Response as string,\n\t\tNumeric_Response as decimal(19,4),\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:true,\n\tkeys:['UID','Reporting_Period','Asset_ID','Fund_ID','Answer_Number'],\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tUID,\n\t\tAttribute,\n\t\tAnswer_Number,\n\t\tText_Response,\n\t\tNumeric_Response,\n\t\tInsert_Datetime = insert_datetime,\n\t\tUpdate_Datetime = update_datetime,\n\t\tProcess_Name = process_name\n\t)) ~> InsertUpdateRow"
+				}
+			},
+			"dependsOn": []
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/LoadStagingDBtoRelationDB_opsanswers_insert_df')]",
 			"type": "Microsoft.DataFactory/factories/dataflows",
 			"apiVersion": "2018-06-01",
@@ -855,6 +1218,166 @@
 			"dependsOn": []
 		},
 		{
+			"name": "[concat(parameters('factoryName'), '/LoadStagingDBtoRelationDB_opsstrategicdeliverable_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "SQLstagingopsstrategicdeliverable_ds",
+								"type": "DatasetReference"
+							},
+							"name": "StagingDB",
+							"typeProperties": {}
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLrelationopsstrategicdeliverable_ds",
+								"type": "DatasetReference"
+							},
+							"name": "RelationalStrategicProjectDeliverable",
+							"typeProperties": {}
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLrelationopsstrategicdeliverable_ds",
+								"type": "DatasetReference"
+							},
+							"name": "UpserttRow"
+						}
+					],
+					"transformations": [
+						{
+							"name": "SelectStagingData"
+						},
+						{
+							"name": "AddAuditColumns"
+						},
+						{
+							"name": "GenerateRelationalChecksum"
+						},
+						{
+							"name": "SelectRelationalData"
+						},
+						{
+							"name": "GenerateStagingChecksum"
+						},
+						{
+							"name": "CompareKeys"
+						},
+						{
+							"name": "UnionNewAndExisting"
+						},
+						{
+							"name": "SelectNewRecordData"
+						},
+						{
+							"name": "AlterRowUpsert"
+						},
+						{
+							"name": "ConvertDatesAndNumbers"
+						},
+						{
+							"name": "NewAndExistingStrategicDeliverable"
+						},
+						{
+							"name": "ChangedAddAuditData"
+						},
+						{
+							"name": "SelectChangeRecord"
+						}
+					],
+					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tProject_ID as string,\n\t\tDeliverable as string,\n\t\tProject_Weighting as string,\n\t\tExpected_Completion_Date as string,\n\t\tPlanned_Completion_Date as string,\n\t\tCurrent_Progress_Perc_Complete as string,\n\t\tValidation_Error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> StagingDB\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tProject_ID as integer,\n\t\tDeliverable as string,\n\t\tProject_Weighting as integer,\n\t\tExpected_Completion_Date as date,\n\t\tPlanned_Completion_Date as date,\n\t\tCurrent_Progress_Perc_Complete as integer,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> RelationalStrategicProjectDeliverable\nGenerateStagingChecksum select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tProject_ID,\n\t\tDeliverable,\n\t\tProject_Weighting,\n\t\tExpected_Completion_Date,\n\t\tPlanned_Completion_Date,\n\t\tCurrent_Progress_Perc_Complete,\n\t\tStagingChecksum\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectStagingData\nSelectNewRecordData derive(insert_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> AddAuditColumns\nRelationalStrategicProjectDeliverable derive(RelationalChecksum = sha2(256, Deliverable,Project_Weighting,Expected_Completion_Date,Planned_Completion_Date,Current_Progress_Perc_Complete)) ~> GenerateRelationalChecksum\nGenerateRelationalChecksum select(mapColumn(\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_Fund_ID = Fund_ID,\n\t\tRelation_Project_ID = Project_ID,\n\t\tRelation_Deliverable = Deliverable,\n\t\tRelation_Project_Weighting = Project_Weighting,\n\t\tRelation_Expected_Completion_Date = Expected_Completion_Date,\n\t\tRelation_Planned_Completion_Date = Planned_Completion_Date,\n\t\tRelation_Current_Progress_Perc_Complete = Current_Progress_Perc_Complete,\n\t\tRelation_Insert_Datetime = Insert_Datetime,\n\t\tRelation_Update_Datetime = Update_Datetime,\n\t\tRelation_Process_Name = Process_Name,\n\t\tRelation_RelationalChecksum = RelationalChecksum\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRelationalData\nConvertDatesAndNumbers derive(StagingChecksum = sha2(256, Deliverable,Project_Weighting,Expected_Completion_Date,Planned_Completion_Date,Current_Progress_Perc_Complete)) ~> GenerateStagingChecksum\nSelectStagingData, SelectRelationalData lookup(Asset_ID == Relation_Asset_ID\n\t&& Fund_ID == Relation_Fund_ID\n\t&& Project_ID == Relation_Project_ID,\n\tmultiple: true,\n\tbroadcast: 'none')~> CompareKeys\nAddAuditColumns, SelectChangeRecord union(byName: true)~> UnionNewAndExisting\nNewAndExistingStrategicDeliverable@NewDeliverable select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tProject_ID,\n\t\tDeliverable,\n\t\tProject_Weighting,\n\t\tExpected_Completion_Date,\n\t\tPlanned_Completion_Date,\n\t\tCurrent_Progress_Perc_Complete\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectNewRecordData\nUnionNewAndExisting alterRow(upsertIf(true())) ~> AlterRowUpsert\nStagingDB derive(Expected_Completion_Date = toDate(Expected_Completion_Date, \"dd/MM/yyyy\"),\n\t\tPlanned_Completion_Date = toDate(Planned_Completion_Date, \"dd/MM/yyyy\"),\n\t\tProject_ID = toInteger(Project_ID),\n\t\tProject_Weighting = toInteger(Project_Weighting),\n\t\tCurrent_Progress_Perc_Complete = toInteger(Current_Progress_Perc_Complete)) ~> ConvertDatesAndNumbers\nCompareKeys split(isNull(Relation_RelationalChecksum),\n\tStagingChecksum != Relation_RelationalChecksum,\n\tdisjoint: false) ~> NewAndExistingStrategicDeliverable@(NewDeliverable, ChangedDeliverable, ExistingNoChange)\nNewAndExistingStrategicDeliverable@ChangedDeliverable derive(update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> ChangedAddAuditData\nChangedAddAuditData select(mapColumn(\n\t\tAsset_ID = Relation_Asset_ID,\n\t\tFund_ID = Relation_Fund_ID,\n\t\tProject_ID = Relation_Project_ID,\n\t\tDeliverable,\n\t\tProject_Weighting,\n\t\tExpected_Completion_Date,\n\t\tPlanned_Completion_Date,\n\t\tCurrent_Progress_Perc_Complete,\n\t\tinsert_datetime = Relation_Insert_Datetime,\n\t\tupdate_datetime,\n\t\tprocess_name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectChangeRecord\nAlterRowUpsert sink(input(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tProject_ID as integer,\n\t\tDeliverable as string,\n\t\tProject_Weighting as integer,\n\t\tExpected_Completion_Date as date,\n\t\tPlanned_Completion_Date as date,\n\t\tCurrent_Progress_Perc_Complete as integer,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:true,\n\tkeys:['Asset_ID','Fund_ID','Project_ID'],\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tProject_ID,\n\t\tDeliverable,\n\t\tProject_Weighting,\n\t\tExpected_Completion_Date,\n\t\tPlanned_Completion_Date,\n\t\tCurrent_Progress_Perc_Complete,\n\t\tInsert_Datetime = insert_datetime,\n\t\tUpdate_Datetime = update_datetime,\n\t\tProcess_Name = process_name\n\t)) ~> UpserttRow"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadStagingDBtoRelationDB_opsstrategicproject_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "SQLstagingopsstrategicproject_ds",
+								"type": "DatasetReference"
+							},
+							"name": "StagingDB",
+							"typeProperties": {}
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLrelationopsstrategicproject_ds",
+								"type": "DatasetReference"
+							},
+							"name": "RelationalStrategicProject",
+							"typeProperties": {}
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLrelationopsstrategicproject_ds",
+								"type": "DatasetReference"
+							},
+							"name": "UpserttRow"
+						}
+					],
+					"transformations": [
+						{
+							"name": "SelectStagingData"
+						},
+						{
+							"name": "AddAuditColumns"
+						},
+						{
+							"name": "GenerateRelationalChecksum"
+						},
+						{
+							"name": "SelectRelationalData"
+						},
+						{
+							"name": "GenerateStagingChecksum"
+						},
+						{
+							"name": "CompareKeys"
+						},
+						{
+							"name": "UnionNewAndExisting"
+						},
+						{
+							"name": "SelectNewRecordData"
+						},
+						{
+							"name": "AlterRowUpsert"
+						},
+						{
+							"name": "ConvertDatesAndID"
+						},
+						{
+							"name": "NewAndExistingStrategicProject"
+						},
+						{
+							"name": "ChangedAddAuditData"
+						},
+						{
+							"name": "SelectChangeRecord"
+						}
+					],
+					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tProject_ID as string,\n\t\tReporting_Period as string,\n\t\tPrimary_Management_Activity as string,\n\t\tProject_Objectives as string,\n\t\tExpected_Value_Impact as string,\n\t\tValidation_Error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> StagingDB\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tProject_ID as integer,\n\t\tReporting_Period as date,\n\t\tPrimary_Management_Activity as string,\n\t\tProject_Objectives as string,\n\t\tExpected_Value_Impact as string,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> RelationalStrategicProject\nGenerateStagingChecksum select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tProject_ID,\n\t\tReporting_Period,\n\t\tPrimary_Management_Activity,\n\t\tProject_Objectives,\n\t\tExpected_Value_Impact,\n\t\tStagingChecksum\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectStagingData\nSelectNewRecordData derive(insert_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> AddAuditColumns\nRelationalStrategicProject derive(RelationalChecksum = sha2(256, Reporting_Period,Primary_Management_Activity,Project_Objectives,Expected_Value_Impact)) ~> GenerateRelationalChecksum\nGenerateRelationalChecksum select(mapColumn(\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_Fund_ID = Fund_ID,\n\t\tRelation_Project_ID = Project_ID,\n\t\tRelation_Reporting_Period = Reporting_Period,\n\t\tRelation_Primary_Management_Activity = Primary_Management_Activity,\n\t\tRelation_Project_Objectives = Project_Objectives,\n\t\tRelation_Expected_Value_Impact = Expected_Value_Impact,\n\t\tRelation_Insert_Datetime = Insert_Datetime,\n\t\tRelation_Update_Datetime = Update_Datetime,\n\t\tRelation_Process_Name = Process_Name,\n\t\tRelation_RelationalChecksum = RelationalChecksum\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRelationalData\nConvertDatesAndID derive(StagingChecksum = sha2(256, Reporting_Period,Primary_Management_Activity,Project_Objectives,Expected_Value_Impact)) ~> GenerateStagingChecksum\nSelectStagingData, SelectRelationalData lookup(Asset_ID == Relation_Asset_ID\n\t&& Fund_ID == Relation_Fund_ID\n\t&& Project_ID == Relation_Project_ID,\n\tmultiple: true,\n\tbroadcast: 'none')~> CompareKeys\nAddAuditColumns, SelectChangeRecord union(byName: true)~> UnionNewAndExisting\nNewAndExistingStrategicProject@NewStrategicProject select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tProject_ID,\n\t\tReporting_Period,\n\t\tPrimary_Management_Activity,\n\t\tProject_Objectives,\n\t\tExpected_Value_Impact\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectNewRecordData\nUnionNewAndExisting alterRow(upsertIf(true())) ~> AlterRowUpsert\nStagingDB derive(Reporting_Period = toDate(Reporting_Period, \"dd/MM/yyyy\"),\n\t\tProject_ID = toInteger(Project_ID)) ~> ConvertDatesAndID\nCompareKeys split(isNull(Relation_RelationalChecksum),\n\tStagingChecksum != Relation_RelationalChecksum,\n\tdisjoint: false) ~> NewAndExistingStrategicProject@(NewStrategicProject, ChangedStrategicProject, ExistingNoChange)\nNewAndExistingStrategicProject@ChangedStrategicProject derive(update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> ChangedAddAuditData\nChangedAddAuditData select(mapColumn(\n\t\tAsset_ID = Relation_Asset_ID,\n\t\tFund_ID = Relation_Fund_ID,\n\t\tProject_ID = Relation_Project_ID,\n\t\tReporting_Period,\n\t\tPrimary_Management_Activity,\n\t\tProject_Objectives,\n\t\tExpected_Value_Impact,\n\t\tinsert_datetime = Relation_Insert_Datetime,\n\t\tupdate_datetime,\n\t\tprocess_name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectChangeRecord\nAlterRowUpsert sink(input(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tProject_ID as integer,\n\t\tReporting_Period as date,\n\t\tPrimary_Management_Activity as string,\n\t\tProject_Objectives as string,\n\t\tExpected_Value_Impact as string,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:true,\n\tkeys:['Asset_ID','Fund_ID','Project_ID'],\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tProject_ID,\n\t\tReporting_Period,\n\t\tPrimary_Management_Activity,\n\t\tProject_Objectives,\n\t\tExpected_Value_Impact,\n\t\tInsert_Datetime = insert_datetime,\n\t\tUpdate_Datetime = update_datetime,\n\t\tProcess_Name = process_name\n\t)) ~> UpserttRow"
+				}
+			},
+			"dependsOn": []
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/LoadStagingDBtoRelationDB_opstimbersales_df')]",
 			"type": "Microsoft.DataFactory/factories/dataflows",
 			"apiVersion": "2018-06-01",
@@ -930,579 +1453,6 @@
 						}
 					],
 					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tTimber_Sale_ID as string,\n\t\tReporting_Period as string,\n\t\tSpecies_Code as string,\n\t\tCustomer as string,\n\t\tDomestic_Export as string,\n\t\tProduct_Type_Code as string,\n\t\tPrice_Point_Code as string,\n\t\tSales_Unit_Code as string,\n\t\tSales_Quantity as string,\n\t\tSales_Revenue as string,\n\t\tProduction_Cost as string,\n\t\tStumpage as string,\n\t\tUnit_Stumpage as string,\n\t\tCurrency_Code as string,\n\t\tValidation_Error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> StagingDB\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tTimber_Sale_ID as integer,\n\t\tReporting_Period as date,\n\t\tSpecies_Code as string,\n\t\tCustomer as string,\n\t\tDomestic_Export as string,\n\t\tProduct_Type_Code as string,\n\t\tPrice_Point_Code as string,\n\t\tSales_Unit_Code as string,\n\t\tSales_Quantity as decimal(19,4),\n\t\tSales_Revenue as decimal(19,4),\n\t\tProduction_Cost as decimal(19,4),\n\t\tStumpage as decimal(19,4),\n\t\tUnit_Stumpage as decimal(19,4),\n\t\tCurrency_Code as string,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> RelationalOpsTimberSales\nGenerateStagingChecksum select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tTimber_Sale_ID,\n\t\tReporting_Period,\n\t\tSpecies_Code,\n\t\tCustomer,\n\t\tDomestic_Export,\n\t\tProduct_Type_Code,\n\t\tPrice_Point_Code,\n\t\tSales_Unit_Code,\n\t\tSales_Quantity,\n\t\tSales_Revenue,\n\t\tProduction_Cost,\n\t\tStumpage,\n\t\tUnit_Stumpage,\n\t\tCurrency_Code,\n\t\tStagingChecksum\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectStagingData\nSelectNewRecordData derive(insert_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> AddAuditColumns\nRelationalOpsTimberSales derive(RelationalChecksum = sha2(256, Reporting_Period,Species_Code,Customer,Domestic_Export,Product_Type_Code,Price_Point_Code,Sales_Unit_Code,Sales_Quantity,Sales_Revenue,Production_Cost,Stumpage,Unit_Stumpage,Currency_Code)) ~> GenerateRelationalChecksum\nGenerateRelationalChecksum select(mapColumn(\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_Fund_ID = Fund_ID,\n\t\tRelation_Timber_Sale_ID = Timber_Sale_ID,\n\t\tRelation_Reporting_Period = Reporting_Period,\n\t\tRelation_Species_Code = Species_Code,\n\t\tRelation_Customer = Customer,\n\t\tRelation_Domestic_Export = Domestic_Export,\n\t\tRelation_Product_Type_Code = Product_Type_Code,\n\t\tRelation_Price_Point_Code = Price_Point_Code,\n\t\tRelation_Sales_Unit_Code = Sales_Unit_Code,\n\t\tRelation_Sales_Quantity = Sales_Quantity,\n\t\tRelation_Sales_Revenue = Sales_Revenue,\n\t\tRelation_Production_Cost = Production_Cost,\n\t\tRelation_Stumpage = Stumpage,\n\t\tRelation_Unit_Stumpage = Unit_Stumpage,\n\t\tRelation_Currency_Code = Currency_Code,\n\t\tRelation_Insert_Datetime = Insert_Datetime,\n\t\tRelation_Update_Datetime = Update_Datetime,\n\t\tRelation_Process_Name = Process_Name,\n\t\tRelation_RelationalChecksum = RelationalChecksum\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRelationalData\nConvertDateandIDandNumbers derive(StagingChecksum = sha2(256, Reporting_Period,Species_Code,Customer,Domestic_Export,Product_Type_Code,Price_Point_Code,Sales_Unit_Code,Sales_Quantity,Sales_Revenue,Production_Cost,Stumpage,Unit_Stumpage,Currency_Code)) ~> GenerateStagingChecksum\nSelectStagingData, SelectRelationalData lookup(Asset_ID == Relation_Asset_ID\n\t&& Fund_ID == Relation_Fund_ID\n\t&& Timber_Sale_ID == Relation_Timber_Sale_ID,\n\tmultiple: true,\n\tbroadcast: 'none')~> CompareKeys\nAddAuditColumns, SelectChangeRecord union(byName: true)~> UnionNewAndExisting\nNewAndExistingTimberSales@NewTimberSales select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tTimber_Sale_ID,\n\t\tReporting_Period,\n\t\tSpecies_Code,\n\t\tCustomer,\n\t\tDomestic_Export,\n\t\tProduct_Type_Code,\n\t\tPrice_Point_Code,\n\t\tSales_Unit_Code,\n\t\tSales_Quantity,\n\t\tSales_Revenue,\n\t\tProduction_Cost,\n\t\tStumpage,\n\t\tUnit_Stumpage,\n\t\tCurrency_Code\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectNewRecordData\nUnionNewAndExisting alterRow(upsertIf(true())) ~> AlterRowUpsert\nCompareKeys split(isNull(Relation_RelationalChecksum),\n\tStagingChecksum != Relation_RelationalChecksum,\n\tdisjoint: false) ~> NewAndExistingTimberSales@(NewTimberSales, ChangedTimberSales, ExistingNoChange)\nNewAndExistingTimberSales@ChangedTimberSales derive(update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> ChangedAddAuditData\nChangedAddAuditData select(mapColumn(\n\t\tAsset_ID = Relation_Asset_ID,\n\t\tFund_ID = Relation_Fund_ID,\n\t\tTimber_Sale_ID = Relation_Timber_Sale_ID,\n\t\tReporting_Period,\n\t\tSpecies_Code,\n\t\tCustomer,\n\t\tDomestic_Export,\n\t\tProduct_Type_Code,\n\t\tPrice_Point_Code,\n\t\tSales_Unit_Code,\n\t\tSales_Quantity,\n\t\tSales_Revenue,\n\t\tProduction_Cost,\n\t\tStumpage,\n\t\tUnit_Stumpage,\n\t\tCurrency_Code,\n\t\tinsert_datetime = Relation_Insert_Datetime,\n\t\tupdate_datetime,\n\t\tprocess_name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectChangeRecord\nStagingDB derive(Timber_Sale_ID = toInteger(Timber_Sale_ID),\n\t\tReporting_Period = toDate(Reporting_Period,\"dd/MM/yyyy\"),\n\t\tSales_Quantity = toDecimal(Sales_Quantity, 19, 4, \"###,###.####\"),\n\t\tSales_Revenue = toDecimal(Sales_Revenue, 19, 4, \"###,###.####\"),\n\t\tProduction_Cost = toDecimal(Production_Cost, 19, 4, \"###,###.####\"),\n\t\tStumpage = toDecimal(Stumpage, 19, 4, \"###,###.####\"),\n\t\tUnit_Stumpage = toDecimal(Unit_Stumpage, 19, 4, \"###,###.####\")) ~> ConvertDateandIDandNumbers\nAlterRowUpsert sink(input(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tTimber_Sale_ID as integer,\n\t\tReporting_Period as date,\n\t\tSpecies_Code as string,\n\t\tCustomer as string,\n\t\tDomestic_Export as string,\n\t\tProduct_Type_Code as string,\n\t\tPrice_Point_Code as string,\n\t\tSales_Unit_Code as string,\n\t\tSales_Quantity as decimal(19,4),\n\t\tSales_Revenue as decimal(19,4),\n\t\tProduction_Cost as decimal(19,4),\n\t\tStumpage as decimal(19,4),\n\t\tUnit_Stumpage as decimal(19,4),\n\t\tCurrency_Code as string,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:true,\n\tkeys:['Asset_ID','Fund_ID','Timber_Sale_ID'],\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tTimber_Sale_ID,\n\t\tReporting_Period,\n\t\tSpecies_Code,\n\t\tCustomer,\n\t\tDomestic_Export,\n\t\tProduct_Type_Code,\n\t\tPrice_Point_Code,\n\t\tSales_Unit_Code,\n\t\tSales_Quantity,\n\t\tSales_Revenue,\n\t\tProduction_Cost,\n\t\tStumpage,\n\t\tUnit_Stumpage,\n\t\tCurrency_Code,\n\t\tInsert_Datetime = insert_datetime,\n\t\tUpdate_Datetime = update_datetime,\n\t\tProcess_Name = process_name\n\t)) ~> UpserttRow"
-				}
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/LoadTxtAdjustmentLoadReadyToDBinsert_coa_trx_dfx')]",
-			"type": "Microsoft.DataFactory/factories/dataflows",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"type": "MappingDataFlow",
-				"typeProperties": {
-					"sources": [
-						{
-							"dataset": {
-								"referenceName": "DelimitedText_adjustment_loadready_dsx",
-								"type": "DatasetReference"
-							},
-							"name": "LoadReadyFile",
-							"typeProperties": {}
-						}
-					],
-					"sinks": [
-						{
-							"dataset": {
-								"referenceName": "SQLrelationcoatrxcommon_ds",
-								"type": "DatasetReference"
-							},
-							"name": "DatabaseTarget"
-						}
-					],
-					"transformations": [
-						{
-							"name": "SelectInsert"
-						},
-						{
-							"name": "FilterInsert"
-						},
-						{
-							"name": "ConvertTrxAmountAvoidRounding"
-						}
-					],
-					"script": "source(output(\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Type as string,\n\t\tTrx_Amount as string,\n\t\tTrx_ID as long,\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string,\n\t\tinsert_update_flag as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\twildcardPaths:['AdjustmentLoadReadyFile.txt']) ~> LoadReadyFile\nConvertTrxAmountAvoidRounding select(mapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Type,\n\t\tTrx_Amount,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInsert\nLoadReadyFile filter(insert_update_flag==toString('I')) ~> FilterInsert\nFilterInsert derive(Trx_Amount = toDecimal(Trx_Amount, 18, 2)) ~> ConvertTrxAmountAvoidRounding\nSelectInsert sink(input(\n\t\tTrx_ID as long,\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Type as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Amount as decimal(18,2),\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string,\n\t\tStart_Date_Tag as date,\n\t\tEnd_Date_Tag as date\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tTrx_Type,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Amount,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t)) ~> DatabaseTarget"
-				}
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/LoadTxtAdjustmentLoadReadyToDBupdate_coa_trx_dfx')]",
-			"type": "Microsoft.DataFactory/factories/dataflows",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"type": "MappingDataFlow",
-				"typeProperties": {
-					"sources": [
-						{
-							"dataset": {
-								"referenceName": "DelimitedText_adjustment_loadready_dsx",
-								"type": "DatasetReference"
-							},
-							"name": "LoadReadyFile",
-							"typeProperties": {}
-						}
-					],
-					"sinks": [
-						{
-							"dataset": {
-								"referenceName": "SQLrelationcoatrxcommon_ds",
-								"type": "DatasetReference"
-							},
-							"name": "DatabaseTarget"
-						}
-					],
-					"transformations": [
-						{
-							"name": "SelectUpdate"
-						},
-						{
-							"name": "FilterUpdate"
-						},
-						{
-							"name": "AlterRowUpdateExpire"
-						},
-						{
-							"name": "ConvertTrxAmountAvoidRounding"
-						}
-					],
-					"script": "source(output(\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Type as string,\n\t\tTrx_Amount as string,\n\t\tTrx_ID as long,\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string,\n\t\tinsert_update_flag as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\twildcardPaths:['AdjustmentLoadReadyFile.txt']) ~> LoadReadyFile\nConvertTrxAmountAvoidRounding select(mapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Type,\n\t\tTrx_Amount,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name,\n\t\tTrx_ID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectUpdate\nLoadReadyFile filter(insert_update_flag==toString('U')) ~> FilterUpdate\nSelectUpdate alterRow(updateIf(record_deleted_flag==1)) ~> AlterRowUpdateExpire\nFilterUpdate derive(Trx_Amount = toDecimal(Trx_Amount, 18, 2)) ~> ConvertTrxAmountAvoidRounding\nAlterRowUpdateExpire sink(input(\n\t\tTrx_ID as long,\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Type as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Amount as decimal(18,2),\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string,\n\t\tStart_Date_Tag as date,\n\t\tEnd_Date_Tag as date\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:false,\n\tupdateable:true,\n\tupsertable:false,\n\tkeys:['Trx_ID'],\n\tformat: 'table',\n\tmapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tTrx_Type,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Amount,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name,\n\t\tTrx_ID\n\t)) ~> DatabaseTarget"
-				}
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/LoadTxtLoadReadyToDBinsert_budget_dfx')]",
-			"type": "Microsoft.DataFactory/factories/dataflows",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"type": "MappingDataFlow",
-				"typeProperties": {
-					"sources": [
-						{
-							"dataset": {
-								"referenceName": "DelimitedText_budget_loadready_ds",
-								"type": "DatasetReference"
-							},
-							"name": "LoadReadyFile",
-							"typeProperties": {}
-						}
-					],
-					"sinks": [
-						{
-							"dataset": {
-								"referenceName": "SQLrelationbudget_ds",
-								"type": "DatasetReference"
-							},
-							"name": "DatabaseTarget"
-						}
-					],
-					"transformations": [
-						{
-							"name": "SelectInsert"
-						},
-						{
-							"name": "FilterInsert"
-						},
-						{
-							"name": "ConvertBudgetValueAvoidRounding"
-						}
-					],
-					"script": "source(output(\n\t\tVersion_Name as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tBudget_Date as timestamp,\n\t\tBudget_Desc as string,\n\t\tBudget_value as string,\n\t\tBudget_Type as string,\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string,\n\t\tinsert_update_flag as string,\n\t\tBudget_ID as long\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\twildcardPaths:['BudgetLoadReadyFile.txt']) ~> LoadReadyFile\nConvertBudgetValueAvoidRounding select(mapColumn(\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tBudget_Date,\n\t\tBudget_Desc,\n\t\tBudget_value,\n\t\tBudget_Type,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name,\n\t\tinsert_update_flag,\n\t\tVersion_Name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInsert\nLoadReadyFile filter(insert_update_flag==toString('I')) ~> FilterInsert\nFilterInsert derive(Budget_value = toDecimal(Budget_value, 18, 2)) ~> ConvertBudgetValueAvoidRounding\nSelectInsert sink(input(\n\t\tBudget_ID as long,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tVersion_Name as string,\n\t\tDebit_Credit as string,\n\t\tBudget_Type as string,\n\t\tBudget_Date as timestamp,\n\t\tBudget_Desc as string,\n\t\tBudget_value as decimal(18,2),\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tVersion_Name,\n\t\tDebit_Credit,\n\t\tBudget_Type,\n\t\tBudget_Date,\n\t\tBudget_Desc,\n\t\tBudget_value,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t)) ~> DatabaseTarget"
-				}
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/LoadTxtLoadReadyToDBupdate_budget_dfx')]",
-			"type": "Microsoft.DataFactory/factories/dataflows",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"type": "MappingDataFlow",
-				"typeProperties": {
-					"sources": [
-						{
-							"dataset": {
-								"referenceName": "DelimitedText_budget_loadready_ds",
-								"type": "DatasetReference"
-							},
-							"name": "LoadReadyFile",
-							"typeProperties": {}
-						}
-					],
-					"sinks": [
-						{
-							"dataset": {
-								"referenceName": "SQLrelationbudget_ds",
-								"type": "DatasetReference"
-							},
-							"name": "DatabaseTarget"
-						}
-					],
-					"transformations": [
-						{
-							"name": "SelectUpdate"
-						},
-						{
-							"name": "FilterUpdate"
-						},
-						{
-							"name": "AlterRowUpdateExpire"
-						},
-						{
-							"name": "ConvertBudgetValueAvoidRounding"
-						}
-					],
-					"script": "source(output(\n\t\tVersion_Name as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tBudget_Date as timestamp,\n\t\tBudget_Desc as string,\n\t\tBudget_value as string,\n\t\tBudget_Type as string,\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string,\n\t\tinsert_update_flag as string,\n\t\tBudget_ID as long\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\twildcardPaths:['BudgetLoadReadyFile.txt']) ~> LoadReadyFile\nConvertBudgetValueAvoidRounding select(mapColumn(\n\t\tVersion_Name,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tBudget_Date,\n\t\tBudget_Desc,\n\t\tBudget_value,\n\t\tBudget_Type,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name,\n\t\tinsert_update_flag,\n\t\tBudget_ID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectUpdate\nLoadReadyFile filter(insert_update_flag==toString('U')) ~> FilterUpdate\nSelectUpdate alterRow(updateIf(record_deleted_flag==1)) ~> AlterRowUpdateExpire\nFilterUpdate derive(Budget_value = toDecimal(Budget_value, 18, 2)) ~> ConvertBudgetValueAvoidRounding\nAlterRowUpdateExpire sink(input(\n\t\tBudget_ID as long,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tVersion_Name as string,\n\t\tDebit_Credit as string,\n\t\tBudget_Type as string,\n\t\tBudget_Date as timestamp,\n\t\tBudget_Desc as string,\n\t\tBudget_value as decimal(18,2),\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:false,\n\tupdateable:true,\n\tupsertable:false,\n\tkeys:['Budget_ID'],\n\tformat: 'table',\n\tmapColumn(\n\t\tBudget_ID,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tVersion_Name,\n\t\tDebit_Credit,\n\t\tBudget_Type,\n\t\tBudget_Date,\n\t\tBudget_Desc,\n\t\tBudget_value,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t)) ~> DatabaseTarget"
-				}
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/LoadTxtToDBstaging_adjustment_dfx')]",
-			"type": "Microsoft.DataFactory/factories/dataflows",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"type": "MappingDataFlow",
-				"typeProperties": {
-					"sources": [
-						{
-							"dataset": {
-								"referenceName": "DelimitedText_sourcelandingscrubbed_adjustment_dsx",
-								"type": "DatasetReference"
-							},
-							"name": "LoadFromScrubbedToStagingDB",
-							"typeProperties": {}
-						},
-						{
-							"dataset": {
-								"referenceName": "SQLrelationasset_ds",
-								"type": "DatasetReference"
-							},
-							"name": "GetAssetMaster",
-							"typeProperties": {}
-						},
-						{
-							"dataset": {
-								"referenceName": "SQLrelationcoa_ds",
-								"type": "DatasetReference"
-							},
-							"name": "GetGLCodes",
-							"typeProperties": {}
-						}
-					],
-					"sinks": [
-						{
-							"dataset": {
-								"referenceName": "SQLstagingadjustment_ds",
-								"type": "DatasetReference"
-							},
-							"name": "StagingDB"
-						}
-					],
-					"transformations": [
-						{
-							"name": "SelectSourceColumns"
-						},
-						{
-							"name": "SetDerivations"
-						},
-						{
-							"name": "SelectForTarget"
-						},
-						{
-							"name": "LookupFundAndAsset"
-						},
-						{
-							"name": "SelectFundColumns"
-						},
-						{
-							"name": "LookupGLcode"
-						},
-						{
-							"name": "SelectCOAcolumns"
-						},
-						{
-							"name": "TransactionTypeGL"
-						},
-						{
-							"name": "SelectGLData"
-						},
-						{
-							"name": "SelectCasfFlowData"
-						},
-						{
-							"name": "ConditionalSplitValidGL"
-						},
-						{
-							"name": "TransactionValidFundAsset"
-						},
-						{
-							"name": "SelectInvalidFundAssetData"
-						},
-						{
-							"name": "DerivedColumnValidationErrorFund"
-						},
-						{
-							"name": "DerivedColumnValidationErrorGL"
-						},
-						{
-							"name": "SelectInvalidGLdata"
-						},
-						{
-							"name": "SelectValidGLdata"
-						},
-						{
-							"name": "UnionAll"
-						},
-						{
-							"name": "TrimSingleQuoteFromGLcode"
-						},
-						{
-							"name": "ConvertAmountToValidFormat"
-						}
-					],
-					"script": "source(output(\n\t\tDate as string,\n\t\tTransaction_Code as string,\n\t\tCashflow_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tTrx_Type as string,\n\t\tGL_Code as string,\n\t\tGL_Description as string,\n\t\tAmount as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> LoadFromScrubbedToStagingDB\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [Asset_ID]\\n      ,[Fund_ID]\\n  FROM [relational].[Asset]\\n  WHERE [record_deleted_flag] = 0',\n\tformat: 'query') ~> GetAssetMaster\nsource(output(\n\t\tGL_Code as string,\n\t\tCategory as string,\n\t\tCash_Flow_Code as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [GL_Code]\\n      ,[Category]\\n      ,[Cash_Flow_Code]\\n  FROM [relational].[Chart_of_Account]\\n  WHERE [record_deleted_flag] = 0',\n\tformat: 'query') ~> GetGLCodes\nConvertAmountToValidFormat select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectSourceColumns\nUnionAll derive(Debit_Credit = case(greaterOrEqual(toDecimal(Amount),0),'DR','CR'),\n\t\tTrx_Amount = abs(toDecimal(Amount,18,2)),\n\t\tDate = toTimestamp(Date,'dd/MM/yyyy')) ~> SetDerivations\nSetDerivations select(mapColumn(\n\t\tTrx_Date = Date,\n\t\tTrx_Code = Transaction_Code,\n\t\tCash_Flow_Code = Cashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tTrx_Desc = GL_Description,\n\t\tvalidation_error = Validation_Error,\n\t\tDebit_Credit,\n\t\tTrx_Amount\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectForTarget\nSelectSourceColumns, SelectFundColumns lookup(Asset_ID == Relation_Asset_ID\n\t&& Fund_ID == Relation_Fund_ID,\n\tmultiple: true,\n\tbroadcast: 'none')~> LookupFundAndAsset\nGetAssetMaster select(mapColumn(\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_Fund_ID = Fund_ID\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectFundColumns\nSelectGLData, SelectCOAcolumns lookup(GL_Code == Relation_GL_Code,\n\tmultiple: true,\n\tbroadcast: 'none')~> LookupGLcode\nGetGLCodes select(mapColumn(\n\t\tRelation_GL_Code = GL_Code,\n\t\tRelation_Category = Category,\n\t\tRelation_Cash_Flow_Code = Cash_Flow_Code\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectCOAcolumns\nTransactionValidFundAsset@ValidFundAsset split(not(isNull(GL_Code)),\n\tdisjoint: false) ~> TransactionTypeGL@(TransactionTypeGL, TransactionTypeCF)\nTrimSingleQuoteFromGLcode select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount,\n\t\tRelation_Asset_ID,\n\t\tRelation_Fund_ID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectGLData\nTransactionTypeGL@TransactionTypeCF select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectCasfFlowData\nLookupGLcode split(GL_Code == Relation_GL_Code,\n\tdisjoint: false) ~> ConditionalSplitValidGL@(ValidGL, NotValidGL)\nLookupFundAndAsset split(not(isNull(Relation_Fund_ID)),\n\tdisjoint: false) ~> TransactionValidFundAsset@(ValidFundAsset, InvalidFundAsset)\nDerivedColumnValidationErrorFund select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidFundAssetData\nTransactionValidFundAsset@InvalidFundAsset derive(Validation_Error = toString('Invalid Fund or Asset')) ~> DerivedColumnValidationErrorFund\nConditionalSplitValidGL@NotValidGL derive(Validation_Error = toString('Invalid GL Code')) ~> DerivedColumnValidationErrorGL\nDerivedColumnValidationErrorGL select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidGLdata\nConditionalSplitValidGL@ValidGL select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectValidGLdata\nSelectValidGLdata, SelectInvalidGLdata, SelectCasfFlowData, SelectInvalidFundAssetData union(byName: true)~> UnionAll\nTransactionTypeGL@TransactionTypeGL derive(GL_Code = trim(GL_Code,'\\'')) ~> TrimSingleQuoteFromGLcode\nLoadFromScrubbedToStagingDB derive(Amount = toDecimal(Amount,18,2,'###,###.##')) ~> ConvertAmountToValidFormat\nSelectForTarget sink(input(\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Type as string,\n\t\tTrx_Amount as decimal(18,2),\n\t\tvalidation_error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Type,\n\t\tTrx_Amount,\n\t\tvalidation_error\n\t)) ~> StagingDB"
-				}
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/LoadTxtToDBstaging_adjustment_n_actual_df')]",
-			"type": "Microsoft.DataFactory/factories/dataflows",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"type": "MappingDataFlow",
-				"typeProperties": {
-					"sources": [
-						{
-							"dataset": {
-								"referenceName": "DelimitedText_sourcelandingscrubbed_adj_n_actual_ds",
-								"type": "DatasetReference"
-							},
-							"name": "LoadFromScrubbedToStagingDB",
-							"typeProperties": {}
-						},
-						{
-							"dataset": {
-								"referenceName": "SQLrelationasset_ds",
-								"type": "DatasetReference"
-							},
-							"name": "GetAssetMaster",
-							"typeProperties": {}
-						},
-						{
-							"dataset": {
-								"referenceName": "SQLrelationcoa_ds",
-								"type": "DatasetReference"
-							},
-							"name": "GetGLCodes",
-							"typeProperties": {}
-						}
-					],
-					"sinks": [
-						{
-							"dataset": {
-								"referenceName": "SQLstagingadjustment_ds",
-								"type": "DatasetReference"
-							},
-							"name": "StagingDB"
-						}
-					],
-					"transformations": [
-						{
-							"name": "SelectSourceColumns"
-						},
-						{
-							"name": "SetDerivations"
-						},
-						{
-							"name": "SelectForTarget"
-						},
-						{
-							"name": "LookupFundAndAsset"
-						},
-						{
-							"name": "SelectFundColumns"
-						},
-						{
-							"name": "LookupGLcode"
-						},
-						{
-							"name": "SelectCOAcolumns"
-						},
-						{
-							"name": "TransactionTypeGL"
-						},
-						{
-							"name": "SelectInvalidTransaction"
-						},
-						{
-							"name": "ConditionalSplitValidGL"
-						},
-						{
-							"name": "TransactionValidFundAsset"
-						},
-						{
-							"name": "SelectInvalidFundAssetData"
-						},
-						{
-							"name": "DerivedColumnValidationErrorFund"
-						},
-						{
-							"name": "DerivedColumnValidationErrorGL"
-						},
-						{
-							"name": "SelectInvalidGLdata"
-						},
-						{
-							"name": "SelectValidGLdata"
-						},
-						{
-							"name": "UnionAll"
-						},
-						{
-							"name": "ConvertAmountToValidFormat"
-						},
-						{
-							"name": "SelectCashFlow"
-						},
-						{
-							"name": "DerivedColumnInvalidTransaction"
-						},
-						{
-							"name": "CheckAmoutNotNull"
-						},
-						{
-							"name": "DerivedInvalidAmountOrDateOrTrxCode"
-						},
-						{
-							"name": "SelectInvalidAmountOrDateOrTrxCode"
-						},
-						{
-							"name": "CleanGLCode"
-						},
-						{
-							"name": "SelectCleanGLCodeData"
-						}
-					],
-					"script": "source(output(\n\t\tDate as string,\n\t\tTransaction_Code as string,\n\t\tCashflow_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tTrx_Type as string,\n\t\tGL_Code as string,\n\t\tGL_Description as string,\n\t\tAmount as string,\n\t\tDebit_Credit as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> LoadFromScrubbedToStagingDB\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [Asset_ID]\\n      ,[Fund_ID]\\n  FROM [relational].[Asset]\\n  WHERE [record_deleted_flag] = 0',\n\tformat: 'query') ~> GetAssetMaster\nsource(output(\n\t\tGL_Code as string,\n\t\tCategory as string,\n\t\tCash_Flow_Code as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [GL_Code]\\n      ,[Category]\\n      ,[Cash_Flow_Code]\\n  FROM [relational].[Chart_of_Account]\\n  WHERE [record_deleted_flag] = 0',\n\tformat: 'query') ~> GetGLCodes\nCheckAmoutNotNull@ValidAmountAndDateAndTrxCode select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount,\n\t\tDebit_Credit\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectSourceColumns\nUnionAll derive(Debit_Credit = upper(Debit_Credit),\n\t\tTrx_Amount = abs(toDecimal(Amount,18,2))) ~> SetDerivations\nSetDerivations select(mapColumn(\n\t\tTrx_Date = Date,\n\t\tTrx_Code = Transaction_Code,\n\t\tCash_Flow_Code = Cashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tTrx_Desc = GL_Description,\n\t\tvalidation_error = Validation_Error,\n\t\tDebit_Credit,\n\t\tTrx_Amount\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectForTarget\nSelectSourceColumns, SelectFundColumns lookup(Asset_ID == Relation_Asset_ID\n\t&& Fund_ID == Relation_Fund_ID,\n\tmultiple: true,\n\tbroadcast: 'none')~> LookupFundAndAsset\nGetAssetMaster select(mapColumn(\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_Fund_ID = Fund_ID\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectFundColumns\nTransactionTypeGL@TransactionTypeGL, SelectCOAcolumns lookup(GL_Code == Relation_GL_Code,\n\tmultiple: true,\n\tbroadcast: 'none')~> LookupGLcode\nGetGLCodes select(mapColumn(\n\t\tRelation_GL_Code = GL_Code,\n\t\tRelation_Category = Category,\n\t\tRelation_Cash_Flow_Code = Cash_Flow_Code\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectCOAcolumns\nSelectCleanGLCodeData split(not(isNull(GL_Code)) && ( Trx_Type <=> 'Actual' || Trx_Type <=> 'Elimination' || Trx_Type <=> 'GL Adjustment' || Trx_Type <=> 'FX Transaction' ),\n\tisNull(GL_Code) && (Trx_Type <=> 'CF Adjustment' || Trx_Type <=> 'FX Transaction'),\n\tdisjoint: false) ~> TransactionTypeGL@(TransactionTypeGL, TransactionTypeCF, InvalidTransaction)\nDerivedColumnInvalidTransaction select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type = Derived_Trx_type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount,\n\t\tDebit_Credit,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidTransaction\nLookupGLcode split(GL_Code == Relation_GL_Code,\n\tdisjoint: false) ~> ConditionalSplitValidGL@(ValidGL, NotValidGL)\nLookupFundAndAsset split(not(isNull(Relation_Fund_ID)),\n\tdisjoint: false) ~> TransactionValidFundAsset@(ValidFundAsset, InvalidFundAsset)\nDerivedColumnValidationErrorFund select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code,\n\t\tFund_ID = Derived_Fund,\n\t\tAsset_ID = Derived_Asset,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount,\n\t\tDebit_Credit,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidFundAssetData\nTransactionValidFundAsset@InvalidFundAsset derive(Validation_Error = toString('Invalid Fund or Asset'),\n\t\tDerived_Fund = iif(isNull(Fund_ID), toString(''), Fund_ID),\n\t\tDerived_Asset = iif(isNull(Asset_ID), toString(''), Asset_ID)) ~> DerivedColumnValidationErrorFund\nConditionalSplitValidGL@NotValidGL derive(Validation_Error = toString('Invalid GL Code')) ~> DerivedColumnValidationErrorGL\nDerivedColumnValidationErrorGL select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount,\n\t\tDebit_Credit,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidGLdata\nConditionalSplitValidGL@ValidGL select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount,\n\t\tDebit_Credit\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectValidGLdata\nSelectValidGLdata, SelectInvalidGLdata, SelectInvalidTransaction, SelectInvalidFundAssetData, SelectCashFlow, SelectInvalidAmountOrDateOrTrxCode union(byName: true)~> UnionAll\nLoadFromScrubbedToStagingDB derive(Amount = toDecimal(Amount,18,2,'###,###.##'),\n\t\tDate = toTimestamp(Date,'dd/MM/yyyy')) ~> ConvertAmountToValidFormat\nTransactionTypeGL@TransactionTypeCF select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount,\n\t\tDebit_Credit\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectCashFlow\nTransactionTypeGL@InvalidTransaction derive(Validation_Error = toString('Invalid transaction type'),\n\t\tDerived_Trx_type = iif(isNull(Trx_Type),toString('Invalid'),Trx_Type)) ~> DerivedColumnInvalidTransaction\nConvertAmountToValidFormat split(not(isNull(Transaction_Code)) && not(isNull(Date)) && not(isNull(Amount)) && (Debit_Credit <=> 'Dr' || Debit_Credit <=> 'Cr'),\n\tdisjoint: false) ~> CheckAmoutNotNull@(ValidAmountAndDateAndTrxCode, InvalidAmountOrDateOrTrxCode)\nCheckAmoutNotNull@InvalidAmountOrDateOrTrxCode derive(Validation_Error = toString('Invalid Transaction Code or Date or Amount or Debit Credit indicator'),\n\t\tDerived_Date = iif(isNull(Date),toTimestamp('31/12/9999','dd/MM/yyyy'),Date),\n\t\tDerived_Amount = iif(isNull(Amount),toDecimal(0,18,2),Amount),\n\t\tDerived_TrxCode = iif(isNull(Transaction_Code),toString('Null Trx Code'),Transaction_Code),\n\t\tDerived_Debit_Credit = iif(isNull(Debit_Credit), toString('XX'), Debit_Credit)) ~> DerivedInvalidAmountOrDateOrTrxCode\nDerivedInvalidAmountOrDateOrTrxCode select(mapColumn(\n\t\tDate = Derived_Date,\n\t\tTransaction_Code = Derived_TrxCode,\n\t\tCashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount = Derived_Amount,\n\t\tDebit_Credit = Derived_Debit_Credit,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidAmountOrDateOrTrxCode\nTransactionValidFundAsset@ValidFundAsset derive(Derived_GL_Code = iif(GL_Code=='\\'', toString(null()), trim(GL_Code,'\\''))) ~> CleanGLCode\nCleanGLCode select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code = Derived_GL_Code,\n\t\tGL_Description,\n\t\tAmount,\n\t\tDebit_Credit\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectCleanGLCodeData\nSelectForTarget sink(input(\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Type as string,\n\t\tTrx_Amount as decimal(18,2),\n\t\tvalidation_error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Type,\n\t\tTrx_Amount,\n\t\tvalidation_error\n\t)) ~> StagingDB"
-				}
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/LoadTxtToDBstaging_adjustment_n_actual_noSrcDrCrCol_dfx')]",
-			"type": "Microsoft.DataFactory/factories/dataflows",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"type": "MappingDataFlow",
-				"typeProperties": {
-					"sources": [
-						{
-							"dataset": {
-								"referenceName": "DelimitedText_sourcelandingscrubbed_adj_n_actual_ds",
-								"type": "DatasetReference"
-							},
-							"name": "LoadFromScrubbedToStagingDB",
-							"typeProperties": {}
-						},
-						{
-							"dataset": {
-								"referenceName": "SQLrelationasset_ds",
-								"type": "DatasetReference"
-							},
-							"name": "GetAssetMaster",
-							"typeProperties": {}
-						},
-						{
-							"dataset": {
-								"referenceName": "SQLrelationcoa_ds",
-								"type": "DatasetReference"
-							},
-							"name": "GetGLCodes",
-							"typeProperties": {}
-						}
-					],
-					"sinks": [
-						{
-							"dataset": {
-								"referenceName": "SQLstagingadjustment_ds",
-								"type": "DatasetReference"
-							},
-							"name": "StagingDB"
-						}
-					],
-					"transformations": [
-						{
-							"name": "SelectSourceColumns"
-						},
-						{
-							"name": "SetDerivations"
-						},
-						{
-							"name": "SelectForTarget"
-						},
-						{
-							"name": "LookupFundAndAsset"
-						},
-						{
-							"name": "SelectFundColumns"
-						},
-						{
-							"name": "LookupGLcode"
-						},
-						{
-							"name": "SelectCOAcolumns"
-						},
-						{
-							"name": "TransactionTypeGL"
-						},
-						{
-							"name": "SelectGLData"
-						},
-						{
-							"name": "SelectInvalidTransaction"
-						},
-						{
-							"name": "ConditionalSplitValidGL"
-						},
-						{
-							"name": "TransactionValidFundAsset"
-						},
-						{
-							"name": "SelectInvalidFundAssetData"
-						},
-						{
-							"name": "DerivedColumnValidationErrorFund"
-						},
-						{
-							"name": "DerivedColumnValidationErrorGL"
-						},
-						{
-							"name": "SelectInvalidGLdata"
-						},
-						{
-							"name": "SelectValidGLdata"
-						},
-						{
-							"name": "UnionAll"
-						},
-						{
-							"name": "TrimSingleQuoteFromGLcode"
-						},
-						{
-							"name": "ConvertAmountToValidFormat"
-						},
-						{
-							"name": "SelectCashFlow"
-						},
-						{
-							"name": "DerivedColumnInvalidTransaction"
-						},
-						{
-							"name": "CheckAmoutNotNull"
-						},
-						{
-							"name": "DerivedInvalidAmount"
-						},
-						{
-							"name": "SelectInvalidAmount"
-						}
-					],
-					"script": "source(output(\n\t\tDate as string,\n\t\tTransaction_Code as string,\n\t\tCashflow_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tTrx_Type as string,\n\t\tGL_Code as string,\n\t\tGL_Description as string,\n\t\tAmount as string,\n\t\tDebit_Credit as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> LoadFromScrubbedToStagingDB\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [Asset_ID]\\n      ,[Fund_ID]\\n  FROM [relational].[Asset]\\n  WHERE [record_deleted_flag] = 0',\n\tformat: 'query') ~> GetAssetMaster\nsource(output(\n\t\tGL_Code as string,\n\t\tCategory as string,\n\t\tCash_Flow_Code as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [GL_Code]\\n      ,[Category]\\n      ,[Cash_Flow_Code]\\n  FROM [relational].[Chart_of_Account]\\n  WHERE [record_deleted_flag] = 0',\n\tformat: 'query') ~> GetGLCodes\nCheckAmoutNotNull@ValidAmount select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectSourceColumns\nUnionAll derive(Debit_Credit = case(greaterOrEqual(toDecimal(Amount,18,2),0),'DR','CR'),\n\t\tTrx_Amount = abs(toDecimal(Amount,18,2)),\n\t\tDate = toTimestamp(Date,'dd/MM/yyyy')) ~> SetDerivations\nSetDerivations select(mapColumn(\n\t\tTrx_Date = Date,\n\t\tTrx_Code = Transaction_Code,\n\t\tCash_Flow_Code = Cashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tTrx_Desc = GL_Description,\n\t\tvalidation_error = Validation_Error,\n\t\tDebit_Credit,\n\t\tTrx_Amount\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectForTarget\nSelectSourceColumns, SelectFundColumns lookup(Asset_ID == Relation_Asset_ID\n\t&& Fund_ID == Relation_Fund_ID,\n\tmultiple: true,\n\tbroadcast: 'none')~> LookupFundAndAsset\nGetAssetMaster select(mapColumn(\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_Fund_ID = Fund_ID\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectFundColumns\nSelectGLData, SelectCOAcolumns lookup(GL_Code == Relation_GL_Code,\n\tmultiple: true,\n\tbroadcast: 'none')~> LookupGLcode\nGetGLCodes select(mapColumn(\n\t\tRelation_GL_Code = GL_Code,\n\t\tRelation_Category = Category,\n\t\tRelation_Cash_Flow_Code = Cash_Flow_Code\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectCOAcolumns\nTransactionValidFundAsset@ValidFundAsset split(not(isNull(GL_Code)) && ( Trx_Type <=> 'Actual' || Trx_Type <=> 'Elimination' || Trx_Type <=> 'GL Adjustment' ),\n\tisNull(GL_Code) && Trx_Type <=> 'CF Adjustment',\n\tdisjoint: false) ~> TransactionTypeGL@(TransactionTypeGL, TransactionTypeCF, InvalidTransaction)\nTrimSingleQuoteFromGLcode select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount,\n\t\tRelation_Asset_ID,\n\t\tRelation_Fund_ID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectGLData\nDerivedColumnInvalidTransaction select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidTransaction\nLookupGLcode split(GL_Code == Relation_GL_Code,\n\tdisjoint: false) ~> ConditionalSplitValidGL@(ValidGL, NotValidGL)\nLookupFundAndAsset split(not(isNull(Relation_Fund_ID)),\n\tdisjoint: false) ~> TransactionValidFundAsset@(ValidFundAsset, InvalidFundAsset)\nDerivedColumnValidationErrorFund select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidFundAssetData\nTransactionValidFundAsset@InvalidFundAsset derive(Validation_Error = toString('Invalid Fund or Asset')) ~> DerivedColumnValidationErrorFund\nConditionalSplitValidGL@NotValidGL derive(Validation_Error = toString('Invalid GL Code')) ~> DerivedColumnValidationErrorGL\nDerivedColumnValidationErrorGL select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidGLdata\nConditionalSplitValidGL@ValidGL select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code = Relation_Cash_Flow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectValidGLdata\nSelectValidGLdata, SelectInvalidGLdata, SelectInvalidTransaction, SelectInvalidFundAssetData, SelectCashFlow, SelectInvalidAmount union(byName: true)~> UnionAll\nTransactionTypeGL@TransactionTypeGL derive(GL_Code = trim(GL_Code,'\\'')) ~> TrimSingleQuoteFromGLcode\nLoadFromScrubbedToStagingDB derive(Amount = toDecimal(Amount,18,2,'###,###.##')) ~> ConvertAmountToValidFormat\nTransactionTypeGL@TransactionTypeCF select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectCashFlow\nTransactionTypeGL@InvalidTransaction derive(Validation_Error = toString('Invalid transaction type')) ~> DerivedColumnInvalidTransaction\nConvertAmountToValidFormat split(not(isNull(Amount)),\n\tdisjoint: false) ~> CheckAmoutNotNull@(ValidAmount, InvalidAmount)\nCheckAmoutNotNull@InvalidAmount derive(Validation_Error = toString('Invalid Amount or Debit Credit indicator')) ~> DerivedInvalidAmount\nDerivedInvalidAmount select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidAmount\nSelectForTarget sink(input(\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Type as string,\n\t\tTrx_Amount as decimal(18,2),\n\t\tvalidation_error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Type,\n\t\tTrx_Amount,\n\t\tvalidation_error\n\t)) ~> StagingDB"
-				}
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/LoadTxtToDBstaging_asset_df')]",
-			"type": "Microsoft.DataFactory/factories/dataflows",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"type": "MappingDataFlow",
-				"typeProperties": {
-					"sources": [
-						{
-							"dataset": {
-								"referenceName": "DelimitedText_sourcelandingscrubbed_asset_ds",
-								"type": "DatasetReference"
-							},
-							"name": "LoadFromScrubbedToStagingDB",
-							"typeProperties": {}
-						}
-					],
-					"sinks": [
-						{
-							"dataset": {
-								"referenceName": "SQLstagingasset_ds",
-								"type": "DatasetReference"
-							},
-							"name": "StagingDB"
-						}
-					],
-					"transformations": [
-						{
-							"name": "SelectSourceColumns"
-						},
-						{
-							"name": "AnalyticFunctionComputeRowOrder"
-						},
-						{
-							"name": "GetFirstRowPerAssetFundCombo"
-						}
-					],
-					"script": "source(output(\n\t\tAsset_ID as string,\n\t\tAsset_name as string,\n\t\tCurrency as string,\n\t\tFund_ID as string,\n\t\tAsset_alloc_percentage as decimal(10,0),\n\t\tAsset_country as string,\n\t\tFund_Region as string,\n\t\tFund_State as string,\n\t\tProp_Mgr_Name as string,\n\t\tProp_Mgr_Company as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> LoadFromScrubbedToStagingDB\nGetFirstRowPerAssetFundCombo select(mapColumn(\n\t\tAsset_ID,\n\t\tAsset_Name = Asset_name,\n\t\tAsset_Curency = Currency,\n\t\tFund_ID,\n\t\tAsset_Alloc_Per = Asset_alloc_percentage,\n\t\tAsset_country,\n\t\tFund_Region,\n\t\tFund_State,\n\t\tProp_Mgr_Name,\n\t\tProp_Mgr_Company\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectSourceColumns\nLoadFromScrubbedToStagingDB window(over(Asset_ID,\n\t\tFund_ID),\n\tasc(Asset_ID, false),\n\tasc(Fund_ID, false),\n\tRN = rowNumber()) ~> AnalyticFunctionComputeRowOrder\nAnalyticFunctionComputeRowOrder filter(RN==1) ~> GetFirstRowPerAssetFundCombo\nSelectSourceColumns sink(input(\n\t\tAsset_ID as string,\n\t\tAsset_Name as string,\n\t\tAsset_Curency as string,\n\t\tFund_ID as string,\n\t\tAsset_Alloc_Per as decimal(18,2),\n\t\tAsset_country as string,\n\t\tFund_Region as string,\n\t\tFund_State as string,\n\t\tProp_Mgr_Name as string,\n\t\tProp_Mgr_Company as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tAsset_Name,\n\t\tAsset_Curency,\n\t\tFund_ID,\n\t\tAsset_Alloc_Per,\n\t\tAsset_country,\n\t\tFund_Region,\n\t\tFund_State,\n\t\tProp_Mgr_Name,\n\t\tProp_Mgr_Company\n\t)) ~> StagingDB"
 				}
 			},
 			"dependsOn": []
