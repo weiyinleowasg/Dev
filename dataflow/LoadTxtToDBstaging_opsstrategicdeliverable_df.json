@@ -1,0 +1,69 @@
+{
+	"name": "LoadTxtToDBstaging_opsstrategicdeliverable_df",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "DelimitedText_sourcelandingscrubbed_opsstrategicdeliverable_ds",
+						"type": "DatasetReference"
+					},
+					"name": "LoadFromScrubbedToStagingDB"
+				},
+				{
+					"dataset": {
+						"referenceName": "SQLrelationasset_ds",
+						"type": "DatasetReference"
+					},
+					"name": "RelationalAsset"
+				}
+			],
+			"sinks": [
+				{
+					"dataset": {
+						"referenceName": "SQLstagingopsstrategicdeliverable_ds",
+						"type": "DatasetReference"
+					},
+					"name": "StagingDB"
+				}
+			],
+			"transformations": [
+				{
+					"name": "LookupRelationAsset"
+				},
+				{
+					"name": "SelectValidRecord"
+				},
+				{
+					"name": "ValidatedDatesAndNumbers"
+				},
+				{
+					"name": "ConvertDateAndNumbers"
+				},
+				{
+					"name": "SelectInvalidDateOrNumber"
+				},
+				{
+					"name": "InvalidDateOrNumberErrormessage"
+				},
+				{
+					"name": "ValidatedAsset"
+				},
+				{
+					"name": "InvalidFundOrAsseterrormessage"
+				},
+				{
+					"name": "SelectInvalidFundOrAsset"
+				},
+				{
+					"name": "UnionAll"
+				},
+				{
+					"name": "SelectRelationalAsset"
+				}
+			],
+			"script": "source(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tProject_ID as string,\n\t\tDeliverable as string,\n\t\tProject_Weighting as string,\n\t\tExpected_Completion_Date as string,\n\t\tPlanned_Completion_Date as string,\n\t\tCurrent_Progress_Perc_Complete as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> LoadFromScrubbedToStagingDB\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT [Asset_ID],[Fund_ID]\\nFROM [relational].[Asset]\\nWHERE record_deleted_flag = 0',\n\tformat: 'query') ~> RelationalAsset\nValidatedDatesAndNumbers@ValidDateAndNumber, SelectRelationalAsset lookup(ValidatedDatesAndNumbers@ValidDateAndNumber@Asset_ID == Relation_Asset_ID\n\t&& ValidatedDatesAndNumbers@ValidDateAndNumber@Fund_ID == Relation_Fund_ID,\n\tmultiple: true,\n\tbroadcast: 'none')~> LookupRelationAsset\nValidatedAsset@ValidFundAndAsset select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tProject_ID,\n\t\tDeliverable,\n\t\tProject_Weighting,\n\t\tExpected_Completion_Date,\n\t\tPlanned_Completion_Date,\n\t\tCurrent_Progress_Perc_Complete\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectValidRecord\nConvertDateAndNumbers split(not(isNull(Derived_Project_ID)) && \r\niif(not(isNull(Project_Weighting)),not(isNull(Derived_Project_Weighting)),true()) && \r\niif(not(isNull(Expected_Completion_Date)),not(isNull(Derived_Expected_Completion_Date)),true()) && \r\niif(not(isNull(Planned_Completion_Date)),not(isNull(Derived_Planned_Completion_Date)),true()) && \r\niif(not(isNull(Current_Progress_Perc_Complete)),not(isNull(Derived_Current_Progress_Perc_Complete)),true()),\n\tdisjoint: false) ~> ValidatedDatesAndNumbers@(ValidDateAndNumber, InvalidDateOrNumber)\nLoadFromScrubbedToStagingDB derive(Derived_Project_ID = toInteger(Project_ID),\n\t\tDerived_Project_Weighting = toShort(Project_Weighting),\n\t\tDerived_Expected_Completion_Date = toDate(Expected_Completion_Date,\"dd/MM/yyyy\"),\n\t\tDerived_Planned_Completion_Date = toDate(Planned_Completion_Date,\"dd/MM/yyyy\"),\n\t\tDerived_Current_Progress_Perc_Complete = toShort(Current_Progress_Perc_Complete)) ~> ConvertDateAndNumbers\nInvalidDateOrNumberErrormessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tProject_ID,\n\t\tDeliverable,\n\t\tProject_Weighting,\n\t\tExpected_Completion_Date,\n\t\tPlanned_Completion_Date,\n\t\tCurrent_Progress_Perc_Complete,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidDateOrNumber\nValidatedDatesAndNumbers@InvalidDateOrNumber derive(Validation_Error = toString(\"Invalid Project ID / Dates / Numbers\")) ~> InvalidDateOrNumberErrormessage\nLookupRelationAsset split(not(isNull(Relation_Asset_ID)),\n\tdisjoint: false) ~> ValidatedAsset@(ValidFundAndAsset, InvalidFundOrAsset)\nValidatedAsset@InvalidFundOrAsset derive(Validation_Error = toString(\"Invalid Fund Or Asset\")) ~> InvalidFundOrAsseterrormessage\nInvalidFundOrAsseterrormessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tProject_ID,\n\t\tDeliverable,\n\t\tProject_Weighting,\n\t\tExpected_Completion_Date,\n\t\tPlanned_Completion_Date,\n\t\tCurrent_Progress_Perc_Complete,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidFundOrAsset\nSelectValidRecord, SelectInvalidDateOrNumber, SelectInvalidFundOrAsset union(byName: true)~> UnionAll\nRelationalAsset select(mapColumn(\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_Fund_ID = Fund_ID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRelationalAsset\nUnionAll sink(input(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tProject_ID as string,\n\t\tDeliverable as string,\n\t\tProject_Weighting as string,\n\t\tExpected_Completion_Date as string,\n\t\tPlanned_Completion_Date as string,\n\t\tCurrent_Progress_Perc_Complete as string,\n\t\tValidation_Error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tProject_ID,\n\t\tDeliverable,\n\t\tProject_Weighting,\n\t\tExpected_Completion_Date,\n\t\tPlanned_Completion_Date,\n\t\tCurrent_Progress_Perc_Complete,\n\t\tValidation_Error\n\t)) ~> StagingDB"
+		}
+	}
+}
