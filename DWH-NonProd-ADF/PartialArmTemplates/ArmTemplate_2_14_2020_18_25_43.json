@@ -1,0 +1,3676 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory name",
+			"defaultValue": "DWH-NonProd-ADF"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/MasterPipeline_Main_pl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "RunPipelineMasterSub1",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineMoveFilesFromFileshareToBlobStore",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "MasterPipeline_Sub1_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true
+						}
+					},
+					{
+						"name": "RunPipelineMasterSub3",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineMasterSub2",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "MasterPipeline_Sub3_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true
+						}
+					},
+					{
+						"name": "SetVarMasterSub1",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineMasterSub1",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "PipelineName",
+							"value": {
+								"value": "@activity('RunPipelineMasterSub1').output",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "SetVarMasterSub3",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineMasterSub3",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "PipelineName",
+							"value": {
+								"value": "@activity('RunPipelineMasterSub3').output",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "MasterUTCtag",
+						"type": "SetVariable",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "MasterUTCtag",
+							"value": {
+								"value": "@utcnow()",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "SendFailMail_MasterSub3",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "UpdateMasterRunLog_MasterSub3",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": "https://prod-12.australiaeast.logic.azure.com:443/workflows/f7a9fbbc810043f28c16fd6bcf3b2f68/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=8yphnNtSS85GDIgCI8OiOwpDghciKo7S9hRjuy5ITI4",
+							"method": "POST",
+							"headers": {
+								"Content-Type": "application/json"
+							},
+							"body": {
+								"dataFactoryName": "@pipeline().DataFactory",
+								"pipelineName": "@pipeline().Pipeline",
+								"messageHeader": "!!!MASTER PIPELINE FAILED!!!",
+								"messageProcessed": "@variables('PipelineName')",
+								"messageNotProcessed": "",
+								"messageErrorDuringProcess": ""
+							}
+						}
+					},
+					{
+						"name": "SendFailMail_MasterSub1",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "UpdateMasterRunLog_MasterSub1",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": "https://prod-12.australiaeast.logic.azure.com:443/workflows/f7a9fbbc810043f28c16fd6bcf3b2f68/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=8yphnNtSS85GDIgCI8OiOwpDghciKo7S9hRjuy5ITI4",
+							"method": "POST",
+							"headers": {
+								"Content-Type": "application/json"
+							},
+							"body": {
+								"dataFactoryName": "@pipeline().DataFactory",
+								"pipelineName": "@pipeline().Pipeline",
+								"messageHeader": "!!!MASTER PIPELINE FAILED!!!",
+								"messageProcessed": "@variables('PipelineName')",
+								"messageNotProcessed": "",
+								"messageErrorDuringProcess": ""
+							}
+						}
+					},
+					{
+						"name": "MasterPipelineSendMailAndLogStatus",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineMasterSub4",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "MasterPipelineSendMail_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"Parent_DataFactory": {
+									"value": "@pipeline().DataFactory",
+									"type": "Expression"
+								},
+								"Parent_Pipeline": {
+									"value": "@pipeline().Pipeline",
+									"type": "Expression"
+								},
+								"Master_Utc_Tag": {
+									"value": "@variables('MasterUTCtag')",
+									"type": "Expression"
+								},
+								"Run_Message_Success": "MasterPipeline_Main_pl completed OK",
+								"Run_Message_Fail": "MasterPipeline_Mail_pl run failed"
+							}
+						}
+					},
+					{
+						"name": "UpdateMasterRunLog_MasterSub3",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "SetVarMasterSub3",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[log].[UpdateMasterRunLog]",
+							"storedProcedureParameters": {
+								"MasterUtcTag": {
+									"value": {
+										"value": "@variables('MasterUTCtag')",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"RunMessage": {
+									"value": {
+										"value": "@variables('PipelineName')",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"RunStatus": {
+									"value": {
+										"value": "FAILED",
+										"type": "Expression"
+									},
+									"type": "String"
+								}
+							}
+						},
+						"linkedServiceName": {
+							"referenceName": "SQLdbConnection",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "UpdateMasterRunLog_MasterSub1",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "SetVarMasterSub1",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[log].[UpdateMasterRunLog]",
+							"storedProcedureParameters": {
+								"MasterUtcTag": {
+									"value": {
+										"value": "@variables('MasterUTCtag')",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"RunMessage": {
+									"value": {
+										"value": "@variables('PipelineName')",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"RunStatus": {
+									"value": {
+										"value": "FAILED",
+										"type": "Expression"
+									},
+									"type": "String"
+								}
+							}
+						},
+						"linkedServiceName": {
+							"referenceName": "SQLdbConnection",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "RunPipelineMoveFilesFromFileshareToBlobStore",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "MasterUTCtag",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "PipelineMoveFiles_fileshare_to_blob_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true
+						}
+					},
+					{
+						"name": "SetVarMoveFiles",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineMoveFilesFromFileshareToBlobStore",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "PipelineName",
+							"value": {
+								"value": "@activity('RunPipelineMoveFilesFromFileshareToBlobStore').output",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "UpdateMasterRunLog_MoveFiles",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "SetVarMoveFiles",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[log].[UpdateMasterRunLog]",
+							"storedProcedureParameters": {
+								"MasterUtcTag": {
+									"value": {
+										"value": "@variables('MasterUTCtag')",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"RunMessage": {
+									"value": {
+										"value": "@variables('PipelineName')",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"RunStatus": {
+									"value": {
+										"value": "FAILED",
+										"type": "Expression"
+									},
+									"type": "String"
+								}
+							}
+						},
+						"linkedServiceName": {
+							"referenceName": "SQLdbConnection",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "SendFailMail_MoveFIles",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "UpdateMasterRunLog_MoveFiles",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": "https://prod-12.australiaeast.logic.azure.com:443/workflows/f7a9fbbc810043f28c16fd6bcf3b2f68/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=8yphnNtSS85GDIgCI8OiOwpDghciKo7S9hRjuy5ITI4",
+							"method": "POST",
+							"headers": {
+								"Content-Type": "application/json"
+							},
+							"body": {
+								"dataFactoryName": "@pipeline().DataFactory",
+								"pipelineName": "@pipeline().Pipeline",
+								"messageHeader": "!!!MASTER PIPELINE FAILED!!!",
+								"messageProcessed": "@variables('PipelineName')",
+								"messageNotProcessed": "",
+								"messageErrorDuringProcess": ""
+							}
+						}
+					},
+					{
+						"name": "RunPipelineMasterSub2",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineMasterSub1",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "MasterPipeline_Sub2_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true
+						}
+					},
+					{
+						"name": "SetVarMasterSub2",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineMasterSub2",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "PipelineName",
+							"value": {
+								"value": "@activity('RunPipelineMasterSub2').output",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "UpdateMasterRunLog_MasterSub2",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "SetVarMasterSub2",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[log].[UpdateMasterRunLog]",
+							"storedProcedureParameters": {
+								"MasterUtcTag": {
+									"value": {
+										"value": "@variables('MasterUTCtag')",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"RunMessage": {
+									"value": {
+										"value": "@variables('PipelineName')",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"RunStatus": {
+									"value": {
+										"value": "FAILED",
+										"type": "Expression"
+									},
+									"type": "String"
+								}
+							}
+						},
+						"linkedServiceName": {
+							"referenceName": "SQLdbConnection",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "SendFailMail_MasterSub2",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "UpdateMasterRunLog_MasterSub2",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": "https://prod-12.australiaeast.logic.azure.com:443/workflows/f7a9fbbc810043f28c16fd6bcf3b2f68/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=8yphnNtSS85GDIgCI8OiOwpDghciKo7S9hRjuy5ITI4",
+							"method": "POST",
+							"headers": {
+								"Content-Type": "application/json"
+							},
+							"body": {
+								"dataFactoryName": "@pipeline().DataFactory",
+								"pipelineName": "@pipeline().Pipeline",
+								"messageHeader": "!!!MASTER PIPELINE FAILED!!!",
+								"messageProcessed": "@variables('PipelineName')",
+								"messageNotProcessed": "",
+								"messageErrorDuringProcess": ""
+							}
+						}
+					},
+					{
+						"name": "RunPipelineMasterSub4",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineMasterSub3",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "MasterPipeline_Sub4_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true
+						}
+					},
+					{
+						"name": "SetVarMasterSub4",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineMasterSub4",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "PipelineName",
+							"value": {
+								"value": "@activity('RunPipelineMasterSub4').output",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "SendFailMail_MasterSub4",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "UpdateMasterRunLog_MasterSub4",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": "https://prod-12.australiaeast.logic.azure.com:443/workflows/f7a9fbbc810043f28c16fd6bcf3b2f68/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=8yphnNtSS85GDIgCI8OiOwpDghciKo7S9hRjuy5ITI4",
+							"method": "POST",
+							"headers": {
+								"Content-Type": "application/json"
+							},
+							"body": {
+								"dataFactoryName": "@pipeline().DataFactory",
+								"pipelineName": "@pipeline().Pipeline",
+								"messageHeader": "!!!MASTER PIPELINE FAILED!!!",
+								"messageProcessed": "@variables('PipelineName')",
+								"messageNotProcessed": "",
+								"messageErrorDuringProcess": ""
+							}
+						}
+					},
+					{
+						"name": "UpdateMasterRunLog_MasterSub4",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "SetVarMasterSub4",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[log].[UpdateMasterRunLog]",
+							"storedProcedureParameters": {
+								"MasterUtcTag": {
+									"value": {
+										"value": "@variables('MasterUTCtag')",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"RunMessage": {
+									"value": {
+										"value": "@variables('PipelineName')",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"RunStatus": {
+									"value": {
+										"value": "FAILED",
+										"type": "Expression"
+									},
+									"type": "String"
+								}
+							}
+						},
+						"linkedServiceName": {
+							"referenceName": "SQLdbConnection",
+							"type": "LinkedServiceReference"
+						}
+					}
+				],
+				"variables": {
+					"PipelineName": {
+						"type": "String",
+						"defaultValue": "MasterPipeline_pl"
+					},
+					"MasterUTCtag": {
+						"type": "String",
+						"defaultValue": "2019-11-07"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/MasterPipeline_Sub4_pl')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/MasterPipeline_Sub4_pl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "RunPipelineOpsTimberSales",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "MasterUTCtag",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "ProcessSourceBlob_opstimbersales_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true
+						}
+					},
+					{
+						"name": "RunPipelineOpsSalesOther",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineOpsTimberSales",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "ProcessSourceBlob_opssalesother_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true
+						}
+					},
+					{
+						"name": "SetVarOpsQuestions",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineOpsTimberSales",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "PipelineName",
+							"value": {
+								"value": "@activity('RunPipelineOpsTimberSales').output",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "MasterUTCtag",
+						"type": "SetVariable",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "MasterUTCtag",
+							"value": {
+								"value": "@utcnow()",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "SendFailMail_OpsQuestions",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "UpdateMasterRunLog_OpsTimberSales",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": "https://prod-12.australiaeast.logic.azure.com:443/workflows/f7a9fbbc810043f28c16fd6bcf3b2f68/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=8yphnNtSS85GDIgCI8OiOwpDghciKo7S9hRjuy5ITI4",
+							"method": "POST",
+							"headers": {
+								"Content-Type": "application/json"
+							},
+							"body": {
+								"dataFactoryName": "@pipeline().DataFactory",
+								"pipelineName": "@pipeline().Pipeline",
+								"messageHeader": "!!!MASTER PIPELINE FAILED!!!",
+								"messageProcessed": "@variables('PipelineName')",
+								"messageNotProcessed": "",
+								"messageErrorDuringProcess": ""
+							}
+						}
+					},
+					{
+						"name": "UpdateMasterRunLog_OpsTimberSales",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "SetVarOpsQuestions",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[log].[UpdateMasterRunLog]",
+							"storedProcedureParameters": {
+								"MasterUtcTag": {
+									"value": {
+										"value": "@variables('MasterUTCtag')",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"RunMessage": {
+									"value": {
+										"value": "@variables('PipelineName')",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"RunStatus": {
+									"value": {
+										"value": "FAILED",
+										"type": "Expression"
+									},
+									"type": "String"
+								}
+							}
+						},
+						"linkedServiceName": {
+							"referenceName": "SQLdbConnection",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "SetVarOpsSalesOther",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineOpsSalesOther",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "PipelineName",
+							"value": {
+								"value": "@activity('RunPipelineOpsSalesOther').output",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "SendFailMail_OpsSalesOther",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "SetVarOpsSalesOther",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": "https://prod-12.australiaeast.logic.azure.com:443/workflows/f7a9fbbc810043f28c16fd6bcf3b2f68/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=8yphnNtSS85GDIgCI8OiOwpDghciKo7S9hRjuy5ITI4",
+							"method": "POST",
+							"headers": {
+								"Content-Type": "application/json"
+							},
+							"body": {
+								"dataFactoryName": "@pipeline().DataFactory",
+								"pipelineName": "@pipeline().Pipeline",
+								"messageHeader": "!!!MASTER PIPELINE FAILED!!!",
+								"messageProcessed": "@variables('PipelineName')",
+								"messageNotProcessed": "",
+								"messageErrorDuringProcess": ""
+							}
+						}
+					},
+					{
+						"name": "RunPipelineOpsOperation",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineOpsSalesOther",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "ProcessSourceBlob_opsoperation_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true
+						}
+					},
+					{
+						"name": "SetVarOpsOperation",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineOpsOperation",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "PipelineName",
+							"value": {
+								"value": "@activity('RunPipelineOpsOperation').output",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "SendFailMail_OpsOperation",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "SetVarOpsOperation",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": "https://prod-12.australiaeast.logic.azure.com:443/workflows/f7a9fbbc810043f28c16fd6bcf3b2f68/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=8yphnNtSS85GDIgCI8OiOwpDghciKo7S9hRjuy5ITI4",
+							"method": "POST",
+							"headers": {
+								"Content-Type": "application/json"
+							},
+							"body": {
+								"dataFactoryName": "@pipeline().DataFactory",
+								"pipelineName": "@pipeline().Pipeline",
+								"messageHeader": "!!!MASTER PIPELINE FAILED!!!",
+								"messageProcessed": "@variables('PipelineName')",
+								"messageNotProcessed": "",
+								"messageErrorDuringProcess": ""
+							}
+						}
+					},
+					{
+						"name": "RunPipelineHarvestRecon",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineOpsOperation",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "ProcessSourceBlob_opsharvestrecon_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true
+						}
+					},
+					{
+						"name": "SetVarOpsHarvestRecon",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineHarvestRecon",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "PipelineName",
+							"value": {
+								"value": "@activity('RunPipelineHarvestRecon').output",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "SendFailMail_OpsHarvestRecon",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "SetVarOpsHarvestRecon",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": "https://prod-12.australiaeast.logic.azure.com:443/workflows/f7a9fbbc810043f28c16fd6bcf3b2f68/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=8yphnNtSS85GDIgCI8OiOwpDghciKo7S9hRjuy5ITI4",
+							"method": "POST",
+							"headers": {
+								"Content-Type": "application/json"
+							},
+							"body": {
+								"dataFactoryName": "@pipeline().DataFactory",
+								"pipelineName": "@pipeline().Pipeline",
+								"messageHeader": "!!!MASTER PIPELINE FAILED!!!",
+								"messageProcessed": "@variables('PipelineName')",
+								"messageNotProcessed": "",
+								"messageErrorDuringProcess": ""
+							}
+						}
+					},
+					{
+						"name": "RunPipelineStrategicProject",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineHarvestRecon",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "ProcessSourceBlob_opsstrategicproject_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true
+						}
+					},
+					{
+						"name": "SetVarOpsStrategicProject",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineStrategicProject",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "PipelineName",
+							"value": {
+								"value": "@activity('RunPipelineStrategicProject').output",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "SendFailMail_OpsStrategicProject",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "SetVarOpsStrategicProject",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": "https://prod-12.australiaeast.logic.azure.com:443/workflows/f7a9fbbc810043f28c16fd6bcf3b2f68/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=8yphnNtSS85GDIgCI8OiOwpDghciKo7S9hRjuy5ITI4",
+							"method": "POST",
+							"headers": {
+								"Content-Type": "application/json"
+							},
+							"body": {
+								"dataFactoryName": "@pipeline().DataFactory",
+								"pipelineName": "@pipeline().Pipeline",
+								"messageHeader": "!!!MASTER PIPELINE FAILED!!!",
+								"messageProcessed": "@variables('PipelineName')",
+								"messageNotProcessed": "",
+								"messageErrorDuringProcess": ""
+							}
+						}
+					},
+					{
+						"name": "RunPipelineStrategicDeliverable",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineStrategicProject",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "ProcessSourceBlob_opsstrategicdeliverable_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true
+						}
+					},
+					{
+						"name": "SetVarOpsStrategicDeliverable",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineStrategicDeliverable",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "PipelineName",
+							"value": {
+								"value": "@activity('RunPipelineStrategicDeliverable').output",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "SendFailMail_OpsStrategicDeliverable",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "SetVarOpsStrategicDeliverable",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": "https://prod-12.australiaeast.logic.azure.com:443/workflows/f7a9fbbc810043f28c16fd6bcf3b2f68/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=8yphnNtSS85GDIgCI8OiOwpDghciKo7S9hRjuy5ITI4",
+							"method": "POST",
+							"headers": {
+								"Content-Type": "application/json"
+							},
+							"body": {
+								"dataFactoryName": "@pipeline().DataFactory",
+								"pipelineName": "@pipeline().Pipeline",
+								"messageHeader": "!!!MASTER PIPELINE FAILED!!!",
+								"messageProcessed": "@variables('PipelineName')",
+								"messageNotProcessed": "",
+								"messageErrorDuringProcess": ""
+							}
+						}
+					},
+					{
+						"name": "RunPipelineOpsContract",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineStrategicDeliverable",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "ProcessSourceBlob_opscontract_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true
+						}
+					},
+					{
+						"name": "SetVarOpsContract",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineOpsContract",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "PipelineName",
+							"value": {
+								"value": "@activity('RunPipelineOpsContract').output",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "SendFailMail_OpsContract",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "SetVarOpsContract",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": "https://prod-12.australiaeast.logic.azure.com:443/workflows/f7a9fbbc810043f28c16fd6bcf3b2f68/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=8yphnNtSS85GDIgCI8OiOwpDghciKo7S9hRjuy5ITI4",
+							"method": "POST",
+							"headers": {
+								"Content-Type": "application/json"
+							},
+							"body": {
+								"dataFactoryName": "@pipeline().DataFactory",
+								"pipelineName": "@pipeline().Pipeline",
+								"messageHeader": "!!!MASTER PIPELINE FAILED!!!",
+								"messageProcessed": "@variables('PipelineName')",
+								"messageNotProcessed": "",
+								"messageErrorDuringProcess": ""
+							}
+						}
+					},
+					{
+						"name": "RunPipelineAudit",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineOpsContract",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "ProcessSourceBlob_opsaudit_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true
+						}
+					},
+					{
+						"name": "SetVarOpsAudit",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineAudit",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "PipelineName",
+							"value": {
+								"value": "@activity('RunPipelineAudit').output",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "SendFailMail_OpsAudit",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "SetVarOpsAudit",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": "https://prod-12.australiaeast.logic.azure.com:443/workflows/f7a9fbbc810043f28c16fd6bcf3b2f68/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=8yphnNtSS85GDIgCI8OiOwpDghciKo7S9hRjuy5ITI4",
+							"method": "POST",
+							"headers": {
+								"Content-Type": "application/json"
+							},
+							"body": {
+								"dataFactoryName": "@pipeline().DataFactory",
+								"pipelineName": "@pipeline().Pipeline",
+								"messageHeader": "!!!MASTER PIPELINE FAILED!!!",
+								"messageProcessed": "@variables('PipelineName')",
+								"messageNotProcessed": "",
+								"messageErrorDuringProcess": ""
+							}
+						}
+					},
+					{
+						"name": "MasterPipelineSendMailAndLogStatus",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "RunPipelineAudit",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "MasterPipelineSendMail_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"Parent_DataFactory": {
+									"value": "@pipeline().DataFactory",
+									"type": "Expression"
+								},
+								"Parent_Pipeline": {
+									"value": "@pipeline().Pipeline",
+									"type": "Expression"
+								},
+								"Master_Utc_Tag": {
+									"value": "@variables('MasterUTCtag')",
+									"type": "Expression"
+								},
+								"Run_Message_Success": "MasterPipeline_Sub4_pl completed OK",
+								"Run_Message_Fail": "MasterPipeline_Sub4_pl run failed"
+							}
+						}
+					}
+				],
+				"variables": {
+					"PipelineName": {
+						"type": "String",
+						"defaultValue": "MasterPipeline_pl"
+					},
+					"MasterUTCtag": {
+						"type": "String",
+						"defaultValue": "2019-11-07"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/ProcessSourceBlob_opsaudit_pl')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ProcessSourceBlob_opsaudit_pl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "GetUnprocessedBlobFromRegister",
+						"type": "Lookup",
+						"dependsOn": [
+							{
+								"activity": "SetEtlUtcTag",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": "SELECT [ORIGINAL_BLOB_LANDING_CONTAINER],\n\t[ORIGINAL_BLOB_NAME],\n\t[ORIGINAL_BLOP_FULLPATH],\n\t[TARGET_BLOB_LANDING_CONTAINER],\n\t[TARGET_BLOB_NAME],\n\t[DATALAKE_CONTAINER],\n\t[DATALAKE_FILE_PATH],\n\t[ORIGINAL_BLOB_ARCHIVE_CONTAINER],\n\t[ORIGINAL_BLOB_ARCHIVE_FULLPATH],\n\tCONCAT(DATALAKE_CONTAINER,'/',DATALAKE_FILE_PATH,'/',TARGET_BLOB_NAME) AS DATALAKE_FULL_PATHFILE\nFROM [log].[SOURCE_REGISTER_TABLE]\nWHERE [ETL_IS_PROCESSED] = 'N'\nAND [ORIGINAL_BLOB_NAME] LIKE 'OPS_AUDIT_%'\nORDER BY [ORIGINAL_BLOB_NAME];"
+							},
+							"dataset": {
+								"referenceName": "SQLsourceRegisterTable_ds",
+								"type": "DatasetReference"
+							},
+							"firstRowOnly": false
+						}
+					},
+					{
+						"name": "CheckProcessArchiveBlobUpdateRegister",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "GetUnprocessedBlobFromRegister",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('GetUnprocessedBlobFromRegister').output.value",
+								"type": "Expression"
+							},
+							"isSequential": true,
+							"activities": [
+								{
+									"name": "GetBlopPath",
+									"type": "GetMetadata",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"dataset": {
+											"referenceName": "DelimitedText_sourcelandingraw_ds",
+											"type": "DatasetReference"
+										},
+										"fieldList": [
+											"itemName",
+											"exists"
+										],
+										"storeSettings": {
+											"type": "AzureBlobStorageReadSettings",
+											"recursive": true
+										},
+										"formatSettings": {
+											"type": "DelimitedTextReadSettings"
+										}
+									}
+								},
+								{
+									"name": "IsPhysicalFileExist",
+									"type": "IfCondition",
+									"dependsOn": [
+										{
+											"activity": "GetBlopPath",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"expression": {
+											"value": "@activity('GetBlopPath').output.exists",
+											"type": "Expression"
+										},
+										"ifFalseActivities": [
+											{
+												"name": "UpdateSourceRegisterNoFile",
+												"type": "SqlServerStoredProcedure",
+												"dependsOn": [
+													{
+														"activity": "DeleteFromScrubbedNoFile",
+														"dependencyConditions": [
+															"Completed"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"storedProcedureName": "[[log].[UpdateSourceRegisterNoFile]",
+													"storedProcedureParameters": {
+														"EtlUtcTag": {
+															"value": {
+																"value": "@variables('Etl_Utc_Tag')",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"FileName": {
+															"value": {
+																"value": "@{item().ORIGINAL_BLOB_NAME}",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"JobName": {
+															"value": {
+																"value": "@pipeline().Pipeline",
+																"type": "Expression"
+															},
+															"type": "String"
+														}
+													}
+												},
+												"linkedServiceName": {
+													"referenceName": "SQLdbConnection",
+													"type": "LinkedServiceReference"
+												}
+											},
+											{
+												"name": "DeleteFromScrubbedNoFile",
+												"type": "Delete",
+												"dependsOn": [],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"dataset": {
+														"referenceName": "DelimitedText_sourcelandingscrubbed_opsaudit_ds",
+														"type": "DatasetReference"
+													},
+													"enableLogging": false,
+													"storeSettings": {
+														"type": "AzureBlobStorageReadSettings",
+														"recursive": false
+													}
+												}
+											}
+										],
+										"ifTrueActivities": [
+											{
+												"name": "UpdateSourceRegisterRun",
+												"type": "SqlServerStoredProcedure",
+												"dependsOn": [],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"storedProcedureName": "[[log].[UpdateSourceRegisterRun]",
+													"storedProcedureParameters": {
+														"EtlUtcTag": {
+															"value": {
+																"value": "@variables('Etl_Utc_Tag')",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"FileName": {
+															"value": {
+																"value": "@{item().ORIGINAL_BLOB_NAME}",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"JobName": {
+															"value": {
+																"value": "@pipeline().Pipeline",
+																"type": "Expression"
+															},
+															"type": "String"
+														}
+													}
+												},
+												"linkedServiceName": {
+													"referenceName": "SQLdbConnection",
+													"type": "LinkedServiceReference"
+												}
+											},
+											{
+												"name": "UpdateSourceRegisterPassed",
+												"type": "SqlServerStoredProcedure",
+												"dependsOn": [
+													{
+														"activity": "DeleteFromScrubbed",
+														"dependencyConditions": [
+															"Completed"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"storedProcedureName": "[[log].[UpdateSourceRegisterPassed]",
+													"storedProcedureParameters": {
+														"EtlUtcTag": {
+															"value": {
+																"value": "@variables('Etl_Utc_Tag')",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"FileName": {
+															"value": {
+																"value": "@{item().ORIGINAL_BLOB_NAME}",
+																"type": "Expression"
+															},
+															"type": "String"
+														}
+													}
+												},
+												"linkedServiceName": {
+													"referenceName": "SQLdbConnection",
+													"type": "LinkedServiceReference"
+												}
+											},
+											{
+												"name": "CopyScrubbedToDataLake",
+												"type": "Copy",
+												"dependsOn": [
+													{
+														"activity": "LoadStagingDBtoRelationDB_spl_df",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "DelimitedTextSource",
+														"storeSettings": {
+															"type": "AzureBlobStorageReadSettings",
+															"recursive": false,
+															"enablePartitionDiscovery": false
+														},
+														"formatSettings": {
+															"type": "DelimitedTextReadSettings"
+														}
+													},
+													"sink": {
+														"type": "DelimitedTextSink",
+														"storeSettings": {
+															"type": "AzureBlobStorageWriteSettings"
+														},
+														"formatSettings": {
+															"type": "DelimitedTextWriteSettings",
+															"quoteAllText": true,
+															"fileExtension": ".txt"
+														}
+													},
+													"enableStaging": false
+												},
+												"inputs": [
+													{
+														"referenceName": "DelimitedText_sourcelandingscrubbed_opsaudit_ds",
+														"type": "DatasetReference"
+													}
+												],
+												"outputs": [
+													{
+														"referenceName": "DelimitedText_datalake_nonfinancial_ds",
+														"type": "DatasetReference"
+													}
+												]
+											},
+											{
+												"name": "LoadTxtToDBstaging_ds",
+												"type": "ExecuteDataFlow",
+												"dependsOn": [
+													{
+														"activity": "UpdateSourceRegisterRun",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"dataflow": {
+														"referenceName": "LoadTxtToDBstaging_opsaudit_df",
+														"type": "DataFlowReference"
+													},
+													"compute": {
+														"coreCount": 8,
+														"computeType": "General"
+													}
+												}
+											},
+											{
+												"name": "UpdateSourceRegisterFailedAbort_CopyToArchive",
+												"type": "SqlServerStoredProcedure",
+												"dependsOn": [
+													{
+														"activity": "CopyOriginalToArchive",
+														"dependencyConditions": [
+															"Failed"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"storedProcedureName": "[[log].[UpdateSourceRegisterFailedAbort]",
+													"storedProcedureParameters": {
+														"EtlUtcTag": {
+															"value": {
+																"value": "@variables('Etl_Utc_Tag')",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"FileName": {
+															"value": {
+																"value": "@{item().ORIGINAL_BLOB_NAME}",
+																"type": "Expression"
+															},
+															"type": "String"
+														}
+													}
+												},
+												"linkedServiceName": {
+													"referenceName": "SQLdbConnection",
+													"type": "LinkedServiceReference"
+												}
+											},
+											{
+												"name": "CopyOriginalToArchive",
+												"type": "Copy",
+												"dependsOn": [
+													{
+														"activity": "CopyScrubbedToDataLake",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "DelimitedTextSource",
+														"storeSettings": {
+															"type": "AzureBlobStorageReadSettings",
+															"recursive": false,
+															"enablePartitionDiscovery": false
+														},
+														"formatSettings": {
+															"type": "DelimitedTextReadSettings"
+														}
+													},
+													"sink": {
+														"type": "DelimitedTextSink",
+														"storeSettings": {
+															"type": "AzureBlobStorageWriteSettings"
+														},
+														"formatSettings": {
+															"type": "DelimitedTextWriteSettings",
+															"quoteAllText": true,
+															"fileExtension": ".txt"
+														}
+													},
+													"enableStaging": false
+												},
+												"inputs": [
+													{
+														"referenceName": "DelimitedText_sourcelandingraw_ds",
+														"type": "DatasetReference"
+													}
+												],
+												"outputs": [
+													{
+														"referenceName": "DelimitedText_sourcearchive_ds",
+														"type": "DatasetReference"
+													}
+												]
+											},
+											{
+												"name": "DeleteSourceRaw",
+												"type": "Delete",
+												"dependsOn": [
+													{
+														"activity": "CopyOriginalToArchive",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"dataset": {
+														"referenceName": "DelimitedText_sourcelandingraw_ds",
+														"type": "DatasetReference"
+													},
+													"enableLogging": false,
+													"storeSettings": {
+														"type": "AzureBlobStorageReadSettings",
+														"recursive": false
+													}
+												}
+											},
+											{
+												"name": "DeleteFromScrubbed",
+												"type": "Delete",
+												"dependsOn": [
+													{
+														"activity": "DeleteSourceRaw",
+														"dependencyConditions": [
+															"Completed"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"dataset": {
+														"referenceName": "DelimitedText_sourcelandingscrubbed_opsaudit_ds",
+														"type": "DatasetReference"
+													},
+													"enableLogging": false,
+													"storeSettings": {
+														"type": "AzureBlobStorageReadSettings",
+														"recursive": false
+													}
+												}
+											},
+											{
+												"name": "UpdateSourceRegisterFailedAbort_Staging",
+												"type": "SqlServerStoredProcedure",
+												"dependsOn": [
+													{
+														"activity": "LoadTxtToDBstaging_ds",
+														"dependencyConditions": [
+															"Failed"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"storedProcedureName": "[[log].[UpdateSourceRegisterFailedAbort]",
+													"storedProcedureParameters": {
+														"EtlUtcTag": {
+															"value": {
+																"value": "@variables('Etl_Utc_Tag')",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"FileName": {
+															"value": {
+																"value": "@{item().ORIGINAL_BLOB_NAME}",
+																"type": "Expression"
+															},
+															"type": "String"
+														}
+													}
+												},
+												"linkedServiceName": {
+													"referenceName": "SQLdbConnection",
+													"type": "LinkedServiceReference"
+												}
+											},
+											{
+												"name": "UpdateSourceRegisterFailedAbort_LoadDW",
+												"type": "SqlServerStoredProcedure",
+												"dependsOn": [
+													{
+														"activity": "LoadStagingDBtoRelationDB_spl_df",
+														"dependencyConditions": [
+															"Failed"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"storedProcedureName": "[[log].[UpdateSourceRegisterFailedAbort]",
+													"storedProcedureParameters": {
+														"EtlUtcTag": {
+															"value": {
+																"value": "@variables('Etl_Utc_Tag')",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"FileName": {
+															"value": {
+																"value": "@{item().ORIGINAL_BLOB_NAME}",
+																"type": "Expression"
+															},
+															"type": "String"
+														}
+													}
+												},
+												"linkedServiceName": {
+													"referenceName": "SQLdbConnection",
+													"type": "LinkedServiceReference"
+												}
+											},
+											{
+												"name": "UpdateSourceRegisterFailedAbort_CopyToDL",
+												"type": "SqlServerStoredProcedure",
+												"dependsOn": [
+													{
+														"activity": "CopyScrubbedToDataLake",
+														"dependencyConditions": [
+															"Failed"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"storedProcedureName": "[[log].[UpdateSourceRegisterFailedAbort]",
+													"storedProcedureParameters": {
+														"EtlUtcTag": {
+															"value": {
+																"value": "@variables('Etl_Utc_Tag')",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"FileName": {
+															"value": {
+																"value": "@{item().ORIGINAL_BLOB_NAME}",
+																"type": "Expression"
+															},
+															"type": "String"
+														}
+													}
+												},
+												"linkedServiceName": {
+													"referenceName": "SQLdbConnection",
+													"type": "LinkedServiceReference"
+												}
+											},
+											{
+												"name": "LoadStagingDBtoRelationDB_spl_df",
+												"type": "ExecutePipeline",
+												"dependsOn": [
+													{
+														"activity": "LoadTxtToDBstaging_ds",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"userProperties": [],
+												"typeProperties": {
+													"pipeline": {
+														"referenceName": "ProcessSourceBlob_opsaudit_spl",
+														"type": "PipelineReference"
+													},
+													"waitOnCompletion": true,
+													"parameters": {
+														"ProcessName": {
+															"value": "@pipeline().Pipeline",
+															"type": "Expression"
+														},
+														"FileName": {
+															"value": "@item().DATALAKE_FULL_PATHFILE",
+															"type": "Expression"
+														},
+														"Etl_Utc_Tag": {
+															"value": "@variables('Etl_Utc_Tag')",
+															"type": "Expression"
+														},
+														"OriginalBlobName": {
+															"value": "@item().ORIGINAL_BLOB_NAME",
+															"type": "Expression"
+														}
+													}
+												}
+											}
+										]
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "SetEtlUtcTag",
+						"type": "SetVariable",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "Etl_Utc_Tag",
+							"value": {
+								"value": "@utcnow()",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "SendPipelineMailSuccess",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "CheckProcessArchiveBlobUpdateRegister",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "PipelineSendMail_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"Parent_DataFactory": {
+									"value": "@pipeline().DataFactory",
+									"type": "Expression"
+								},
+								"Parent_Pipeline": {
+									"value": "@pipeline().Pipeline",
+									"type": "Expression"
+								},
+								"Success_Fail_Header": "***SUCCESS***",
+								"Etl_Utc_Tag": {
+									"value": "@variables('Etl_Utc_Tag')",
+									"type": "Expression"
+								},
+								"File_Pattern": "OPS_AUDIT_%"
+							}
+						}
+					},
+					{
+						"name": "SendPipelineMailFail",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "CheckProcessArchiveBlobUpdateRegister",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "PipelineSendMail_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"Parent_DataFactory": {
+									"value": "@pipeline().DataFactory",
+									"type": "Expression"
+								},
+								"Parent_Pipeline": {
+									"value": "@pipeline().Pipeline",
+									"type": "Expression"
+								},
+								"Success_Fail_Header": "!!!FAILED!!!",
+								"Etl_Utc_Tag": {
+									"value": "@variables('Etl_Utc_Tag')",
+									"type": "Expression"
+								},
+								"File_Pattern": "OPS_AUDIT_%"
+							}
+						}
+					}
+				],
+				"variables": {
+					"Success_Fail_Header": {
+						"type": "String",
+						"defaultValue": "***SUCCESS***"
+					},
+					"Etl_Utc_Tag": {
+						"type": "String",
+						"defaultValue": "2019-10-22"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/DelimitedText_sourcelandingscrubbed_opsaudit_ds')]",
+				"[concat(variables('factoryId'), '/dataflows/LoadTxtToDBstaging_opsaudit_df')]",
+				"[concat(variables('factoryId'), '/pipelines/ProcessSourceBlob_opsaudit_spl')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ProcessSourceBlob_opsaudit_spl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "LookupStagingOpsIncident",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": "SELECT count(*) Total_Error\n  FROM [staging].[OPS_Audit]\n  WHERE [Validation_Error] IS NOT NULL"
+							},
+							"dataset": {
+								"referenceName": "SQLstagingopsaudit_ds",
+								"type": "DatasetReference"
+							}
+						}
+					},
+					{
+						"name": "If Condition1",
+						"type": "IfCondition",
+						"dependsOn": [
+							{
+								"activity": "LookupStagingOpsIncident",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@greater(activity('LookupStagingOpsIncident').output.firstRow.TOTAL_ERROR,0)",
+								"type": "Expression"
+							},
+							"ifFalseActivities": [
+								{
+									"name": "LoadStagingDBtoRelationDB_opsaudit_df",
+									"type": "ExecuteDataFlow",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"dataflow": {
+											"referenceName": "LoadStagingDBtoRelationDB_opsaudit_df",
+											"type": "DataFlowReference",
+											"parameters": {
+												"ProcessName": {
+													"value": "'@{pipeline().parameters.ProcessName}'",
+													"type": "Expression"
+												},
+												"FileName": {
+													"value": "'@{pipeline().parameters.FileName}'",
+													"type": "Expression"
+												},
+												"Etl_Utc_Tag": {
+													"value": "'@{pipeline().parameters.Etl_Utc_Tag}'",
+													"type": "Expression"
+												}
+											}
+										},
+										"compute": {
+											"coreCount": 8,
+											"computeType": "General"
+										}
+									}
+								}
+							],
+							"ifTrueActivities": [
+								{
+									"name": "UpdateSourceRegisterTableAbort",
+									"type": "SqlServerStoredProcedure",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"storedProcedureName": "[[log].[UpdateSourceRegisterFailedAbort]",
+										"storedProcedureParameters": {
+											"EtlUtcTag": {
+												"value": {
+													"value": "@pipeline().parameters.Etl_Utc_Tag",
+													"type": "Expression"
+												},
+												"type": "String"
+											},
+											"FileName": {
+												"value": {
+													"value": "@pipeline().parameters.OriginalBlobName",
+													"type": "Expression"
+												},
+												"type": "String"
+											}
+										}
+									},
+									"linkedServiceName": {
+										"referenceName": "SQLdbConnection",
+										"type": "LinkedServiceReference"
+									}
+								}
+							]
+						}
+					}
+				],
+				"parameters": {
+					"ProcessName": {
+						"type": "string"
+					},
+					"FileName": {
+						"type": "string"
+					},
+					"Etl_Utc_Tag": {
+						"type": "string"
+					},
+					"OriginalBlobName": {
+						"type": "string"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/SQLstagingopsaudit_ds')]",
+				"[concat(variables('factoryId'), '/dataflows/LoadStagingDBtoRelationDB_opsaudit_df')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ProcessSourceBlob_opscontract_spl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "LookupStagingOpsIncident",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": "SELECT count(*) Total_Error\n  FROM [staging].[OPS_Contract]\n  WHERE [Validation_Error] IS NOT NULL"
+							},
+							"dataset": {
+								"referenceName": "SQLstagingopscontract_ds",
+								"type": "DatasetReference"
+							}
+						}
+					},
+					{
+						"name": "If Condition1",
+						"type": "IfCondition",
+						"dependsOn": [
+							{
+								"activity": "LookupStagingOpsIncident",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@greater(activity('LookupStagingOpsIncident').output.firstRow.TOTAL_ERROR,0)",
+								"type": "Expression"
+							},
+							"ifFalseActivities": [
+								{
+									"name": "LoadStagingDBtoRelationDB_opscontract_df",
+									"type": "ExecuteDataFlow",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"dataflow": {
+											"referenceName": "LoadStagingDBtoRelationDB_opscontract_df",
+											"type": "DataFlowReference",
+											"parameters": {
+												"ProcessName": {
+													"value": "'@{pipeline().parameters.ProcessName}'",
+													"type": "Expression"
+												},
+												"FileName": {
+													"value": "'@{pipeline().parameters.FileName}'",
+													"type": "Expression"
+												},
+												"Etl_Utc_Tag": {
+													"value": "'@{pipeline().parameters.Etl_Utc_Tag}'",
+													"type": "Expression"
+												}
+											}
+										},
+										"compute": {
+											"coreCount": 8,
+											"computeType": "General"
+										}
+									}
+								}
+							],
+							"ifTrueActivities": [
+								{
+									"name": "UpdateSourceRegisterTableAbort",
+									"type": "SqlServerStoredProcedure",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"storedProcedureName": "[[log].[UpdateSourceRegisterFailedAbort]",
+										"storedProcedureParameters": {
+											"EtlUtcTag": {
+												"value": {
+													"value": "@pipeline().parameters.Etl_Utc_Tag",
+													"type": "Expression"
+												},
+												"type": "String"
+											},
+											"FileName": {
+												"value": {
+													"value": "@pipeline().parameters.OriginalBlobName",
+													"type": "Expression"
+												},
+												"type": "String"
+											}
+										}
+									},
+									"linkedServiceName": {
+										"referenceName": "SQLdbConnection",
+										"type": "LinkedServiceReference"
+									}
+								}
+							]
+						}
+					}
+				],
+				"parameters": {
+					"ProcessName": {
+						"type": "string"
+					},
+					"FileName": {
+						"type": "string"
+					},
+					"Etl_Utc_Tag": {
+						"type": "string"
+					},
+					"OriginalBlobName": {
+						"type": "string"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ProcessSourceBlob_opsharvestrecon_spl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "LookupStagingOpsIncident",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": "SELECT count(*) Total_Error\n  FROM [staging].[OPS_Harvest_Reconciliation]\n  WHERE [Validation_Error] IS NOT NULL"
+							},
+							"dataset": {
+								"referenceName": "SQLstagingopsharvestrecon_ds",
+								"type": "DatasetReference"
+							}
+						}
+					},
+					{
+						"name": "If Condition1",
+						"type": "IfCondition",
+						"dependsOn": [
+							{
+								"activity": "LookupStagingOpsIncident",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@greater(activity('LookupStagingOpsIncident').output.firstRow.TOTAL_ERROR,0)",
+								"type": "Expression"
+							},
+							"ifFalseActivities": [
+								{
+									"name": "LoadStagingDBtoRelationDB_opsharvestrecon_df",
+									"type": "ExecuteDataFlow",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"dataflow": {
+											"referenceName": "LoadStagingDBtoRelationDB_opsharvestrecon_df",
+											"type": "DataFlowReference",
+											"parameters": {
+												"ProcessName": {
+													"value": "'@{pipeline().parameters.ProcessName}'",
+													"type": "Expression"
+												},
+												"FileName": {
+													"value": "'@{pipeline().parameters.FileName}'",
+													"type": "Expression"
+												},
+												"Etl_Utc_Tag": {
+													"value": "'@{pipeline().parameters.Etl_Utc_Tag}'",
+													"type": "Expression"
+												}
+											}
+										},
+										"compute": {
+											"coreCount": 8,
+											"computeType": "General"
+										}
+									}
+								}
+							],
+							"ifTrueActivities": [
+								{
+									"name": "UpdateSourceRegisterTableAbort",
+									"type": "SqlServerStoredProcedure",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"storedProcedureName": "[[log].[UpdateSourceRegisterFailedAbort]",
+										"storedProcedureParameters": {
+											"EtlUtcTag": {
+												"value": {
+													"value": "@pipeline().parameters.Etl_Utc_Tag",
+													"type": "Expression"
+												},
+												"type": "String"
+											},
+											"FileName": {
+												"value": {
+													"value": "@pipeline().parameters.OriginalBlobName",
+													"type": "Expression"
+												},
+												"type": "String"
+											}
+										}
+									},
+									"linkedServiceName": {
+										"referenceName": "SQLdbConnection",
+										"type": "LinkedServiceReference"
+									}
+								}
+							]
+						}
+					}
+				],
+				"parameters": {
+					"ProcessName": {
+						"type": "string"
+					},
+					"FileName": {
+						"type": "string"
+					},
+					"Etl_Utc_Tag": {
+						"type": "string"
+					},
+					"OriginalBlobName": {
+						"type": "string"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ProcessSourceBlob_opsoperation_spl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "LookupStagingOpsIncident",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": "SELECT count(*) Total_Error\n  FROM [staging].[OPS_Operation]\n  WHERE [Validation_Error] IS NOT NULL"
+							},
+							"dataset": {
+								"referenceName": "SQLstagingopsoperation_ds",
+								"type": "DatasetReference"
+							}
+						}
+					},
+					{
+						"name": "ProcessStagingToRelational",
+						"type": "IfCondition",
+						"dependsOn": [
+							{
+								"activity": "LookupStagingOpsIncident",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@greater(activity('LookupStagingOpsIncident').output.firstRow.TOTAL_ERROR,0)",
+								"type": "Expression"
+							},
+							"ifFalseActivities": [
+								{
+									"name": "LoadStagingDBtoRelationDB_opsoperation_df",
+									"type": "ExecuteDataFlow",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"dataflow": {
+											"referenceName": "LoadStagingDBtoRelationDB_opsoperation_df",
+											"type": "DataFlowReference",
+											"parameters": {
+												"ProcessName": {
+													"value": "'@{pipeline().parameters.ProcessName}'",
+													"type": "Expression"
+												},
+												"FileName": {
+													"value": "'@{pipeline().parameters.FileName}'",
+													"type": "Expression"
+												},
+												"Etl_Utc_Tag": {
+													"value": "'@{pipeline().parameters.Etl_Utc_Tag}'",
+													"type": "Expression"
+												}
+											}
+										},
+										"compute": {
+											"coreCount": 8,
+											"computeType": "General"
+										}
+									}
+								}
+							],
+							"ifTrueActivities": [
+								{
+									"name": "UpdateSourceRegisterTableAbort",
+									"type": "SqlServerStoredProcedure",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"storedProcedureName": "[[log].[UpdateSourceRegisterFailedAbort]",
+										"storedProcedureParameters": {
+											"EtlUtcTag": {
+												"value": {
+													"value": "@pipeline().parameters.Etl_Utc_Tag",
+													"type": "Expression"
+												},
+												"type": "String"
+											},
+											"FileName": {
+												"value": {
+													"value": "@pipeline().parameters.OriginalBlobName",
+													"type": "Expression"
+												},
+												"type": "String"
+											}
+										}
+									},
+									"linkedServiceName": {
+										"referenceName": "SQLdbConnection",
+										"type": "LinkedServiceReference"
+									}
+								}
+							]
+						}
+					}
+				],
+				"parameters": {
+					"ProcessName": {
+						"type": "string"
+					},
+					"FileName": {
+						"type": "string"
+					},
+					"Etl_Utc_Tag": {
+						"type": "string"
+					},
+					"OriginalBlobName": {
+						"type": "string"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ProcessSourceBlob_opsstrategicdeliverable_spl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "LookupStagingOpsIncident",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": "SELECT count(*) Total_Error\n  FROM [staging].[OPS_Strategic_Project_Deliverable]\n  WHERE [Validation_Error] IS NOT NULL"
+							},
+							"dataset": {
+								"referenceName": "SQLstagingopsstrategicdeliverable_ds",
+								"type": "DatasetReference"
+							}
+						}
+					},
+					{
+						"name": "If Condition1",
+						"type": "IfCondition",
+						"dependsOn": [
+							{
+								"activity": "LookupStagingOpsIncident",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@greater(activity('LookupStagingOpsIncident').output.firstRow.TOTAL_ERROR,0)",
+								"type": "Expression"
+							},
+							"ifFalseActivities": [
+								{
+									"name": "LoadStagingDBtoRelationDB_opsstrategicdeliverable_df",
+									"type": "ExecuteDataFlow",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"dataflow": {
+											"referenceName": "LoadStagingDBtoRelationDB_opsstrategicdeliverable_df",
+											"type": "DataFlowReference",
+											"parameters": {
+												"ProcessName": {
+													"value": "'@{pipeline().parameters.ProcessName}'",
+													"type": "Expression"
+												},
+												"FileName": {
+													"value": "'@{pipeline().parameters.FileName}'",
+													"type": "Expression"
+												},
+												"Etl_Utc_Tag": {
+													"value": "'@{pipeline().parameters.Etl_Utc_Tag}'",
+													"type": "Expression"
+												}
+											}
+										},
+										"compute": {
+											"coreCount": 8,
+											"computeType": "General"
+										}
+									}
+								}
+							],
+							"ifTrueActivities": [
+								{
+									"name": "UpdateSourceRegisterTableAbort",
+									"type": "SqlServerStoredProcedure",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"storedProcedureName": "[[log].[UpdateSourceRegisterFailedAbort]",
+										"storedProcedureParameters": {
+											"EtlUtcTag": {
+												"value": {
+													"value": "@pipeline().parameters.Etl_Utc_Tag",
+													"type": "Expression"
+												},
+												"type": "String"
+											},
+											"FileName": {
+												"value": {
+													"value": "@pipeline().parameters.OriginalBlobName",
+													"type": "Expression"
+												},
+												"type": "String"
+											}
+										}
+									},
+									"linkedServiceName": {
+										"referenceName": "SQLdbConnection",
+										"type": "LinkedServiceReference"
+									}
+								}
+							]
+						}
+					}
+				],
+				"parameters": {
+					"ProcessName": {
+						"type": "string"
+					},
+					"FileName": {
+						"type": "string"
+					},
+					"Etl_Utc_Tag": {
+						"type": "string"
+					},
+					"OriginalBlobName": {
+						"type": "string"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ProcessSourceBlob_opsstrategicproject_spl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "LookupStagingOpsIncident",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": "SELECT count(*) Total_Error\n  FROM [staging].[OPS_Strategic_Project]\n  WHERE [Validation_Error] IS NOT NULL"
+							},
+							"dataset": {
+								"referenceName": "SQLstagingopsstrategicproject_ds",
+								"type": "DatasetReference"
+							}
+						}
+					},
+					{
+						"name": "If Condition1",
+						"type": "IfCondition",
+						"dependsOn": [
+							{
+								"activity": "LookupStagingOpsIncident",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@greater(activity('LookupStagingOpsIncident').output.firstRow.TOTAL_ERROR,0)",
+								"type": "Expression"
+							},
+							"ifFalseActivities": [
+								{
+									"name": "LoadStagingDBtoRelationDB_opsstrategicproject_df",
+									"type": "ExecuteDataFlow",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"dataflow": {
+											"referenceName": "LoadStagingDBtoRelationDB_opsstrategicproject_df",
+											"type": "DataFlowReference",
+											"parameters": {
+												"ProcessName": {
+													"value": "'@{pipeline().parameters.ProcessName}'",
+													"type": "Expression"
+												},
+												"FileName": {
+													"value": "'@{pipeline().parameters.FileName}'",
+													"type": "Expression"
+												},
+												"Etl_Utc_Tag": {
+													"value": "'@{pipeline().parameters.Etl_Utc_Tag}'",
+													"type": "Expression"
+												}
+											}
+										},
+										"compute": {
+											"coreCount": 8,
+											"computeType": "General"
+										}
+									}
+								}
+							],
+							"ifTrueActivities": [
+								{
+									"name": "UpdateSourceRegisterTableAbort",
+									"type": "SqlServerStoredProcedure",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"storedProcedureName": "[[log].[UpdateSourceRegisterFailedAbort]",
+										"storedProcedureParameters": {
+											"EtlUtcTag": {
+												"value": {
+													"value": "@pipeline().parameters.Etl_Utc_Tag",
+													"type": "Expression"
+												},
+												"type": "String"
+											},
+											"FileName": {
+												"value": {
+													"value": "@pipeline().parameters.OriginalBlobName",
+													"type": "Expression"
+												},
+												"type": "String"
+											}
+										}
+									},
+									"linkedServiceName": {
+										"referenceName": "SQLdbConnection",
+										"type": "LinkedServiceReference"
+									}
+								}
+							]
+						}
+					}
+				],
+				"parameters": {
+					"ProcessName": {
+						"type": "string"
+					},
+					"FileName": {
+						"type": "string"
+					},
+					"Etl_Utc_Tag": {
+						"type": "string"
+					},
+					"OriginalBlobName": {
+						"type": "string"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ProcessSourceBlob_opstimbersales_spl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "LookupStagingOpsIncident",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": "SELECT count(*) Total_Error\n  FROM [staging].[OPS_Timber_Sales]\n  WHERE [Validation_Error] IS NOT NULL"
+							},
+							"dataset": {
+								"referenceName": "SQLstagingopstimbersales_ds",
+								"type": "DatasetReference"
+							}
+						}
+					},
+					{
+						"name": "If Condition1",
+						"type": "IfCondition",
+						"dependsOn": [
+							{
+								"activity": "LookupStagingOpsIncident",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@greater(activity('LookupStagingOpsIncident').output.firstRow.TOTAL_ERROR,0)",
+								"type": "Expression"
+							},
+							"ifFalseActivities": [
+								{
+									"name": "LoadStagingDBtoRelationDB_opstimbersales_df",
+									"type": "ExecuteDataFlow",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"dataflow": {
+											"referenceName": "LoadStagingDBtoRelationDB_opstimbersales_df",
+											"type": "DataFlowReference",
+											"parameters": {
+												"ProcessName": {
+													"value": "'@{pipeline().parameters.ProcessName}'",
+													"type": "Expression"
+												},
+												"FileName": {
+													"value": "'@{pipeline().parameters.FileName}'",
+													"type": "Expression"
+												},
+												"Etl_Utc_Tag": {
+													"value": "'@{pipeline().parameters.Etl_Utc_Tag}'",
+													"type": "Expression"
+												}
+											}
+										},
+										"compute": {
+											"coreCount": 8,
+											"computeType": "General"
+										}
+									}
+								}
+							],
+							"ifTrueActivities": [
+								{
+									"name": "UpdateSourceRegisterTableAbort",
+									"type": "SqlServerStoredProcedure",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"storedProcedureName": "[[log].[UpdateSourceRegisterFailedAbort]",
+										"storedProcedureParameters": {
+											"EtlUtcTag": {
+												"value": {
+													"value": "@pipeline().parameters.Etl_Utc_Tag",
+													"type": "Expression"
+												},
+												"type": "String"
+											},
+											"FileName": {
+												"value": {
+													"value": "@pipeline().parameters.OriginalBlobName",
+													"type": "Expression"
+												},
+												"type": "String"
+											}
+										}
+									},
+									"linkedServiceName": {
+										"referenceName": "SQLdbConnection",
+										"type": "LinkedServiceReference"
+									}
+								}
+							]
+						}
+					}
+				],
+				"parameters": {
+					"ProcessName": {
+						"type": "string"
+					},
+					"FileName": {
+						"type": "string"
+					},
+					"Etl_Utc_Tag": {
+						"type": "string"
+					},
+					"OriginalBlobName": {
+						"type": "string"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DelimitedText_sourcelandingscrubbed_opsaudit_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "BlobStore_nfdwhstaging",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": {
+							"value": "@{item().TARGET_BLOB_NAME}",
+							"type": "Expression"
+						},
+						"container": "sourcelandingscrubbed"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": [
+					{
+						"name": "Asset_ID",
+						"type": "String"
+					},
+					{
+						"name": "Fund_ID",
+						"type": "String"
+					},
+					{
+						"name": "Audit_ID",
+						"type": "String"
+					},
+					{
+						"name": "Reporting_Period",
+						"type": "String"
+					},
+					{
+						"name": "Certification_Audit_Type_Code",
+						"type": "String"
+					},
+					{
+						"name": "Corrective_Action_Identified",
+						"type": "String"
+					},
+					{
+						"name": "Audit_Date",
+						"type": "String"
+					},
+					{
+						"name": "Audit_Classification",
+						"type": "String"
+					},
+					{
+						"name": "Corrective_Action_Due_Date",
+						"type": "String"
+					},
+					{
+						"name": "Date_Action_Closed",
+						"type": "String"
+					}
+				]
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SQLrelationopsaudit_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "Asset_ID",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Fund_ID",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Audit_ID",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "Reporting_Period",
+						"type": "date"
+					},
+					{
+						"name": "Certification_Audit_Type_Code",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Corrective_Action_Identified",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Audit_Date",
+						"type": "date"
+					},
+					{
+						"name": "Audit_Classification",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Corrective_Action_Due_Date",
+						"type": "date"
+					},
+					{
+						"name": "Date_Action_Closed",
+						"type": "date"
+					},
+					{
+						"name": "Insert_Datetime",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					},
+					{
+						"name": "Update_Datetime",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					},
+					{
+						"name": "Process_Name",
+						"type": "nvarchar"
+					}
+				],
+				"typeProperties": {
+					"schema": "relational",
+					"table": "OPS_AUDIT"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SQLrelationopsaudittype_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "Certification_Audit_Type_Code",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Certification_Audit_Type",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Active_YN",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Insert_Datetime",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					},
+					{
+						"name": "Update_Datetime",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					},
+					{
+						"name": "Process_Name",
+						"type": "nvarchar"
+					}
+				],
+				"typeProperties": {
+					"schema": "relational",
+					"table": "OPS_AUDIT_TYPE"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SQLstagingopsaudit_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "Asset_ID",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Fund_ID",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Audit_ID",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Reporting_Period",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Certification_Audit_Type_Code",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Corrective_Action_Identified",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Audit_Date",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Audit_Classification",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Corrective_Action_Due_Date",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Date_Action_Closed",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Validation_Error",
+						"type": "nvarchar"
+					}
+				],
+				"typeProperties": {
+					"schema": "staging",
+					"table": "OPS_AUDIT"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadStagingDBtoRelationDB_opsaudit_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "SQLstagingopsaudit_ds",
+								"type": "DatasetReference"
+							},
+							"name": "StagingDB"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLrelationopsaudit_ds",
+								"type": "DatasetReference"
+							},
+							"name": "RelationalAudit"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLrelationopsaudit_ds",
+								"type": "DatasetReference"
+							},
+							"name": "UpserttRow"
+						}
+					],
+					"transformations": [
+						{
+							"name": "SelectStagingData"
+						},
+						{
+							"name": "AddAuditColumns"
+						},
+						{
+							"name": "GenerateRelationalChecksum"
+						},
+						{
+							"name": "SelectRelationalData"
+						},
+						{
+							"name": "GenerateStagingChecksum"
+						},
+						{
+							"name": "CompareKeys"
+						},
+						{
+							"name": "UnionNewAndExisting"
+						},
+						{
+							"name": "SelectNewRecordData"
+						},
+						{
+							"name": "AlterRowUpsert"
+						},
+						{
+							"name": "ConvertDatesAndID"
+						},
+						{
+							"name": "NewAndExistingAudit"
+						},
+						{
+							"name": "ChangedAddAuditData"
+						},
+						{
+							"name": "SelectChangeRecord"
+						}
+					],
+					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tAudit_ID as string,\n\t\tReporting_Period as string,\n\t\tCertification_Audit_Type_Code as string,\n\t\tCorrective_Action_Identified as string,\n\t\tAudit_Date as string,\n\t\tAudit_Classification as string,\n\t\tCorrective_Action_Due_Date as string,\n\t\tDate_Action_Closed as string,\n\t\tValidation_Error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> StagingDB\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tAudit_ID as integer,\n\t\tReporting_Period as date,\n\t\tCertification_Audit_Type_Code as string,\n\t\tCorrective_Action_Identified as string,\n\t\tAudit_Date as date,\n\t\tAudit_Classification as string,\n\t\tCorrective_Action_Due_Date as date,\n\t\tDate_Action_Closed as date,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> RelationalAudit\nGenerateStagingChecksum select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tAudit_ID,\n\t\tReporting_Period,\n\t\tCertification_Audit_Type_Code,\n\t\tCorrective_Action_Identified,\n\t\tAudit_Date,\n\t\tAudit_Classification,\n\t\tCorrective_Action_Due_Date,\n\t\tDate_Action_Closed,\n\t\tStagingChecksum\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectStagingData\nSelectNewRecordData derive(insert_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> AddAuditColumns\nRelationalAudit derive(RelationalChecksum = sha2(256, Reporting_Period,Certification_Audit_Type_Code,Corrective_Action_Identified,Audit_Date,Audit_Classification,Corrective_Action_Due_Date,Date_Action_Closed)) ~> GenerateRelationalChecksum\nGenerateRelationalChecksum select(mapColumn(\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_Fund_ID = Fund_ID,\n\t\tRelation_Audit_ID = Audit_ID,\n\t\tRelation_Reporting_Period = Reporting_Period,\n\t\tRelation_Certification_Audit_Type_Code = Certification_Audit_Type_Code,\n\t\tRelation_Corrective_Action_Identified = Corrective_Action_Identified,\n\t\tRelation_Audit_Date = Audit_Date,\n\t\tRelation_Audit_Classification = Audit_Classification,\n\t\tRelation_Corrective_Action_Due_Date = Corrective_Action_Due_Date,\n\t\tRelation_Date_Action_Closed = Date_Action_Closed,\n\t\tRelation_Insert_Datetime = Insert_Datetime,\n\t\tRelation_Update_Datetime = Update_Datetime,\n\t\tRelation_Process_Name = Process_Name,\n\t\tRelation_RelationalChecksum = RelationalChecksum\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRelationalData\nConvertDatesAndID derive(StagingChecksum = sha2(256, Reporting_Period,Certification_Audit_Type_Code,Corrective_Action_Identified,Audit_Date,Audit_Classification,Corrective_Action_Due_Date,Date_Action_Closed)) ~> GenerateStagingChecksum\nSelectStagingData, SelectRelationalData lookup(Asset_ID == Relation_Asset_ID\n\t&& Fund_ID == Relation_Fund_ID\n\t&& Audit_ID == Relation_Audit_ID,\n\tmultiple: true,\n\tbroadcast: 'none')~> CompareKeys\nAddAuditColumns, SelectChangeRecord union(byName: true)~> UnionNewAndExisting\nNewAndExistingAudit@NewAudit select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tAudit_ID,\n\t\tReporting_Period,\n\t\tCertification_Audit_Type_Code,\n\t\tCorrective_Action_Identified,\n\t\tAudit_Date,\n\t\tAudit_Classification,\n\t\tCorrective_Action_Due_Date,\n\t\tDate_Action_Closed\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectNewRecordData\nUnionNewAndExisting alterRow(upsertIf(true())) ~> AlterRowUpsert\nStagingDB derive(Reporting_Period = toDate(Reporting_Period, \"dd/MM/yyyy\"),\n\t\tAudit_ID = toInteger(Audit_ID),\n\t\tAudit_Date = toDate(Audit_Date, \"dd/MM/yyyy\"),\n\t\tCorrective_Action_Due_Date = toDate(Corrective_Action_Due_Date, \"dd/MM/yyyy\"),\n\t\tDate_Action_Closed = toDate(Date_Action_Closed, \"dd/MM/yyyy\")) ~> ConvertDatesAndID\nCompareKeys split(isNull(Relation_RelationalChecksum),\n\tStagingChecksum != Relation_RelationalChecksum,\n\tdisjoint: false) ~> NewAndExistingAudit@(NewAudit, ChangedAudit, ExistingNoChange)\nNewAndExistingAudit@ChangedAudit derive(update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> ChangedAddAuditData\nChangedAddAuditData select(mapColumn(\n\t\tAsset_ID = Relation_Asset_ID,\n\t\tFund_ID = Relation_Fund_ID,\n\t\tAudit_ID = Relation_Audit_ID,\n\t\tReporting_Period,\n\t\tCertification_Audit_Type_Code,\n\t\tCorrective_Action_Identified,\n\t\tAudit_Date,\n\t\tAudit_Classification,\n\t\tCorrective_Action_Due_Date,\n\t\tDate_Action_Closed,\n\t\tinsert_datetime = Relation_Insert_Datetime,\n\t\tupdate_datetime,\n\t\tprocess_name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectChangeRecord\nAlterRowUpsert sink(input(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tAudit_ID as integer,\n\t\tReporting_Period as date,\n\t\tCertification_Audit_Type_Code as string,\n\t\tCorrective_Action_Identified as string,\n\t\tAudit_Date as date,\n\t\tAudit_Classification as string,\n\t\tCorrective_Action_Due_Date as date,\n\t\tDate_Action_Closed as date,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:true,\n\tkeys:['Asset_ID','Fund_ID','Audit_ID'],\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tAudit_ID,\n\t\tReporting_Period,\n\t\tCertification_Audit_Type_Code,\n\t\tCorrective_Action_Identified,\n\t\tAudit_Date,\n\t\tAudit_Classification,\n\t\tCorrective_Action_Due_Date,\n\t\tDate_Action_Closed,\n\t\tInsert_Datetime = insert_datetime,\n\t\tUpdate_Datetime = update_datetime,\n\t\tProcess_Name = process_name\n\t)) ~> UpserttRow"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/SQLstagingopsaudit_ds')]",
+				"[concat(variables('factoryId'), '/datasets/SQLrelationopsaudit_ds')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadTxtToDBstaging_opsaudit_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "DelimitedText_sourcelandingscrubbed_opsaudit_ds",
+								"type": "DatasetReference"
+							},
+							"name": "LoadFromScrubbedToStagingDB"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLrelationasset_ds",
+								"type": "DatasetReference"
+							},
+							"name": "RelationalAsset"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLrelationopsaudittype_ds",
+								"type": "DatasetReference"
+							},
+							"name": "RelationalAuditType"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLstagingopsaudit_ds",
+								"type": "DatasetReference"
+							},
+							"name": "StagingDB"
+						}
+					],
+					"transformations": [
+						{
+							"name": "LookupRelationAsset"
+						},
+						{
+							"name": "SelectValidRecord"
+						},
+						{
+							"name": "ValidatedDateAndNumber"
+						},
+						{
+							"name": "ConvertDateAndNumber"
+						},
+						{
+							"name": "SelectInvalidDateOrNumber"
+						},
+						{
+							"name": "InvalidDateOrNumberErrormessage"
+						},
+						{
+							"name": "SelectRelationalAsset"
+						},
+						{
+							"name": "ValidatedAsset"
+						},
+						{
+							"name": "InvalidFundOrAsseterrormessage"
+						},
+						{
+							"name": "SelectInvalidFundOrAsset"
+						},
+						{
+							"name": "UnionAll"
+						},
+						{
+							"name": "LookupRelationalAuditType"
+						},
+						{
+							"name": "SelectRelationalIncidentType"
+						},
+						{
+							"name": "IsValidAuditType"
+						},
+						{
+							"name": "InvalidAuditTypeErrormessage"
+						},
+						{
+							"name": "SelectInvalidAuditType"
+						}
+					],
+					"script": "source(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tAudit_ID as string,\n\t\tReporting_Period as string,\n\t\tCertification_Audit_Type_Code as string,\n\t\tCorrective_Action_Identified as string,\n\t\tAudit_Date as string,\n\t\tAudit_Classification as string,\n\t\tCorrective_Action_Due_Date as string,\n\t\tDate_Action_Closed as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> LoadFromScrubbedToStagingDB\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT [Asset_ID],[Fund_ID]\\nFROM [relational].[Asset]\\nWHERE record_deleted_flag = 0',\n\tformat: 'query') ~> RelationalAsset\nsource(output(\n\t\tCertification_Audit_Type_Code as string,\n\t\tCertification_Audit_Type as string,\n\t\tActive_YN as string,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> RelationalAuditType\nValidatedDateAndNumber@ValidDateAndNumber, SelectRelationalAsset lookup(Asset_ID == Relation_Asset_ID\n\t&& Fund_ID == Relation_Fund_ID,\n\tmultiple: true,\n\tbroadcast: 'none')~> LookupRelationAsset\nIsValidAuditType@ValidAuditType select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tAudit_ID,\n\t\tReporting_Period,\n\t\tCertification_Audit_Type_Code,\n\t\tCorrective_Action_Identified,\n\t\tAudit_Date,\n\t\tAudit_Classification,\n\t\tCorrective_Action_Due_Date,\n\t\tDate_Action_Closed\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectValidRecord\nConvertDateAndNumber split(not(isNull(Derived_Audit_ID)) && not(isNull(Derived_Reporting_Period)) && \r\niif(not(isNull(Audit_Date)),not(isNull(Derived_Audit_ID)),true()) && \r\niif(not(isNull(Corrective_Action_Due_Date)),not(isNull(Derived_Corrective_Action_Due_Date)),true()) && \r\niif(not(isNull(Date_Action_Closed)),not(isNull(Derived_Date_Action_Closed)),true()),\n\tdisjoint: false) ~> ValidatedDateAndNumber@(ValidDateAndNumber, InvalidDateOrNumber)\nLoadFromScrubbedToStagingDB derive(Derived_Reporting_Period = toDate(Reporting_Period,\"dd/MM/yyyy\"),\n\t\tDerived_Audit_ID = toInteger(Audit_ID),\n\t\tDerived_Audit_Date = toDate(Audit_Date,\"dd/MM/yyyy\"),\n\t\tDerived_Corrective_Action_Due_Date = toDate(Corrective_Action_Due_Date,\"dd/MM/yyyy\"),\n\t\tDerived_Date_Action_Closed = toDate(Date_Action_Closed,\"dd/MM/yyyy\")) ~> ConvertDateAndNumber\nInvalidDateOrNumberErrormessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tAudit_ID,\n\t\tReporting_Period,\n\t\tCertification_Audit_Type_Code,\n\t\tCorrective_Action_Identified,\n\t\tAudit_Date,\n\t\tAudit_Classification,\n\t\tCorrective_Action_Due_Date,\n\t\tDate_Action_Closed,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidDateOrNumber\nValidatedDateAndNumber@InvalidDateOrNumber derive(Validation_Error = toString(\"Invalid Reporting Period / Audit ID / Other dates fileds in source file\")) ~> InvalidDateOrNumberErrormessage\nRelationalAsset select(mapColumn(\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_Fund_ID = Fund_ID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRelationalAsset\nLookupRelationAsset split(not(isNull(Relation_Asset_ID)),\n\tdisjoint: false) ~> ValidatedAsset@(ValidFundAndAsset, InvalidFundOrAsset)\nValidatedAsset@InvalidFundOrAsset derive(Validation_Error = toString(\"Invalid Fund Or Asset\")) ~> InvalidFundOrAsseterrormessage\nInvalidFundOrAsseterrormessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tAudit_ID,\n\t\tReporting_Period,\n\t\tCertification_Audit_Type_Code,\n\t\tCorrective_Action_Identified,\n\t\tAudit_Date,\n\t\tAudit_Classification,\n\t\tCorrective_Action_Due_Date,\n\t\tDate_Action_Closed,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidFundOrAsset\nSelectValidRecord, SelectInvalidDateOrNumber, SelectInvalidFundOrAsset, SelectInvalidAuditType union(byName: true)~> UnionAll\nValidatedAsset@ValidFundAndAsset, SelectRelationalIncidentType lookup(Certification_Audit_Type_Code == Relation_Certification_Audit_Type_Code,\n\tmultiple: true,\n\tbroadcast: 'none')~> LookupRelationalAuditType\nRelationalAuditType select(mapColumn(\n\t\tRelation_Certification_Audit_Type_Code = Certification_Audit_Type_Code\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRelationalIncidentType\nLookupRelationalAuditType split(not(isNull(Relation_Certification_Audit_Type_Code)),\n\tdisjoint: false) ~> IsValidAuditType@(ValidAuditType, InvalidAuditType)\nIsValidAuditType@InvalidAuditType derive(Validation_Error = toString(\"Invalid Certification Audit Type Code\")) ~> InvalidAuditTypeErrormessage\nInvalidAuditTypeErrormessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tAudit_ID,\n\t\tReporting_Period,\n\t\tCertification_Audit_Type_Code,\n\t\tCorrective_Action_Identified,\n\t\tAudit_Date,\n\t\tAudit_Classification,\n\t\tCorrective_Action_Due_Date,\n\t\tDate_Action_Closed,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidAuditType\nUnionAll sink(input(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tAudit_ID as string,\n\t\tReporting_Period as string,\n\t\tCertification_Audit_Type_Code as string,\n\t\tCorrective_Action_Identified as string,\n\t\tAudit_Date as string,\n\t\tAudit_Classification as string,\n\t\tCorrective_Action_Due_Date as string,\n\t\tDate_Action_Closed as string,\n\t\tValidation_Error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tAudit_ID,\n\t\tReporting_Period,\n\t\tCertification_Audit_Type_Code,\n\t\tCorrective_Action_Identified,\n\t\tAudit_Date,\n\t\tAudit_Classification,\n\t\tCorrective_Action_Due_Date,\n\t\tDate_Action_Closed,\n\t\tValidation_Error\n\t)) ~> StagingDB"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/DelimitedText_sourcelandingscrubbed_opsaudit_ds')]",
+				"[concat(variables('factoryId'), '/datasets/SQLrelationopsaudittype_ds')]",
+				"[concat(variables('factoryId'), '/datasets/SQLstagingopsaudit_ds')]"
+			]
+		}
+	]
+}
