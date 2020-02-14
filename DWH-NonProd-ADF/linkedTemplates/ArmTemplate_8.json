@@ -13,45 +13,6 @@
 	},
 	"resources": [
 		{
-			"name": "[concat(parameters('factoryName'), '/LoadStagingDBtoRelationDB_fctrefasset_delete_df')]",
-			"type": "Microsoft.DataFactory/factories/dataflows",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"type": "MappingDataFlow",
-				"typeProperties": {
-					"sources": [
-						{
-							"dataset": {
-								"referenceName": "SQLstagingfctrefasset_ds",
-								"type": "DatasetReference"
-							},
-							"name": "StagingDB",
-							"typeProperties": {}
-						}
-					],
-					"sinks": [
-						{
-							"dataset": {
-								"referenceName": "SQLrelationfctrefasset_ds",
-								"type": "DatasetReference"
-							},
-							"name": "DeleteRecords"
-						}
-					],
-					"transformations": [
-						{
-							"name": "SelectOutput"
-						},
-						{
-							"name": "AlterRowDelete"
-						}
-					],
-					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tVersion_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT \\n      [Version_name]\\nFROM [staging].[Forecast_Asset_reference]',\n\tformat: 'query') ~> StagingDB\nStagingDB select(mapColumn(\n\t\tVersion_name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectOutput\nSelectOutput alterRow(deleteIf(not(isNull(Version_name)))) ~> AlterRowDelete\nAlterRowDelete sink(input(\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tDatabaseName as string,\n\t\tGroup_ID as integer,\n\t\tAttribute_id as integer,\n\t\tOrigin_id as integer,\n\t\tAsset_Offset as integer,\n\t\tVersion_name as string,\n\t\tIsProcessed as integer,\n\t\tstart_datetime as timestamp,\n\t\tend_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:true,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:false,\n\tkeys:['Version_name'],\n\tformat: 'table',\n\tmapColumn(\n\t\tVersion_name\n\t)) ~> DeleteRecords"
-				}
-			},
-			"dependsOn": []
-		},
-		{
 			"name": "[concat(parameters('factoryName'), '/LoadStagingDBtoRelationDB_fctrefasset_insert_df')]",
 			"type": "Microsoft.DataFactory/factories/dataflows",
 			"apiVersion": "2018-06-01",
@@ -211,9 +172,12 @@
 						},
 						{
 							"name": "UpdateSelectForExpire"
+						},
+						{
+							"name": "GetCurrentRecord"
 						}
 					],
-					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tForex_Date as timestamp,\n\t\tBase_Currency as string,\n\t\tTarget_Currency as string,\n\t\tEOM_Rate as decimal(18,4),\n\t\tAvg_Mon_Rate as decimal(18,4)\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> StagingDB\nsource(output(\n\t\tForex_Date as timestamp,\n\t\tBase_Currency as string,\n\t\tTarget_Currency as string,\n\t\tEOM_Rate as decimal(18,4),\n\t\tAvg_Mon_Rate as decimal(18,4),\n\t\tstart_datetime as timestamp,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [Forex_Date]\\n      ,[Base_Currency]\\n      ,[Target_Currency]\\n      ,[EOM_Rate]\\n      ,[Avg_Mon_Rate]\\n      ,[start_datetime]\\n      ,[process_name]\\nFROM [relational].[Forex_Rate]\\nWHERE [record_deleted_flag] = 0',\n\tformat: 'query') ~> RelationDB\nStagingDB derive(StagingChecksum = sha2(256, Forex_Date,Base_Currency,Target_Currency)) ~> StagingAddChecksum\nStagingAddChecksum, RelationRenameColumns lookup(Forex_Date == Relation_Forex_Date\n\t&& Base_Currency == Relation_Base_Currency\n\t&& Target_Currency == Relation_Target_Currency,\n\tmultiple: true,\n\tbroadcast: 'none')~> LookupRelationalStream\nRelationDB derive(RelationalChecksum = sha2(256, Forex_Date,Base_Currency,Target_Currency)) ~> RelationalAddChecksum\nLookupRelationalStream split(isNull(Relation_RelationalChecksum),\n\tEOM_Rate!=Relation_EOM_Rate||Avg_Mon_Rate!=Relation_Avg_Mon_Rate,\n\tdisjoint: false) ~> ConditionalSplitNewOrExpire@(StagingNewRow, StagingChangedRow, IgnoreNoChange)\nRelationalAddChecksum select(mapColumn(\n\t\tRelation_Forex_Date = Forex_Date,\n\t\tRelation_Base_Currency = Base_Currency,\n\t\tRelation_Target_Currency = Target_Currency,\n\t\tRelation_EOM_Rate = EOM_Rate,\n\t\tRelation_Avg_Mon_Rate = Avg_Mon_Rate,\n\t\tRelation_start_datetime = start_datetime,\n\t\tRelation_process_name = process_name,\n\t\tRelation_RelationalChecksum = RelationalChecksum\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> RelationRenameColumns\nConditionalSplitNewOrExpire@StagingNewRow select(mapColumn(\n\t\tForex_Date,\n\t\tBase_Currency,\n\t\tTarget_Currency,\n\t\tEOM_Rate,\n\t\tAvg_Mon_Rate\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectNewStagingRow\nSelectNewStagingRow derive(start_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tend_datetime = toTimestamp('9999-12-31 00:00:00'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> AddAuditColumns\nUnionForDB alterRow(insertIf(record_deleted_flag==toInteger(0)),\n\tupdateIf(record_deleted_flag==toInteger(1))) ~> AlterRowInsertUpdateExpire\nConditionalSplitNewOrExpire@StagingChangedRow derive(start_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tend_datetime = toTimestamp('9999-12-31 00:00:00'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> UpdateAddAuditAttributes\nConditionalSplitNewOrExpire@StagingChangedRow derive(end_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\trecord_deleted_flag = toInteger(1)) ~> AddExpiredAttributes\nUpdateAddAuditAttributes select(mapColumn(\n\t\tForex_Date,\n\t\tBase_Currency,\n\t\tTarget_Currency,\n\t\tEOM_Rate,\n\t\tAvg_Mon_Rate,\n\t\tstart_datetime,\n\t\tend_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> UpdateSelectForInsert\nAddAuditColumns, UpdateSelectForInsert, UpdateSelectForExpire union(byName: true)~> UnionForDB\nAddExpiredAttributes select(mapColumn(\n\t\tForex_Date = Relation_Forex_Date,\n\t\tBase_Currency = Relation_Base_Currency,\n\t\tTarget_Currency = Relation_Target_Currency,\n\t\tEOM_Rate = Relation_EOM_Rate,\n\t\tAvg_Mon_Rate = Relation_Avg_Mon_Rate,\n\t\tstart_datetime = Relation_start_datetime,\n\t\tprocess_name = Relation_process_name,\n\t\tend_datetime,\n\t\trecord_deleted_flag\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> UpdateSelectForExpire\nAlterRowInsertUpdateExpire sink(input(\n\t\tForex_Date as timestamp,\n\t\tBase_Currency as string,\n\t\tTarget_Currency as string,\n\t\tEOM_Rate as decimal(18,4),\n\t\tAvg_Mon_Rate as decimal(18,4),\n\t\tstart_datetime as timestamp,\n\t\tend_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:true,\n\tupsertable:false,\n\tkeys:['Forex_Date','Base_Currency','Target_Currency'],\n\tformat: 'table',\n\tmapColumn(\n\t\tForex_Date,\n\t\tBase_Currency,\n\t\tTarget_Currency,\n\t\tEOM_Rate,\n\t\tAvg_Mon_Rate,\n\t\tstart_datetime,\n\t\tend_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t)) ~> InsertUpdateRow"
+					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tForex_Date as timestamp,\n\t\tBase_Currency as string,\n\t\tTarget_Currency as string,\n\t\tEOM_Rate as decimal(18,7),\n\t\tAvg_Mon_Rate as decimal(18,7)\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> StagingDB\nsource(output(\n\t\tForex_Date as timestamp,\n\t\tBase_Currency as string,\n\t\tTarget_Currency as string,\n\t\tEOM_Rate as decimal(18,7),\n\t\tAvg_Mon_Rate as decimal(18,7),\n\t\tstart_datetime as timestamp,\n\t\tend_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> RelationDB\nStagingDB derive(StagingChecksum = sha2(256, Forex_Date,Base_Currency,Target_Currency,EOM_Rate,Avg_Mon_Rate)) ~> StagingAddChecksum\nStagingAddChecksum, RelationRenameColumns lookup(Forex_Date == Relation_Forex_Date\n\t&& Base_Currency == Relation_Base_Currency\n\t&& Target_Currency == Relation_Target_Currency,\n\tmultiple: true,\n\tbroadcast: 'none')~> LookupRelationalStream\nGetCurrentRecord derive(RelationalChecksum = sha2(256, Forex_Date,Base_Currency,Target_Currency,EOM_Rate,Avg_Mon_Rate)) ~> RelationalAddChecksum\nLookupRelationalStream split(isNull(Relation_RelationalChecksum),\n\tEOM_Rate!=Relation_EOM_Rate||Avg_Mon_Rate!=Relation_Avg_Mon_Rate,\n\tdisjoint: false) ~> ConditionalSplitNewOrExpire@(StagingNewRow, StagingChangedRow, IgnoreNoChange)\nRelationalAddChecksum select(mapColumn(\n\t\tRelation_Forex_Date = Forex_Date,\n\t\tRelation_Base_Currency = Base_Currency,\n\t\tRelation_Target_Currency = Target_Currency,\n\t\tRelation_EOM_Rate = EOM_Rate,\n\t\tRelation_Avg_Mon_Rate = Avg_Mon_Rate,\n\t\tRelation_start_datetime = start_datetime,\n\t\tRelation_process_name = process_name,\n\t\tRelation_RelationalChecksum = RelationalChecksum\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> RelationRenameColumns\nConditionalSplitNewOrExpire@StagingNewRow select(mapColumn(\n\t\tForex_Date,\n\t\tBase_Currency,\n\t\tTarget_Currency,\n\t\tEOM_Rate,\n\t\tAvg_Mon_Rate\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectNewStagingRow\nSelectNewStagingRow derive(start_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tend_datetime = toTimestamp('9999-12-31 00:00:00'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> AddAuditColumns\nUnionForDB alterRow(insertIf(record_deleted_flag==toInteger(0)),\n\tupdateIf(record_deleted_flag==toInteger(1))) ~> AlterRowInsertUpdateExpire\nConditionalSplitNewOrExpire@StagingChangedRow derive(start_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tend_datetime = toTimestamp('9999-12-31 00:00:00'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> UpdateAddAuditAttributes\nConditionalSplitNewOrExpire@StagingChangedRow derive(end_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\trecord_deleted_flag = toInteger(1)) ~> AddExpiredAttributes\nUpdateAddAuditAttributes select(mapColumn(\n\t\tForex_Date,\n\t\tBase_Currency,\n\t\tTarget_Currency,\n\t\tEOM_Rate,\n\t\tAvg_Mon_Rate,\n\t\tstart_datetime,\n\t\tend_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> UpdateSelectForInsert\nAddAuditColumns, UpdateSelectForInsert, UpdateSelectForExpire union(byName: true)~> UnionForDB\nAddExpiredAttributes select(mapColumn(\n\t\tForex_Date = Relation_Forex_Date,\n\t\tBase_Currency = Relation_Base_Currency,\n\t\tTarget_Currency = Relation_Target_Currency,\n\t\tEOM_Rate = Relation_EOM_Rate,\n\t\tAvg_Mon_Rate = Relation_Avg_Mon_Rate,\n\t\tstart_datetime = Relation_start_datetime,\n\t\tprocess_name = Relation_process_name,\n\t\tend_datetime,\n\t\trecord_deleted_flag\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> UpdateSelectForExpire\nRelationDB filter(record_deleted_flag == 0) ~> GetCurrentRecord\nAlterRowInsertUpdateExpire sink(input(\n\t\tForex_Date as timestamp,\n\t\tBase_Currency as string,\n\t\tTarget_Currency as string,\n\t\tEOM_Rate as decimal(18,7),\n\t\tAvg_Mon_Rate as decimal(18,7),\n\t\tstart_datetime as timestamp,\n\t\tend_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:true,\n\tupsertable:false,\n\tkeys:['Forex_Date','Base_Currency','Target_Currency'],\n\tformat: 'table',\n\tmapColumn(\n\t\tForex_Date,\n\t\tBase_Currency,\n\t\tTarget_Currency,\n\t\tEOM_Rate,\n\t\tAvg_Mon_Rate,\n\t\tstart_datetime,\n\t\tend_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t)) ~> InsertUpdateRow"
 				}
 			},
 			"dependsOn": []
@@ -1339,6 +1303,89 @@
 						}
 					],
 					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tTransaction_ID as string,\n\t\tReporting_Period as string,\n\t\tTransaction_Date as string,\n\t\tRelated_Parties_Involved as string,\n\t\tTransaction_Description as string,\n\t\tTransaction_Size as string,\n\t\tHow_Managed as string,\n\t\tMutual_Benefit as string,\n\t\tValidation_Error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> StagingDB\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tTransaction_ID as integer,\n\t\tReporting_Period as date,\n\t\tTransaction_Date as date,\n\t\tRelated_Parties_Involved as string,\n\t\tTransaction_Description as string,\n\t\tTransaction_Size as decimal(19,4),\n\t\tHow_Managed as string,\n\t\tMutual_Benefit as string,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> RelationalRelaterPartyTransaction\nGenerateStagingChecksum select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tTransaction_ID,\n\t\tReporting_Period,\n\t\tTransaction_Date,\n\t\tRelated_Parties_Involved,\n\t\tTransaction_Description,\n\t\tTransaction_Size,\n\t\tHow_Managed,\n\t\tMutual_Benefit,\n\t\tStagingChecksum\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectStagingData\nSelectNewRecordData derive(insert_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> AddAuditColumns\nRelationalRelaterPartyTransaction derive(RelationalChecksum = sha2(256, Reporting_Period,Transaction_Date,Related_Parties_Involved,Transaction_Description,Transaction_Size,How_Managed,Mutual_Benefit)) ~> GenerateRelationalChecksum\nGenerateRelationalChecksum select(mapColumn(\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_Fund_ID = Fund_ID,\n\t\tRelation_Transaction_ID = Transaction_ID,\n\t\tRelation_Reporting_Period = Reporting_Period,\n\t\tRelation_Transaction_Date = Transaction_Date,\n\t\tRelation_Related_Parties_Involved = Related_Parties_Involved,\n\t\tRelation_Transaction_Description = Transaction_Description,\n\t\tRelation_Transaction_Size = Transaction_Size,\n\t\tRelation_How_Managed = How_Managed,\n\t\tRelation_Mutual_Benefit = Mutual_Benefit,\n\t\tRelation_Insert_Datetime = Insert_Datetime,\n\t\tRelation_Update_Datetime = Update_Datetime,\n\t\tRelation_Process_Name = Process_Name,\n\t\tRelation_RelationalChecksum = RelationalChecksum\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRelationalData\nConvertDatesAndID derive(StagingChecksum = sha2(256, Reporting_Period,Transaction_Date,Related_Parties_Involved,Transaction_Description,Transaction_Size,How_Managed,Mutual_Benefit)) ~> GenerateStagingChecksum\nSelectStagingData, SelectRelationalData lookup(Asset_ID == Relation_Asset_ID\n\t&& Fund_ID == Relation_Fund_ID\n\t&& Transaction_ID == Relation_Transaction_ID,\n\tmultiple: true,\n\tbroadcast: 'none')~> CompareKeys\nAddAuditColumns, SelectChangeRecord union(byName: true)~> UnionNewAndExisting\nNewAndExistingRelatedPartyTrx@NewRelated select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tTransaction_ID,\n\t\tReporting_Period,\n\t\tTransaction_Date,\n\t\tRelated_Parties_Involved,\n\t\tTransaction_Description,\n\t\tTransaction_Size,\n\t\tHow_Managed,\n\t\tMutual_Benefit\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectNewRecordData\nUnionNewAndExisting alterRow(upsertIf(true())) ~> AlterRowUpsert\nStagingDB derive(Reporting_Period = toDate(Reporting_Period, \"dd/MM/yyyy\"),\n\t\tTransaction_Date = toDate(Transaction_Date, \"dd/MM/yyyy\"),\n\t\tTransaction_ID = toInteger(Transaction_ID),\n\t\tTransaction_Size = toDecimal(Transaction_Size,19,4,'###,###.##')) ~> ConvertDatesAndID\nCompareKeys split(isNull(Relation_RelationalChecksum),\n\tStagingChecksum != Relation_RelationalChecksum,\n\tdisjoint: false) ~> NewAndExistingRelatedPartyTrx@(NewRelated, ChangedRelated, ExistingNoChange)\nNewAndExistingRelatedPartyTrx@ChangedRelated derive(update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> ChangedAddAuditData\nChangedAddAuditData select(mapColumn(\n\t\tAsset_ID = Relation_Asset_ID,\n\t\tFund_ID = Relation_Fund_ID,\n\t\tTransaction_ID = Relation_Transaction_ID,\n\t\tReporting_Period,\n\t\tTransaction_Date,\n\t\tRelated_Parties_Involved,\n\t\tTransaction_Description,\n\t\tTransaction_Size,\n\t\tHow_Managed,\n\t\tMutual_Benefit,\n\t\tinsert_datetime = Relation_Insert_Datetime,\n\t\tupdate_datetime,\n\t\tprocess_name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectChangeRecord\nAlterRowUpsert sink(input(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tTransaction_ID as integer,\n\t\tReporting_Period as date,\n\t\tTransaction_Date as date,\n\t\tRelated_Parties_Involved as string,\n\t\tTransaction_Description as string,\n\t\tTransaction_Size as decimal(19,4),\n\t\tHow_Managed as string,\n\t\tMutual_Benefit as string,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:true,\n\tkeys:['Asset_ID','Fund_ID','Transaction_ID'],\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tTransaction_ID,\n\t\tReporting_Period,\n\t\tTransaction_Date,\n\t\tRelated_Parties_Involved,\n\t\tTransaction_Description,\n\t\tTransaction_Size,\n\t\tHow_Managed,\n\t\tMutual_Benefit,\n\t\tInsert_Datetime = insert_datetime,\n\t\tUpdate_Datetime = update_datetime,\n\t\tProcess_Name = process_name\n\t)) ~> UpserttRow"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadStagingDBtoRelationDB_opsriskopportunityreg_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "SQLstagingopsriskopportunityreg_ds",
+								"type": "DatasetReference"
+							},
+							"name": "StagingDB",
+							"typeProperties": {}
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLrelationopsriskopportunityreg_ds",
+								"type": "DatasetReference"
+							},
+							"name": "RelationalRiskOpportunityRegister",
+							"typeProperties": {}
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLrelationopsriskopportunityreg_ds",
+								"type": "DatasetReference"
+							},
+							"name": "UpserttRow"
+						}
+					],
+					"transformations": [
+						{
+							"name": "SelectStagingData"
+						},
+						{
+							"name": "AddAuditColumns"
+						},
+						{
+							"name": "GenerateRelationalChecksum"
+						},
+						{
+							"name": "SelectRelationalData"
+						},
+						{
+							"name": "GenerateStagingChecksum"
+						},
+						{
+							"name": "CompareKeys"
+						},
+						{
+							"name": "UnionNewAndExisting"
+						},
+						{
+							"name": "SelectNewRecordData"
+						},
+						{
+							"name": "AlterRowUpsert"
+						},
+						{
+							"name": "ConvertDatesAndID"
+						},
+						{
+							"name": "NewAndExistingRiskOpportunityReg"
+						},
+						{
+							"name": "ChangedAddAuditData"
+						},
+						{
+							"name": "SelectChangeRecord"
+						},
+						{
+							"name": "ConvertNumberToString"
+						}
+					],
+					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tRisk_Opp_ID as string,\n\t\tReporting_Period as string,\n\t\tRisk_Ops_Sub_Class_Code as string,\n\t\tRisk_Ops_Descripton as string,\n\t\tActions_Controls as string,\n\t\tDate_Lodged as string,\n\t\tLikelihood as string,\n\t\tSeverity as string,\n\t\tInherent_Risk_Rating as string,\n\t\tEliminate_Mitigate as string,\n\t\tResidual_Likelihood as string,\n\t\tResidual_Severity as string,\n\t\tResidual_Risk_Rating as string,\n\t\tFuture_Controls as string,\n\t\tPerson_Responsible as string,\n\t\tDate_Closed as string,\n\t\tQuarterly_Incidents as string,\n\t\tRisk_Opps_Flag as string,\n\t\tValidation_Error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> StagingDB\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tRisk_Opp_ID as integer,\n\t\tReporting_Period as date,\n\t\tRisk_Ops_Sub_Class_Code as string,\n\t\tRisk_Ops_Descripton as string,\n\t\tActions_Controls as string,\n\t\tDate_Lodged as date,\n\t\tLikelihood as integer,\n\t\tSeverity as integer,\n\t\tInherent_Risk_Rating as integer,\n\t\tEliminate_Mitigate as string,\n\t\tResidual_Likelihood as integer,\n\t\tResidual_Severity as integer,\n\t\tResidual_Risk_Rating as integer,\n\t\tFuture_Controls as string,\n\t\tPerson_Responsible as string,\n\t\tDate_Closed as date,\n\t\tQuarterly_Incidents as integer,\n\t\tRisk_Opps_Flag as string,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> RelationalRiskOpportunityRegister\nGenerateStagingChecksum select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tRisk_Opp_ID,\n\t\tReporting_Period,\n\t\tRisk_Ops_Sub_Class_Code,\n\t\tRisk_Ops_Descripton,\n\t\tActions_Controls,\n\t\tDate_Lodged,\n\t\tLikelihood,\n\t\tSeverity,\n\t\tInherent_Risk_Rating,\n\t\tEliminate_Mitigate,\n\t\tResidual_Likelihood,\n\t\tResidual_Severity,\n\t\tResidual_Risk_Rating,\n\t\tFuture_Controls,\n\t\tPerson_Responsible,\n\t\tDate_Closed,\n\t\tQuarterly_Incidents,\n\t\tRisk_Opps_Flag,\n\t\tValidation_Error,\n\t\tStagingChecksum\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectStagingData\nSelectNewRecordData derive(insert_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> AddAuditColumns\nConvertNumberToString derive(RelationalChecksum = sha2(256, Reporting_Period,Risk_Ops_Sub_Class_Code,Risk_Ops_Descripton,Actions_Controls,Date_Lodged,Likelihood,Severity,Inherent_Risk_Rating,Eliminate_Mitigate,Residual_Likelihood,Residual_Severity,Residual_Risk_Rating,Future_Controls,Person_Responsible,Date_Closed,Quarterly_Incidents,Risk_Opps_Flag)) ~> GenerateRelationalChecksum\nGenerateRelationalChecksum select(mapColumn(\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_Fund_ID = Fund_ID,\n\t\tRelation_Risk_Opp_ID = Risk_Opp_ID,\n\t\tRelation_Reporting_Period = Reporting_Period,\n\t\tRelation_Risk_Ops_Sub_Class_Code = Risk_Ops_Sub_Class_Code,\n\t\tRelation_Risk_Ops_Descripton = Risk_Ops_Descripton,\n\t\tRelation_Actions_Controls = Actions_Controls,\n\t\tRelation_Date_Lodged = Date_Lodged,\n\t\tRelation_Likelihood = Likelihood,\n\t\tRelation_Severity = Severity,\n\t\tRelation_Inherent_Risk_Rating = Inherent_Risk_Rating,\n\t\tRelation_Eliminate_Mitigate = Eliminate_Mitigate,\n\t\tRelation_Residual_Likelihood = Residual_Likelihood,\n\t\tRelation_Residual_Severity = Residual_Severity,\n\t\tRelation_Residual_Risk_Rating = Residual_Risk_Rating,\n\t\tRelation_Future_Controls = Future_Controls,\n\t\tRelation_Person_Responsible = Person_Responsible,\n\t\tRelation_Date_Closed = Date_Closed,\n\t\tRelation_Quarterly_Incidents = Quarterly_Incidents,\n\t\tRelation_Risk_Opps_Flag = Risk_Opps_Flag,\n\t\tRelation_Insert_Datetime = Insert_Datetime,\n\t\tRelation_Update_Datetime = Update_Datetime,\n\t\tRelation_Process_Name = Process_Name,\n\t\tRelation_RelationalChecksum = RelationalChecksum\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRelationalData\nConvertDatesAndID derive(StagingChecksum = sha2(256, Reporting_Period,Risk_Ops_Sub_Class_Code,Risk_Ops_Descripton,Actions_Controls,Date_Lodged,Likelihood,Severity,Inherent_Risk_Rating,Eliminate_Mitigate,Residual_Likelihood,Residual_Severity,Residual_Risk_Rating,Future_Controls,Person_Responsible,Date_Closed,Quarterly_Incidents,Risk_Opps_Flag)) ~> GenerateStagingChecksum\nSelectStagingData, SelectRelationalData lookup(Asset_ID == Relation_Asset_ID\n\t&& Fund_ID == Relation_Fund_ID\n\t&& Risk_Opp_ID == Relation_Risk_Opp_ID,\n\tmultiple: true,\n\tbroadcast: 'none')~> CompareKeys\nAddAuditColumns, SelectChangeRecord union(byName: true)~> UnionNewAndExisting\nNewAndExistingRiskOpportunityReg@NewRiskOpportunityReg select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tRisk_Opp_ID,\n\t\tReporting_Period,\n\t\tRisk_Ops_Sub_Class_Code,\n\t\tRisk_Ops_Descripton,\n\t\tActions_Controls,\n\t\tDate_Lodged,\n\t\tLikelihood,\n\t\tSeverity,\n\t\tInherent_Risk_Rating,\n\t\tEliminate_Mitigate,\n\t\tResidual_Likelihood,\n\t\tResidual_Severity,\n\t\tResidual_Risk_Rating,\n\t\tFuture_Controls,\n\t\tPerson_Responsible,\n\t\tDate_Closed,\n\t\tQuarterly_Incidents,\n\t\tRisk_Opps_Flag\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectNewRecordData\nUnionNewAndExisting alterRow(upsertIf(true())) ~> AlterRowUpsert\nStagingDB derive(Reporting_Period = toDate(Reporting_Period, \"dd/MM/yyyy\"),\n\t\tDate_Lodged = toDate(Date_Lodged, \"dd/MM/yyyy\"),\n\t\tDate_Closed = toDate(Date_Closed, \"dd/MM/yyyy\"),\n\t\tRisk_Opp_ID = toInteger(Risk_Opp_ID)) ~> ConvertDatesAndID\nCompareKeys split(isNull(Relation_RelationalChecksum),\n\tStagingChecksum != Relation_RelationalChecksum,\n\tdisjoint: false) ~> NewAndExistingRiskOpportunityReg@(NewRiskOpportunityReg, ChangedRiskOpportunityReg, ExistingNoChange)\nNewAndExistingRiskOpportunityReg@ChangedRiskOpportunityReg derive(update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> ChangedAddAuditData\nChangedAddAuditData select(mapColumn(\n\t\tAsset_ID = Relation_Asset_ID,\n\t\tFund_ID = Relation_Fund_ID,\n\t\tRisk_Opp_ID = Relation_Risk_Opp_ID,\n\t\tReporting_Period,\n\t\tRisk_Ops_Sub_Class_Code,\n\t\tRisk_Ops_Descripton,\n\t\tActions_Controls,\n\t\tDate_Lodged,\n\t\tLikelihood,\n\t\tSeverity,\n\t\tInherent_Risk_Rating,\n\t\tEliminate_Mitigate,\n\t\tResidual_Likelihood,\n\t\tResidual_Severity,\n\t\tResidual_Risk_Rating,\n\t\tFuture_Controls,\n\t\tPerson_Responsible,\n\t\tDate_Closed,\n\t\tQuarterly_Incidents,\n\t\tRisk_Opps_Flag,\n\t\tinsert_datetime = Relation_Insert_Datetime,\n\t\tupdate_datetime,\n\t\tprocess_name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectChangeRecord\nRelationalRiskOpportunityRegister derive(Likelihood = toString(Likelihood),\n\t\tSeverity = toString(Severity),\n\t\tInherent_Risk_Rating = toString(Inherent_Risk_Rating),\n\t\tResidual_Likelihood = toString(Residual_Likelihood),\n\t\tResidual_Severity = toString(Residual_Severity),\n\t\tResidual_Risk_Rating = toString(Residual_Risk_Rating),\n\t\tQuarterly_Incidents = toString(Quarterly_Incidents)) ~> ConvertNumberToString\nAlterRowUpsert sink(input(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tRisk_Opp_ID as integer,\n\t\tReporting_Period as date,\n\t\tRisk_Ops_Sub_Class_Code as string,\n\t\tRisk_Ops_Descripton as string,\n\t\tActions_Controls as string,\n\t\tDate_Lodged as date,\n\t\tLikelihood as integer,\n\t\tSeverity as integer,\n\t\tInherent_Risk_Rating as integer,\n\t\tEliminate_Mitigate as string,\n\t\tResidual_Likelihood as integer,\n\t\tResidual_Severity as integer,\n\t\tResidual_Risk_Rating as integer,\n\t\tFuture_Controls as string,\n\t\tPerson_Responsible as string,\n\t\tDate_Closed as date,\n\t\tQuarterly_Incidents as integer,\n\t\tRisk_Opps_Flag as string,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:true,\n\tkeys:['Asset_ID','Fund_ID','Risk_Opp_ID'],\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tRisk_Opp_ID,\n\t\tReporting_Period,\n\t\tRisk_Ops_Sub_Class_Code,\n\t\tRisk_Ops_Descripton,\n\t\tActions_Controls,\n\t\tDate_Lodged,\n\t\tLikelihood,\n\t\tSeverity,\n\t\tInherent_Risk_Rating,\n\t\tEliminate_Mitigate,\n\t\tResidual_Likelihood,\n\t\tResidual_Severity,\n\t\tResidual_Risk_Rating,\n\t\tFuture_Controls,\n\t\tPerson_Responsible,\n\t\tDate_Closed,\n\t\tQuarterly_Incidents,\n\t\tRisk_Opps_Flag,\n\t\tInsert_Datetime = insert_datetime,\n\t\tUpdate_Datetime = update_datetime,\n\t\tProcess_Name = process_name\n\t)) ~> UpserttRow"
 				}
 			},
 			"dependsOn": []

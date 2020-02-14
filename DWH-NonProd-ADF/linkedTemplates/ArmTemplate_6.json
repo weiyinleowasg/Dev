@@ -13,110 +13,6 @@
 	},
 	"resources": [
 		{
-			"name": "[concat(parameters('factoryName'), '/SQLstagingopsriskopportunityreg_ds')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "SQLdbConnection",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "AzureSqlTable",
-				"schema": [
-					{
-						"name": "Asset_ID",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Fund_ID",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Risk_Opp_ID",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Reporting_Period",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Risk_Ops_Sub_Class_Code",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Risk_Ops_Descripton",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Actions_Controls",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Date_Lodged",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Likelihood",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Severity",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Inherent_Risk_Rating",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Eliminate_Mitigate",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Residual_Likelihood",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Residual_Severity",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Residual_Risk_Rating",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Future_Controls",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Person_Responsible",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Date_Closed",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Quarterly_Incidents",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Risk_Opps_Flag",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Validation_Error",
-						"type": "nvarchar"
-					}
-				],
-				"typeProperties": {
-					"schema": "staging",
-					"table": "OPS_Risk_Opportunity_Register"
-				}
-			},
-			"dependsOn": []
-		},
-		{
 			"name": "[concat(parameters('factoryName'), '/SQLstagingopssalesother')]",
 			"type": "Microsoft.DataFactory/factories/datasets",
 			"apiVersion": "2018-06-01",
@@ -2082,6 +1978,164 @@
 									}
 								}
 							]
+						}
+					}
+				],
+				"parameters": {
+					"Parent_DataFactory": {
+						"type": "string"
+					},
+					"Parent_Pipeline": {
+						"type": "string"
+					},
+					"Success_Fail_Header": {
+						"type": "string"
+					},
+					"Etl_Utc_Tag": {
+						"type": "string"
+					},
+					"File_Pattern": {
+						"type": "string"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/PipelineSendMail_pl_old')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "SuccessOrFailMail",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "GetErrorDuringProcessFiles",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": "https://prod-24.australiaeast.logic.azure.com:443/workflows/e28a90add06c495bbc9362b5109fb4c0/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=j2wEDAKOpnQ83iKkUa84aeGE6Nfb5604lp-z1-W4ek0",
+							"method": "POST",
+							"headers": {
+								"Content-Type": "application/json"
+							},
+							"body": {
+								"dataFactoryName": "@pipeline().parameters.Parent_DataFactory",
+								"pipelineName": "@pipeline().parameters.Parent_Pipeline",
+								"messageHeader": "@pipeline().parameters.Success_Fail_Header",
+								"messageProcessed": "@activity('GetProcessedFiles').output.firstRow",
+								"messageNotProcessed": "@activity('GetNotProcessedFiles').output.firstRow",
+								"messageErrorDuringProcess": "@activity('GetErrorDuringProcessFiles').output.firstRow"
+							}
+						}
+					},
+					{
+						"name": "GetProcessedFiles",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": {
+									"value": "SELECT \n       stuff( (SELECT ', '+original_blob_name \n               FROM log.source_register_table\n\t\t\t   where etl_is_processed = 'Y'\n\t\t\t   and etl_utc_tag = '@{pipeline().parameters.Etl_Utc_Tag}'\n\t\t\t   order by original_blob_name\n               FOR XML PATH(''), TYPE).value('.', 'varchar(max)'),1,1,'') as Processed_Files\n;",
+									"type": "Expression"
+								}
+							},
+							"dataset": {
+								"referenceName": "SQLsourceRegisterTable_ds",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						}
+					},
+					{
+						"name": "GetNotProcessedFiles",
+						"type": "Lookup",
+						"dependsOn": [
+							{
+								"activity": "GetProcessedFiles",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": {
+									"value": "SELECT \n       stuff( (SELECT ', '+original_blob_name \n               FROM log.source_register_table\n\t\t\t   where etl_is_processed = 'N'\n\t\t\t   and original_blob_name like '@{pipeline().parameters.File_Pattern}'\n\t\t\t   order by original_blob_name\n               FOR XML PATH(''), TYPE).value('.', 'varchar(max)'),1,1,'') as Not_Processed_Files\n;",
+									"type": "Expression"
+								}
+							},
+							"dataset": {
+								"referenceName": "SQLsourceRegisterTable_ds",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						}
+					},
+					{
+						"name": "GetErrorDuringProcessFiles",
+						"type": "Lookup",
+						"dependsOn": [
+							{
+								"activity": "GetNotProcessedFiles",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": {
+									"value": "SELECT \n       stuff( (SELECT ', '+original_blob_name \n               FROM log.source_register_table\n\t\t\t   where etl_is_processed = 'N'\n\t\t\t   and etl_run_status like 'FAIL%'\n\t\t\t   and etl_utc_tag = '@{pipeline().parameters.Etl_Utc_Tag}'\n\t\t\t   order by original_blob_name\n               FOR XML PATH(''), TYPE).value('.', 'varchar(max)'),1,1,'') as ErrorDuringProcess_Files\n;",
+									"type": "Expression"
+								}
+							},
+							"dataset": {
+								"referenceName": "SQLsourceRegisterTable_ds",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
 						}
 					}
 				],
