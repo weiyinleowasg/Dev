@@ -13,6 +13,54 @@
 	},
 	"resources": [
 		{
+			"name": "[concat(parameters('factoryName'), '/LoadTxtToDBstaging_opssalesunit_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "DelimitedText_sourcelandingscrubbed_opssalesunit_ds",
+								"type": "DatasetReference"
+							},
+							"name": "LoadFromScrubbedToStagingDB",
+							"typeProperties": {}
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLstagingopssalesunit_ds",
+								"type": "DatasetReference"
+							},
+							"name": "StagingDB"
+						}
+					],
+					"transformations": [
+						{
+							"name": "SelectValidRecord"
+						},
+						{
+							"name": "ValidatedSalesUnitCode"
+						},
+						{
+							"name": "SelectInvalidSalesUnitCode"
+						},
+						{
+							"name": "InvalidSalesUnitCodeerrormessage"
+						},
+						{
+							"name": "UnionAll"
+						}
+					],
+					"script": "source(output(\n\t\tSales_Unit_Code as string,\n\t\tSales_Unit as string,\n\t\tActive_YN as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> LoadFromScrubbedToStagingDB\nValidatedSalesUnitCode@ValidSalesUnitCode select(mapColumn(\n\t\tSales_Unit_Code,\n\t\tSales_Unit,\n\t\tActive_YN\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectValidRecord\nLoadFromScrubbedToStagingDB split(not(isNull(Sales_Unit_Code)) && trim(Sales_Unit_Code) != '',\n\tdisjoint: false) ~> ValidatedSalesUnitCode@(ValidSalesUnitCode, InvalidSalesUnitCode)\nInvalidSalesUnitCodeerrormessage select(mapColumn(\n\t\tSales_Unit_Code,\n\t\tSales_Unit,\n\t\tActive_YN,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidSalesUnitCode\nValidatedSalesUnitCode@InvalidSalesUnitCode derive(Validation_Error = toString(\"Invalid Sales Unit Code\")) ~> InvalidSalesUnitCodeerrormessage\nSelectValidRecord, SelectInvalidSalesUnitCode union(byName: true)~> UnionAll\nUnionAll sink(input(\n\t\tSales_Unit_Code as string,\n\t\tSales_Unit as string,\n\t\tActive_YN as string,\n\t\tValidation_Error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tSales_Unit_Code,\n\t\tSales_Unit,\n\t\tActive_YN,\n\t\tValidation_Error\n\t)) ~> StagingDB"
+				}
+			},
+			"dependsOn": []
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/LoadTxtToDBstaging_opsstrategicdeliverable_df')]",
 			"type": "Microsoft.DataFactory/factories/dataflows",
 			"apiVersion": "2018-06-01",
@@ -322,6 +370,43 @@
 						}
 					],
 					"script": "source(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tTimber_Sale_ID as string,\n\t\tReporting_Period as string,\n\t\tSpecies_Code as string,\n\t\tCustomer as string,\n\t\tDomestic_Export as string,\n\t\tProduct_Type_Code as string,\n\t\tPrice_Point_Code as string,\n\t\tSales_Unit_Code as string,\n\t\tSales_Quantity as string,\n\t\tSales_Revenue as string,\n\t\tProduction_Cost as string,\n\t\tStumpage as string,\n\t\tUnit_Stumpage as string,\n\t\tCurrency_Code as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> LoadFromScrubbedToStagingDB\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT [Asset_ID],[Fund_ID]\\nFROM [relational].[Asset]\\nWHERE record_deleted_flag = 0',\n\tformat: 'query') ~> RelationalAsset\nsource(output(\n\t\tSpecies_Code as string,\n\t\tSpecies as string,\n\t\tSpecies_Group as string,\n\t\tActive_YN as string,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> RelationalSpeciesType\nsource(output(\n\t\tProduct_Type_Code as string,\n\t\tProduct_Type as string,\n\t\tActive_YN as string,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> RelationalProductType\nsource(output(\n\t\tPrice_Point_Code as string,\n\t\tPrice_Point as string,\n\t\tActive_YN as string,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> RelationalPricePoint\nsource(output(\n\t\tSales_Unit_Code as string,\n\t\tSales_Unit as string,\n\t\tActive_YN as string,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> RelationalSalesUnit\nValidatedTimberSalesIDandDateandDecimal@ValidDateAndTimberSalesIDandNumbers, SelectRelationalAsset lookup(Asset_ID == Relation_Asset_ID\n\t&& Fund_ID == Relation_Fund_ID,\n\tmultiple: true,\n\tbroadcast: 'none')~> LookupRelationAsset\nIsValidSalesUnit@ValidSalesUnit select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tTimber_Sale_ID,\n\t\tReporting_Period,\n\t\tSpecies_Code,\n\t\tCustomer,\n\t\tDomestic_Export,\n\t\tProduct_Type_Code,\n\t\tPrice_Point_Code,\n\t\tSales_Unit_Code,\n\t\tSales_Quantity,\n\t\tSales_Revenue,\n\t\tProduction_Cost,\n\t\tStumpage,\n\t\tUnit_Stumpage,\n\t\tCurrency_Code\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectValidRecord\nConvertDateAndTimberSalesID split(not(isNull(Derived_Timber_Sales_ID)) && not(isNull(Derived_Reporting_Period)) && \r\niif(not(isNull(Sales_Quantity)),not(isNull(Derived_Sales_Quantity)),true()) &&\r\niif(not(isNull(Sales_Revenue)),not(isNull(Derived_Sales_Revenue)),true()) &&\r\niif(not(isNull(Derived_Production_Cost)),not(isNull(Production_Cost)),true()) &&\r\niif(not(isNull(Stumpage)),not(isNull(Derived_Stumpage)),true()) &&\r\niif(not(isNull(Unit_Stumpage)),not(isNull(Derived_Unit_Stumpage)),true()),\n\tdisjoint: false) ~> ValidatedTimberSalesIDandDateandDecimal@(ValidDateAndTimberSalesIDandNumbers, InvalidDateOrTimberSlaesIDOrNumbers)\nLoadFromScrubbedToStagingDB derive(Derived_Reporting_Period = toDate(Reporting_Period,\"dd/MM/yyyy\"),\n\t\tDerived_Timber_Sales_ID = toInteger(Timber_Sale_ID),\n\t\tDerived_Sales_Quantity = toDecimal(Sales_Quantity, 19, 4, \"###,###.####\"),\n\t\tDerived_Sales_Revenue = toDecimal(Sales_Revenue, 19, 4, \"###,###.####\"),\n\t\tDerived_Production_Cost = toDecimal(Production_Cost, 19, 4, \"###,###.####\"),\n\t\tDerived_Stumpage = toDecimal(Stumpage, 19, 4, \"###,###.####\"),\n\t\tDerived_Unit_Stumpage = toDecimal(Unit_Stumpage, 19, 4, \"###,###.####\")) ~> ConvertDateAndTimberSalesID\nInvalidDateOrTimberSalesIDOrNumbererrormessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tTimber_Sale_ID,\n\t\tReporting_Period,\n\t\tSpecies_Code,\n\t\tCustomer,\n\t\tDomestic_Export,\n\t\tProduct_Type_Code,\n\t\tPrice_Point_Code,\n\t\tSales_Unit_Code,\n\t\tSales_Quantity,\n\t\tSales_Revenue,\n\t\tProduction_Cost,\n\t\tStumpage,\n\t\tUnit_Stumpage,\n\t\tCurrency_Code,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidDateOrTimberSlaesIDOrNumbers\nValidatedTimberSalesIDandDateandDecimal@InvalidDateOrTimberSlaesIDOrNumbers derive(Validation_Error = toString(\"Invalid Reporting Period  / Timber Sales ID / Sales Quantity / Sales Revenue / Production Cost / Stumpage / Unit Stumpage\")) ~> InvalidDateOrTimberSalesIDOrNumbererrormessage\nRelationalAsset select(mapColumn(\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_Fund_ID = Fund_ID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRelationalAsset\nLookupRelationAsset split(not(isNull(Relation_Asset_ID)),\n\tdisjoint: false) ~> ValidatedAsset@(ValidFundAndAsset, InvalidFundOrAsset)\nValidatedAsset@InvalidFundOrAsset derive(Validation_Error = toString(\"Invalid Fund Or Asset\")) ~> InvalidFundOrAsseterrormessage\nInvalidFundOrAsseterrormessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tTimber_Sale_ID,\n\t\tReporting_Period,\n\t\tSpecies_Code,\n\t\tCustomer,\n\t\tDomestic_Export,\n\t\tProduct_Type_Code,\n\t\tPrice_Point_Code,\n\t\tSales_Unit_Code,\n\t\tSales_Quantity,\n\t\tSales_Revenue,\n\t\tProduction_Cost,\n\t\tStumpage,\n\t\tUnit_Stumpage,\n\t\tCurrency_Code,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidFundOrAsset\nSelectValidRecord, SelectInvalidDateOrTimberSlaesIDOrNumbers, SelectInvalidFundOrAsset, SelectInvalidSpeciesType, SelectInvalidProductType, SelectInvalidPricePoint, SelectInvalidSalesUnit union(byName: true)~> UnionAll\nValidatedAsset@ValidFundAndAsset, SelectRelationalSpeciesType lookup(Species_Code == Relation_Species_Code,\n\tmultiple: true,\n\tbroadcast: 'none')~> LookupRelationalSpeciesType\nRelationalSpeciesType select(mapColumn(\n\t\tRelation_Species_Code = Species_Code\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRelationalSpeciesType\nLookupRelationalSpeciesType split(not(isNull(Relation_Species_Code)),\n\tdisjoint: false) ~> IsValidSpeciesType@(ValidSpeciesType, InvalidSpeciesType)\nIsValidSpeciesType@InvalidSpeciesType derive(Validation_Error = toString(\"Invalid Species Code\")) ~> InvalidSpeciesTypeerrormessage\nInvalidSpeciesTypeerrormessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tTimber_Sale_ID,\n\t\tReporting_Period,\n\t\tSpecies_Code,\n\t\tCustomer,\n\t\tDomestic_Export,\n\t\tProduct_Type_Code,\n\t\tPrice_Point_Code,\n\t\tSales_Unit_Code,\n\t\tSales_Quantity,\n\t\tSales_Revenue,\n\t\tProduction_Cost,\n\t\tStumpage,\n\t\tUnit_Stumpage,\n\t\tCurrency_Code,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidSpeciesType\nRelationalProductType select(mapColumn(\n\t\tRelation_Product_Type_Code = Product_Type_Code\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRelationalProductType\nRelationalPricePoint select(mapColumn(\n\t\tRelation_Price_Point_Code = Price_Point_Code\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRelationalPricePoint\nRelationalSalesUnit select(mapColumn(\n\t\tRelation_Sales_Unit_Code = Sales_Unit_Code\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRelationalSalesUnit\nIsValidSpeciesType@ValidSpeciesType, SelectRelationalProductType lookup(Product_Type_Code == Relation_Product_Type_Code,\n\tmultiple: false,\n\tpickup: 'any',\n\tbroadcast: 'none')~> LookupRelationalProductType\nLookupRelationalProductType split(not(isNull(Relation_Product_Type_Code)),\n\tdisjoint: false) ~> IsValidProductType@(ValidProductType, InvalidProductType)\nIsValidProductType@InvalidProductType derive(Validation_Error = toString(\"Invalid Product Type\")) ~> InvalidProductTypeerrormessage\nInvalidProductTypeerrormessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tTimber_Sale_ID,\n\t\tReporting_Period,\n\t\tSpecies_Code,\n\t\tCustomer,\n\t\tDomestic_Export,\n\t\tProduct_Type_Code,\n\t\tPrice_Point_Code,\n\t\tSales_Unit_Code,\n\t\tSales_Quantity,\n\t\tSales_Revenue,\n\t\tProduction_Cost,\n\t\tStumpage,\n\t\tUnit_Stumpage,\n\t\tCurrency_Code,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidProductType\nIsValidProductType@ValidProductType, SelectRelationalPricePoint lookup(Price_Point_Code == Relation_Price_Point_Code,\n\tmultiple: false,\n\tpickup: 'any',\n\tbroadcast: 'none')~> LookupPricePoint\nLookupPricePoint split(not(isNull(Relation_Price_Point_Code)),\n\tdisjoint: false) ~> IsValidPricePoint@(ValidPricePoint, InvalidPricePoint)\nIsValidPricePoint@ValidPricePoint, SelectRelationalSalesUnit lookup(Sales_Unit_Code == Relation_Sales_Unit_Code,\n\tmultiple: false,\n\tpickup: 'any',\n\tbroadcast: 'none')~> LookupSalesUnit\nLookupSalesUnit split(not(isNull(Relation_Sales_Unit_Code)),\n\tdisjoint: false) ~> IsValidSalesUnit@(ValidSalesUnit, InvalidSalesUnit)\nIsValidPricePoint@InvalidPricePoint derive(Validation_Error = toString(\"Invalid Price Point\")) ~> InvalidPricePointerrormessage\nInvalidPricePointerrormessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tTimber_Sale_ID,\n\t\tReporting_Period,\n\t\tSpecies_Code,\n\t\tCustomer,\n\t\tDomestic_Export,\n\t\tProduct_Type_Code,\n\t\tPrice_Point_Code,\n\t\tSales_Unit_Code,\n\t\tSales_Quantity,\n\t\tSales_Revenue,\n\t\tProduction_Cost,\n\t\tStumpage,\n\t\tUnit_Stumpage,\n\t\tCurrency_Code,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidPricePoint\nIsValidSalesUnit@InvalidSalesUnit derive(Validation_Error = toString(\"Invalid Sales Unit Code\")) ~> InvalidSaleUniterrormessage\nInvalidSaleUniterrormessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tTimber_Sale_ID,\n\t\tReporting_Period,\n\t\tSpecies_Code,\n\t\tCustomer,\n\t\tDomestic_Export,\n\t\tProduct_Type_Code,\n\t\tPrice_Point_Code,\n\t\tSales_Unit_Code,\n\t\tSales_Quantity,\n\t\tSales_Revenue,\n\t\tProduction_Cost,\n\t\tStumpage,\n\t\tUnit_Stumpage,\n\t\tCurrency_Code,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidSalesUnit\nUnionAll sink(input(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tTimber_Sale_ID as string,\n\t\tReporting_Period as string,\n\t\tSpecies_Code as string,\n\t\tCustomer as string,\n\t\tDomestic_Export as string,\n\t\tProduct_Type_Code as string,\n\t\tPrice_Point_Code as string,\n\t\tSales_Unit_Code as string,\n\t\tSales_Quantity as string,\n\t\tSales_Revenue as string,\n\t\tProduction_Cost as string,\n\t\tStumpage as string,\n\t\tUnit_Stumpage as string,\n\t\tCurrency_Code as string,\n\t\tValidation_Error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tTimber_Sale_ID,\n\t\tReporting_Period,\n\t\tSpecies_Code,\n\t\tCustomer,\n\t\tDomestic_Export,\n\t\tProduct_Type_Code,\n\t\tPrice_Point_Code,\n\t\tSales_Unit_Code,\n\t\tSales_Quantity,\n\t\tSales_Revenue,\n\t\tProduction_Cost,\n\t\tStumpage,\n\t\tUnit_Stumpage,\n\t\tCurrency_Code,\n\t\tValidation_Error\n\t)) ~> StagingDB"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/dataflow1')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "Geo_sourcelandingscrubbed_geojsonmodified_ds",
+								"type": "DatasetReference"
+							},
+							"name": "geojsonmodified",
+							"typeProperties": {}
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "DelimitedText_budget_loadready_ds",
+								"type": "DatasetReference"
+							},
+							"name": "sink1"
+						}
+					],
+					"transformations": [
+						{
+							"name": "MapDrifted1",
+							"description": "Creates an explicit mapping for each drifted column"
+						}
+					],
+					"script": "source(output(\n\t\tfeatures as (type as string, properties as (Asset_Id as string, Fund_Id as string, OBJECTID as string, Property as string, Crop_Type as string, Plant_Year as string, State as string, Area_Ha as double, SHAPE_Leng as double, SHAPE_Area as double), geometry as (type as string, coordinates as string))[]\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tbackslashEscape: true) ~> geojsonmodified\ngeojsonmodified derive({_corrupt_record} = toString(byName('_corrupt_record')),\n\t\ttype = toString(byName('type')),\n\t\tAsset_ID = features[1].properties.Asset_Id) ~> MapDrifted1\nMapDrifted1 sink(input(\n\t\tVersion_Name as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tBudget_Date as string,\n\t\tBudget_Desc as string,\n\t\tBudget_value as string,\n\t\tBudget_Type as string,\n\t\tUpdate_datetime as string,\n\t\trecord_deleted_flag as string,\n\t\tprocess_name as string,\n\t\tinsert_update_flag as string,\n\t\tBudget_ID as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tpartitionFileNames:['abc.txt'],\n\tmapColumn(\n\t\tAsset_ID\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> sink1"
 				}
 			},
 			"dependsOn": []
@@ -7325,308 +7410,6 @@
 											"datasetParameters": {
 												"StagingDB": {},
 												"RelationalCertification": {},
-												"UpserttRow": {}
-											}
-										},
-										"staging": {},
-										"compute": {
-											"coreCount": 8,
-											"computeType": "General"
-										}
-									}
-								}
-							],
-							"ifTrueActivities": [
-								{
-									"name": "UpdateSourceRegisterTableAbort",
-									"type": "SqlServerStoredProcedure",
-									"dependsOn": [],
-									"policy": {
-										"timeout": "7.00:00:00",
-										"retry": 0,
-										"retryIntervalInSeconds": 30,
-										"secureOutput": false,
-										"secureInput": false
-									},
-									"userProperties": [],
-									"typeProperties": {
-										"storedProcedureName": "[[log].[UpdateSourceRegisterFailedAbort]",
-										"storedProcedureParameters": {
-											"EtlUtcTag": {
-												"value": {
-													"value": "@pipeline().parameters.Etl_Utc_Tag",
-													"type": "Expression"
-												},
-												"type": "String"
-											},
-											"FileName": {
-												"value": {
-													"value": "@pipeline().parameters.OriginalBlobName",
-													"type": "Expression"
-												},
-												"type": "String"
-											}
-										}
-									},
-									"linkedServiceName": {
-										"referenceName": "SQLdbConnection",
-										"type": "LinkedServiceReference"
-									}
-								}
-							]
-						}
-					}
-				],
-				"parameters": {
-					"ProcessName": {
-						"type": "string"
-					},
-					"FileName": {
-						"type": "string"
-					},
-					"Etl_Utc_Tag": {
-						"type": "string"
-					},
-					"OriginalBlobName": {
-						"type": "string"
-					}
-				},
-				"annotations": []
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/ProcessSourceBlob_opscontract_spl')]",
-			"type": "Microsoft.DataFactory/factories/pipelines",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"activities": [
-					{
-						"name": "LookupStagingOpsIncident",
-						"type": "Lookup",
-						"dependsOn": [],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"source": {
-								"type": "AzureSqlSource",
-								"sqlReaderQuery": "SELECT count(*) Total_Error\n  FROM [staging].[OPS_Contract]\n  WHERE [Validation_Error] IS NOT NULL"
-							},
-							"dataset": {
-								"referenceName": "SQLstagingopscontract_ds",
-								"type": "DatasetReference",
-								"parameters": {}
-							}
-						}
-					},
-					{
-						"name": "If Condition1",
-						"type": "IfCondition",
-						"dependsOn": [
-							{
-								"activity": "LookupStagingOpsIncident",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"expression": {
-								"value": "@greater(activity('LookupStagingOpsIncident').output.firstRow.TOTAL_ERROR,0)",
-								"type": "Expression"
-							},
-							"ifFalseActivities": [
-								{
-									"name": "LoadStagingDBtoRelationDB_opscontract_df",
-									"type": "ExecuteDataFlow",
-									"dependsOn": [],
-									"policy": {
-										"timeout": "7.00:00:00",
-										"retry": 0,
-										"retryIntervalInSeconds": 30,
-										"secureOutput": false,
-										"secureInput": false
-									},
-									"userProperties": [],
-									"typeProperties": {
-										"dataflow": {
-											"referenceName": "LoadStagingDBtoRelationDB_opscontract_df",
-											"type": "DataFlowReference",
-											"parameters": {
-												"ProcessName": {
-													"value": "'@{pipeline().parameters.ProcessName}'",
-													"type": "Expression"
-												},
-												"FileName": {
-													"value": "'@{pipeline().parameters.FileName}'",
-													"type": "Expression"
-												},
-												"Etl_Utc_Tag": {
-													"value": "'@{pipeline().parameters.Etl_Utc_Tag}'",
-													"type": "Expression"
-												}
-											},
-											"datasetParameters": {
-												"StagingDB": {},
-												"RelationalContract": {},
-												"UpserttRow": {}
-											}
-										},
-										"staging": {},
-										"compute": {
-											"coreCount": 8,
-											"computeType": "General"
-										}
-									}
-								}
-							],
-							"ifTrueActivities": [
-								{
-									"name": "UpdateSourceRegisterTableAbort",
-									"type": "SqlServerStoredProcedure",
-									"dependsOn": [],
-									"policy": {
-										"timeout": "7.00:00:00",
-										"retry": 0,
-										"retryIntervalInSeconds": 30,
-										"secureOutput": false,
-										"secureInput": false
-									},
-									"userProperties": [],
-									"typeProperties": {
-										"storedProcedureName": "[[log].[UpdateSourceRegisterFailedAbort]",
-										"storedProcedureParameters": {
-											"EtlUtcTag": {
-												"value": {
-													"value": "@pipeline().parameters.Etl_Utc_Tag",
-													"type": "Expression"
-												},
-												"type": "String"
-											},
-											"FileName": {
-												"value": {
-													"value": "@pipeline().parameters.OriginalBlobName",
-													"type": "Expression"
-												},
-												"type": "String"
-											}
-										}
-									},
-									"linkedServiceName": {
-										"referenceName": "SQLdbConnection",
-										"type": "LinkedServiceReference"
-									}
-								}
-							]
-						}
-					}
-				],
-				"parameters": {
-					"ProcessName": {
-						"type": "string"
-					},
-					"FileName": {
-						"type": "string"
-					},
-					"Etl_Utc_Tag": {
-						"type": "string"
-					},
-					"OriginalBlobName": {
-						"type": "string"
-					}
-				},
-				"annotations": []
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/ProcessSourceBlob_opsharvestrecon_spl')]",
-			"type": "Microsoft.DataFactory/factories/pipelines",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"activities": [
-					{
-						"name": "LookupStagingOpsIncident",
-						"type": "Lookup",
-						"dependsOn": [],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"source": {
-								"type": "AzureSqlSource",
-								"sqlReaderQuery": "SELECT count(*) Total_Error\n  FROM [staging].[OPS_Harvest_Reconciliation]\n  WHERE [Validation_Error] IS NOT NULL"
-							},
-							"dataset": {
-								"referenceName": "SQLstagingopsharvestrecon_ds",
-								"type": "DatasetReference",
-								"parameters": {}
-							}
-						}
-					},
-					{
-						"name": "If Condition1",
-						"type": "IfCondition",
-						"dependsOn": [
-							{
-								"activity": "LookupStagingOpsIncident",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"expression": {
-								"value": "@greater(activity('LookupStagingOpsIncident').output.firstRow.TOTAL_ERROR,0)",
-								"type": "Expression"
-							},
-							"ifFalseActivities": [
-								{
-									"name": "LoadStagingDBtoRelationDB_opsharvestrecon_df",
-									"type": "ExecuteDataFlow",
-									"dependsOn": [],
-									"policy": {
-										"timeout": "7.00:00:00",
-										"retry": 0,
-										"retryIntervalInSeconds": 30,
-										"secureOutput": false,
-										"secureInput": false
-									},
-									"userProperties": [],
-									"typeProperties": {
-										"dataflow": {
-											"referenceName": "LoadStagingDBtoRelationDB_opsharvestrecon_df",
-											"type": "DataFlowReference",
-											"parameters": {
-												"ProcessName": {
-													"value": "'@{pipeline().parameters.ProcessName}'",
-													"type": "Expression"
-												},
-												"FileName": {
-													"value": "'@{pipeline().parameters.FileName}'",
-													"type": "Expression"
-												},
-												"Etl_Utc_Tag": {
-													"value": "'@{pipeline().parameters.Etl_Utc_Tag}'",
-													"type": "Expression"
-												}
-											},
-											"datasetParameters": {
-												"StagingDB": {},
-												"RelationalHarvestReconciliation": {},
 												"UpserttRow": {}
 											}
 										},
