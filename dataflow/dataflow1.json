@@ -15,7 +15,7 @@
 			"sinks": [
 				{
 					"dataset": {
-						"referenceName": "DelimitedText_sourcearchive_ds",
+						"referenceName": "DelimitedText_budget_loadready_ds",
 						"type": "DatasetReference"
 					},
 					"name": "sink1"
@@ -27,7 +27,7 @@
 					"description": "Creates an explicit mapping for each drifted column"
 				}
 			],
-			"script": "source(output(\n\t\tfeatures as (type as string, properties as (Asset_Id as string, Fund_Id as string, OBJECTID as string, Property as string, Crop_Type as string, Plant_Year as string, State as string, Area_Ha as double, SHAPE_Leng as double, SHAPE_Area as double), geometry as (type as string, coordinates as string))[]\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tbackslashEscape: true) ~> geojsonmodified\ngeojsonmodified derive({_corrupt_record} = toString(byName('_corrupt_record')),\n\t\ttype = toString(byName('type')),\n\t\tfeatures = ERROR_FUNCTION(''),\n\t\tAsset_ID = features[1].properties.Asset_Id) ~> MapDrifted1\nMapDrifted1 sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tpartitionFileNames:['abc.txt'],\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> sink1"
+			"script": "source(output(\n\t\tfeatures as (type as string, properties as (Asset_Id as string, Fund_Id as string, OBJECTID as string, Property as string, Crop_Type as string, Plant_Year as string, State as string, Area_Ha as double, SHAPE_Leng as double, SHAPE_Area as double), geometry as (type as string, coordinates as string))[]\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tbackslashEscape: true) ~> geojsonmodified\ngeojsonmodified derive({_corrupt_record} = toString(byName('_corrupt_record')),\n\t\ttype = toString(byName('type')),\n\t\tAsset_ID = features[1].properties.Asset_Id) ~> MapDrifted1\nMapDrifted1 sink(input(\n\t\tVersion_Name as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tBudget_Date as string,\n\t\tBudget_Desc as string,\n\t\tBudget_value as string,\n\t\tBudget_Type as string,\n\t\tUpdate_datetime as string,\n\t\trecord_deleted_flag as string,\n\t\tprocess_name as string,\n\t\tinsert_update_flag as string,\n\t\tBudget_ID as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tpartitionFileNames:['abc.txt'],\n\tmapColumn(\n\t\tAsset_ID\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> sink1"
 		}
 	}
 }
