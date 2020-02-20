@@ -9302,7 +9302,7 @@
 						"typeProperties": {
 							"source": {
 								"type": "AzureSqlSource",
-								"sqlReaderQuery": "SELECT [ORIGINAL_BLOB_LANDING_CONTAINER],\n\t[ORIGINAL_BLOB_NAME],\n\t[ORIGINAL_BLOP_FULLPATH],\n\t[TARGET_BLOB_LANDING_CONTAINER],\n\t[TARGET_BLOB_NAME],\n\t[DATALAKE_CONTAINER],\n\t[DATALAKE_FILE_PATH],\n\t[ORIGINAL_BLOB_ARCHIVE_CONTAINER],\n\t[ORIGINAL_BLOB_ARCHIVE_FULLPATH],\n\tCONCAT(DATALAKE_CONTAINER,'/',DATALAKE_FILE_PATH,'/',TARGET_BLOB_NAME) AS DATALAKE_FULL_PATHFILE\nFROM [log].[SOURCE_REGISTER_TABLE]\nWHERE [ETL_IS_PROCESSED] = 'N'\nAND [ORIGINAL_BLOB_NAME] LIKE 'BGT%'\nORDER BY [ORIGINAL_BLOB_NAME];"
+								"sqlReaderQuery": "SELECT [ORIGINAL_BLOB_LANDING_CONTAINER],\n\t[ORIGINAL_BLOB_NAME],\n\t[ORIGINAL_BLOP_FULLPATH],\n\t[TARGET_BLOB_LANDING_CONTAINER],\n\t[TARGET_BLOB_NAME],\n\t[DATALAKE_CONTAINER],\n\t[DATALAKE_FILE_PATH],\n\t[ORIGINAL_BLOB_ARCHIVE_CONTAINER],\n\t[ORIGINAL_BLOB_ARCHIVE_FULLPATH],\n\tCONCAT(DATALAKE_CONTAINER,'/',DATALAKE_FILE_PATH,'/',TARGET_BLOB_NAME) AS DATALAKE_FULL_PATHFILE\nFROM [log].[SOURCE_REGISTER_TABLE]\nWHERE [ETL_IS_PROCESSED] = 'N'\nAND [ORIGINAL_BLOB_NAME] LIKE 'BUDGET_%'\nORDER BY [ORIGINAL_BLOB_NAME];"
 							},
 							"dataset": {
 								"referenceName": "SQLsourceRegisterTable_ds",
@@ -10024,7 +10024,7 @@
 									"value": "@variables('Etl_Utc_Tag')",
 									"type": "Expression"
 								},
-								"File_Pattern": "BGT%"
+								"File_Pattern": "BUDGET_%"
 							}
 						}
 					},
@@ -10060,7 +10060,7 @@
 									"value": "@variables('Etl_Utc_Tag')",
 									"type": "Expression"
 								},
-								"File_Pattern": "BGT%"
+								"File_Pattern": "BUDGET_%"
 							}
 						}
 					}
@@ -41420,60 +41420,52 @@
 				"schema": {
 					"type": "object",
 					"properties": {
-						"features": {
-							"type": "array",
-							"items": {
-								"type": "object",
-								"properties": {
-									"type": {
-										"type": "string"
-									},
-									"properties": {
-										"type": "object",
-										"properties": {
-											"Asset_Id": {
-												"type": "string"
-											},
-											"Fund_Id": {
-												"type": "string"
-											},
-											"OBJECTID": {
-												"type": "integer"
-											},
-											"Property": {
-												"type": "string"
-											},
-											"Crop_Type": {
-												"type": "string"
-											},
-											"Plant_Year": {
-												"type": "integer"
-											},
-											"State": {
-												"type": "string"
-											},
-											"Area_Ha": {
-												"type": "number"
-											},
-											"SHAPE_Leng": {
-												"type": "number"
-											},
-											"SHAPE_Area": {
-												"type": "number"
-											}
-										}
-									},
-									"geometry": {
-										"type": "object",
-										"properties": {
-											"type": {
-												"type": "string"
-											},
-											"coordinates": {
-												"type": "string"
-											}
-										}
-									}
+						"type": {
+							"type": "string"
+						},
+						"properties": {
+							"type": "object",
+							"properties": {
+								"Asset_Id": {
+									"type": "string"
+								},
+								"Fund_Id": {
+									"type": "string"
+								},
+								"OBJECTID": {
+									"type": "integer"
+								},
+								"Property": {
+									"type": "string"
+								},
+								"Crop_Type": {
+									"type": "string"
+								},
+								"Plant_Year": {
+									"type": "integer"
+								},
+								"State": {
+									"type": "string"
+								},
+								"Area_Ha": {
+									"type": "number"
+								},
+								"SHAPE_Leng": {
+									"type": "number"
+								},
+								"SHAPE_Area": {
+									"type": "number"
+								}
+							}
+						},
+						"geometry": {
+							"type": "object",
+							"properties": {
+								"type": {
+									"type": "string"
+								},
+								"coordinates": {
+									"type": "string"
 								}
 							}
 						}
@@ -47063,6 +47055,44 @@
 			},
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/linkedServices/BlobStore_nfdwhstaging')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/testJson')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "asset_id",
+						"type": "nvarchar"
+					},
+					{
+						"name": "fund_id",
+						"type": "nvarchar"
+					},
+					{
+						"name": "loc_geometry",
+						"type": "NFDWHDEV.sys.geometry"
+					},
+					{
+						"name": "loc_json",
+						"type": "nvarchar"
+					}
+				],
+				"typeProperties": {
+					"schema": "weiyin",
+					"table": "testjson"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/SQLdbConnection')]"
 			]
 		},
 		{
@@ -52907,7 +52937,7 @@
 					"sinks": [
 						{
 							"dataset": {
-								"referenceName": "DelimitedText_budget_loadready_ds",
+								"referenceName": "testJson",
 								"type": "DatasetReference"
 							},
 							"name": "sink1"
@@ -52915,16 +52945,22 @@
 					],
 					"transformations": [
 						{
-							"name": "MapDrifted1",
+							"name": "Select1"
+						},
+						{
+							"name": "MapDrifted2",
 							"description": "Creates an explicit mapping for each drifted column"
+						},
+						{
+							"name": "Filter1"
 						}
 					],
-					"script": "source(output(\n\t\tfeatures as (type as string, properties as (Asset_Id as string, Fund_Id as string, OBJECTID as string, Property as string, Crop_Type as string, Plant_Year as string, State as string, Area_Ha as double, SHAPE_Leng as double, SHAPE_Area as double), geometry as (type as string, coordinates as string))[]\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tbackslashEscape: true) ~> geojsonmodified\ngeojsonmodified derive({_corrupt_record} = toString(byName('_corrupt_record')),\n\t\ttype = toString(byName('type')),\n\t\tAsset_ID = features[1].properties.Asset_Id) ~> MapDrifted1\nMapDrifted1 sink(input(\n\t\tVersion_Name as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tBudget_Date as string,\n\t\tBudget_Desc as string,\n\t\tBudget_value as string,\n\t\tBudget_Type as string,\n\t\tUpdate_datetime as string,\n\t\trecord_deleted_flag as string,\n\t\tprocess_name as string,\n\t\tinsert_update_flag as string,\n\t\tBudget_ID as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tpartitionFileNames:['abc.txt'],\n\tmapColumn(\n\t\tAsset_ID\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> sink1"
+					"script": "source(output(\n\t\ttype as string,\n\t\tproperties as (Asset_Id as string, Fund_Id as string, OBJECTID as string, Property as string, Crop_Type as string, Plant_Year as string, State as string, Area_Ha as double, SHAPE_Leng as double, SHAPE_Area as double),\n\t\tgeometry as (type as string, coordinates as string)\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tbackslashEscape: true) ~> geojsonmodified\nFilter1 select(mapColumn(\n\t\tAsset_ID = asset_id,\n\t\tFund_ID = fund_id,\n\t\tLoc_Json = loc_json\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> Select1\ngeojsonmodified derive({_corrupt_record} = toString(byName('_corrupt_record')),\n\t\tasset_id = properties.Asset_Id,\n\t\tfund_id = properties.Fund_Id,\n\t\tloc_json = geometry.coordinates) ~> MapDrifted2\nMapDrifted2 filter(not(isNull(asset_id))) ~> Filter1\nSelect1 sink(input(\n\t\tasset_id as string,\n\t\tfund_id as string,\n\t\tloc_geometry as binary,\n\t\tloc_json as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tasset_id = Asset_ID,\n\t\tfund_id = Fund_ID,\n\t\tloc_json = Loc_Json\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> sink1"
 				}
 			},
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/datasets/Geo_sourcelandingscrubbed_geojsonmodified_ds')]",
-				"[concat(variables('factoryId'), '/datasets/DelimitedText_budget_loadready_ds')]"
+				"[concat(variables('factoryId'), '/datasets/testJson')]"
 			]
 		}
 	]
