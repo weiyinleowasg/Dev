@@ -1,0 +1,76 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory name",
+			"defaultValue": "DWH-NonProd-ADF"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/ProcessTigermothSendmail_Completion_pl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "TigermothCompletion_Sendmail",
+						"type": "WebActivity",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": "https://prod-12.australiaeast.logic.azure.com:443/workflows/f7a9fbbc810043f28c16fd6bcf3b2f68/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=8yphnNtSS85GDIgCI8OiOwpDghciKo7S9hRjuy5ITI4",
+							"method": "POST",
+							"headers": {
+								"Content-Type": "application/json"
+							},
+							"body": {
+								"dataFactoryName": "@pipeline().parameters.Parent_DataFactory",
+								"pipelineName": "@pipeline().parameters.Parent_Pipeline",
+								"messageHeader": "@pipeline().parameters.Success_Fail_Header",
+								"messageProcessed": "",
+								"messageNotProcessed": "",
+								"messageErrorDuringProcess": ""
+							}
+						}
+					}
+				],
+				"parameters": {
+					"Parent_DataFactory": {
+						"type": "string"
+					},
+					"Parent_Pipeline": {
+						"type": "string"
+					},
+					"Success_Fail_Header": {
+						"type": "string"
+					}
+				},
+				"variables": {
+					"Success_Fail_Header": {
+						"type": "String",
+						"defaultValue": "***SUCCESS***"
+					},
+					"Etl_Utc_Tag": {
+						"type": "String",
+						"defaultValue": "2019-10-22"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": []
+		}
+	]
+}

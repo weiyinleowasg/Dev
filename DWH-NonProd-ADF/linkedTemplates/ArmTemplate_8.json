@@ -25,16 +25,14 @@
 								"referenceName": "SQLstagingbudget_ds",
 								"type": "DatasetReference"
 							},
-							"name": "StagingDB",
-							"typeProperties": {}
+							"name": "StagingDB"
 						},
 						{
 							"dataset": {
 								"referenceName": "SQLrelationbudget_ds",
 								"type": "DatasetReference"
 							},
-							"name": "RelationDB",
-							"typeProperties": {}
+							"name": "RelationDB"
 						}
 					],
 					"sinks": [
@@ -105,8 +103,7 @@
 								"referenceName": "SQLstagingbudget_ds",
 								"type": "DatasetReference"
 							},
-							"name": "StagingDB",
-							"typeProperties": {}
+							"name": "StagingDB"
 						}
 					],
 					"sinks": [
@@ -144,16 +141,14 @@
 								"referenceName": "SQLstagingcoa_ds",
 								"type": "DatasetReference"
 							},
-							"name": "StagingDB",
-							"typeProperties": {}
+							"name": "StagingDB"
 						},
 						{
 							"dataset": {
 								"referenceName": "SQLrelationcoa_ds",
 								"type": "DatasetReference"
 							},
-							"name": "RelationDB",
-							"typeProperties": {}
+							"name": "RelationDB"
 						}
 					],
 					"sinks": [
@@ -224,24 +219,21 @@
 								"referenceName": "SQLstagingcoatrxcommon_ds",
 								"type": "DatasetReference"
 							},
-							"name": "StagingDB",
-							"typeProperties": {}
+							"name": "StagingDB"
 						},
 						{
 							"dataset": {
 								"referenceName": "SQLrelationcoatrxcommon_ds",
 								"type": "DatasetReference"
 							},
-							"name": "RelationDB",
-							"typeProperties": {}
+							"name": "RelationDB"
 						},
 						{
 							"dataset": {
 								"referenceName": "SQLrelationcoatrxcommon_ds",
 								"type": "DatasetReference"
 							},
-							"name": "RelationDBbeginningbalanceonly",
-							"typeProperties": {}
+							"name": "RelationDBbeginningbalanceonly"
 						}
 					],
 					"sinks": [
@@ -294,7 +286,7 @@
 							"name": "UnionNewTransactions"
 						}
 					],
-					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Amount as decimal(18,2),\n\t\tCash_Flow_Code as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: '  SELECT CASE WHEN Trx_Desc = \\'Beginning Balance:\\' THEN CONCAT(TRX.[Trx_Code],\\'-\\',FUN.[Fund_ID]) ELSE Trx_Code END AS Trx_Code\\n      ,FUN.[Fund_ID]\\n      ,TRX.[Asset_ID]\\n\t  ,TRX.GL_Code\\n      ,[Debit_Credit]\\n      ,[Trx_Date]\\n      ,[Trx_Desc]\\n      ,[Trx_Amount]\\n\t  ,CASE WHEN COA.[GL_Code] IS NULL THEN \\'NO GL_CODE DURING LOAD\\' ELSE COA.[Cash_Flow_Code] END AS Cash_Flow_Code\\n  FROM [staging].[COA_Transactions] TRX\\n  LEFT JOIN [relational].[Chart_of_Account] COA\\n  ON TRX.[GL_Code] = COA.[GL_Code] AND COA.[record_deleted_flag] = 0\\n  LEFT JOIN [relational].[Fund] FUN\\n  ON TRX.[Fund_ID] = FUN.[Company_Name] AND FUN.[record_deleted_flag] = 0\\n  LEFT JOIN [relational].[Asset] ASS\\n  ON TRX.[Asset_ID] = ASS.[Asset_ID] AND FUN.[Fund_ID] = ASS.[Fund_ID] AND ASS.[record_deleted_flag] = 0',\n\tformat: 'query') ~> StagingDB\nsource(output(\n\t\tTrx_ID as long,\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Type as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Amount as decimal(18,2),\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [Trx_ID]\\n      ,[Trx_Code]\\n      ,[Fund_ID]\\n      ,[Asset_ID]\\n      ,[GL_Code]\\n      ,[Cash_Flow_Code]\\n      ,[Debit_Credit]\\n      ,[Trx_Type]\\n      ,[Trx_Date]\\n      ,[Trx_Desc]\\n      ,[Trx_Amount]\\n      ,[Update_datetime]\\n      ,[record_deleted_flag]\\n      ,[process_name]\\n  FROM [relational].[COA_Transactions]\\n  WHERE [record_deleted_flag] = 0\\n  AND [Trx_Type] = \\'Actual\\'\\n  AND DATEDIFF(DAY,Update_datetime,CONVERT(smalldatetime,CONVERT(datetimeoffset, SYSDATETIME()) AT TIME ZONE \\'AUS Eastern Standard Time\\')) <= 365',\n\tformat: 'query') ~> RelationDB\nsource(output(\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tTrx_Type as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [Trx_Code]\\n      ,[Fund_ID]\\n      ,[Asset_ID]\\n      ,[GL_Code]\\n      ,[Trx_Type]\\n      ,[Trx_Date]\\n      ,[Trx_Desc]\\n  FROM [relational].[COA_Transactions]\\n  WHERE [record_deleted_flag] = 0\\n  AND [Trx_Type] = \\'Actual\\'\\n  AND [Trx_Desc] = \\'Beginning Balance:\\'',\n\tformat: 'query') ~> RelationDBbeginningbalanceonly\nStagingDB derive(StagingChecksum = sha2(256, Trx_Code,Fund_ID,Asset_ID,GL_Code,Debit_Credit,Trx_Date,Trx_Desc,Trx_Amount)) ~> StatgingAddChecksum\nStatgingAddChecksum, RelationRenameColumns lookup(StagingChecksum == Relation_RelationalChecksum,\n\tmultiple: true,\n\tbroadcast: 'none')~> LookupRelationalStream\nRelationDB derive(RelationalChecksum = sha2(256, Trx_Code,Fund_ID,Asset_ID,GL_Code,Debit_Credit,Trx_Date,Trx_Desc,Trx_Amount)) ~> RelationalAddChecksum\nLookupRelationalStream split(isNull(Relation_RelationalChecksum),\n\tdisjoint: false) ~> ConditionalSplitNewOrExpire@(StagingNewRow, IgnoreNoChange)\nRelationalAddChecksum select(mapColumn(\n\t\tRelation_Trx_ID = Trx_ID,\n\t\tRelation_Trx_Code = Trx_Code,\n\t\tRelation_Fund_ID = Fund_ID,\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_GL_Code = GL_Code,\n\t\tRelation_Cash_Flow_Code = Cash_Flow_Code,\n\t\tRelation_Debit_Credit = Debit_Credit,\n\t\tRelation_Trx_Type = Trx_Type,\n\t\tRelation_Trx_Date = Trx_Date,\n\t\tRelation_Trx_Desc = Trx_Desc,\n\t\tRelation_Trx_Amount = Trx_Amount,\n\t\tRelation_Update_datetime = Update_datetime,\n\t\tRelation_record_deleted_flag = record_deleted_flag,\n\t\tRelation_process_name = process_name,\n\t\tRelation_RelationalChecksum = RelationalChecksum\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> RelationRenameColumns\nIsTrxCodeBeginningBalance@TrxCodeNotBeginningBalance select(mapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tDebit_Credit,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Amount,\n\t\tCash_Flow_Code\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectNewStagingRow\nUnionNewTransactions derive(Update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName),\n\t\tTrx_Type = toString('Actual')) ~> AddAuditColumns\nConditionalSplitNewOrExpire@StagingNewRow split(Trx_Desc!='Beginning Balance:',\n\tdisjoint: false) ~> IsTrxCodeBeginningBalance@(TrxCodeNotBeginningBalance, TrxCodeBeginningBalance)\nRelationDBbeginningbalanceonly select(mapColumn(\n\t\tRelationBB_Trx_Code = Trx_Code,\n\t\tRelationBB_Fund_ID = Fund_ID,\n\t\tRelationBB_Asset_ID = Asset_ID,\n\t\tRelationBB_GL_Code = GL_Code,\n\t\tRelationBB_Trx_Type = Trx_Type,\n\t\tRelationBB_Trx_Date = Trx_Date,\n\t\tRelationBB_Trx_Desc = Trx_Desc\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectDBcolumnsBeginningBalance\nIsTrxCodeBeginningBalance@TrxCodeBeginningBalance, SelectDBcolumnsBeginningBalance lookup(Trx_Code == RelationBB_Trx_Code,\n\tmultiple: true,\n\tbroadcast: 'none')~> LookupDBbeginningBalance\nLookupDBbeginningBalance split(isNull(RelationBB_Trx_Code),\n\tdisjoint: false) ~> IsTrxCodeBeginningBalanceExist@(NewTrxCodeBeginningBalance, ExistingTrxCodeBeginningBalance)\nIsTrxCodeBeginningBalanceExist@NewTrxCodeBeginningBalance select(mapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tDebit_Credit,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Amount,\n\t\tCash_Flow_Code\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectBeginingBalanceColumns\nSelectNewStagingRow, SelectBeginingBalanceColumns union(byName: true)~> UnionNewTransactions\nAddAuditColumns sink(input(\n\t\tTrx_ID as long,\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Type as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Amount as decimal(18,2),\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string,\n\t\tStart_Date_Tag as date,\n\t\tEnd_Date_Tag as date\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tkeys:['Fund_ID'],\n\tformat: 'table',\n\tmapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tTrx_Type,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Amount,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t)) ~> InsertRow"
+					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Amount as decimal(18,2),\n\t\tCash_Flow_Code as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: '  SELECT CASE WHEN Trx_Desc = \\'Beginning Balance:\\' THEN CONCAT(TRX.[Trx_Code],\\'-\\',FUN.[Fund_ID]) ELSE Trx_Code END AS Trx_Code\\n      ,FUN.[Fund_ID]\\n      ,TRX.[Asset_ID]\\n\t  ,TRX.GL_Code\\n      ,[Debit_Credit]\\n      ,[Trx_Date]\\n      ,[Trx_Desc]\\n      ,[Trx_Amount]\\n\t  ,CASE WHEN COA.[GL_Code] IS NULL THEN \\'NO GL_CODE DURING LOAD\\' ELSE COA.[Cash_Flow_Code] END AS Cash_Flow_Code\\n  FROM [staging].[COA_Transactions] TRX\\n  LEFT JOIN [relational].[Chart_of_Account] COA\\n  ON TRX.[GL_Code] = COA.[GL_Code] AND COA.[record_deleted_flag] = 0\\n  LEFT JOIN [relational].[Fund] FUN\\n  ON TRX.[Fund_ID] = FUN.[Company_Name] AND FUN.[record_deleted_flag] = 0\\n  LEFT JOIN [relational].[Asset] ASS\\n  ON TRX.[Asset_ID] = ASS.[Asset_ID] AND FUN.[Fund_ID] = ASS.[Fund_ID] AND ASS.[record_deleted_flag] = 0',\n\tformat: 'query') ~> StagingDB\nsource(output(\n\t\tTrx_ID as long,\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Type as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Amount as decimal(18,2),\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [Trx_ID]\\n      ,[Trx_Code]\\n      ,[Fund_ID]\\n      ,[Asset_ID]\\n      ,[GL_Code]\\n      ,[Cash_Flow_Code]\\n      ,[Debit_Credit]\\n      ,[Trx_Type]\\n      ,[Trx_Date]\\n      ,[Trx_Desc]\\n      ,[Trx_Amount]\\n      ,[Update_datetime]\\n      ,[record_deleted_flag]\\n      ,[process_name]\\n  FROM [relational].[COA_Transactions]\\n  WHERE [record_deleted_flag] = 0\\n  AND [Trx_Type] = \\'Actual\\'\\n  AND DATEDIFF(DAY,Update_datetime,CONVERT(smalldatetime,CONVERT(datetimeoffset, SYSDATETIME()) AT TIME ZONE \\'AUS Eastern Standard Time\\')) <= 365',\n\tformat: 'query') ~> RelationDB\nsource(output(\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tTrx_Type as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [Trx_Code]\\n      ,[Fund_ID]\\n      ,[Asset_ID]\\n      ,[GL_Code]\\n      ,[Trx_Type]\\n      ,[Trx_Date]\\n      ,[Trx_Desc]\\n  FROM [relational].[COA_Transactions]\\n  WHERE [record_deleted_flag] = 0\\n  AND [Trx_Type] = \\'Actual\\'\\n  AND [Trx_Desc] = \\'Beginning Balance:\\'',\n\tformat: 'query') ~> RelationDBbeginningbalanceonly\nStagingDB derive(StagingChecksum = sha2(256, Trx_Code,Fund_ID,Asset_ID,GL_Code,Debit_Credit,Trx_Date,Trx_Desc,Trx_Amount)) ~> StatgingAddChecksum\nStatgingAddChecksum, RelationRenameColumns lookup(StagingChecksum == Relation_RelationalChecksum,\n\tmultiple: true,\n\tbroadcast: 'none')~> LookupRelationalStream\nRelationDB derive(RelationalChecksum = sha2(256, Trx_Code,Fund_ID,Asset_ID,GL_Code,Debit_Credit,Trx_Date,Trx_Desc,Trx_Amount)) ~> RelationalAddChecksum\nLookupRelationalStream split(isNull(Relation_RelationalChecksum),\n\tdisjoint: false) ~> ConditionalSplitNewOrExpire@(StagingNewRow, IgnoreNoChange)\nRelationalAddChecksum select(mapColumn(\n\t\tRelation_Trx_ID = Trx_ID,\n\t\tRelation_Trx_Code = Trx_Code,\n\t\tRelation_Fund_ID = Fund_ID,\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_GL_Code = GL_Code,\n\t\tRelation_Cash_Flow_Code = Cash_Flow_Code,\n\t\tRelation_Debit_Credit = Debit_Credit,\n\t\tRelation_Trx_Type = Trx_Type,\n\t\tRelation_Trx_Date = Trx_Date,\n\t\tRelation_Trx_Desc = Trx_Desc,\n\t\tRelation_Trx_Amount = Trx_Amount,\n\t\tRelation_Update_datetime = Update_datetime,\n\t\tRelation_record_deleted_flag = record_deleted_flag,\n\t\tRelation_process_name = process_name,\n\t\tRelation_RelationalChecksum = RelationalChecksum\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> RelationRenameColumns\nIsTrxCodeBeginningBalance@TrxCodeNotBeginningBalance select(mapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tDebit_Credit,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Amount,\n\t\tCash_Flow_Code\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectNewStagingRow\nUnionNewTransactions derive(Update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName),\n\t\tTrx_Type = toString('Actual')) ~> AddAuditColumns\nConditionalSplitNewOrExpire@StagingNewRow split(Trx_Desc!='Beginning Balance:',\n\tdisjoint: false) ~> IsTrxCodeBeginningBalance@(TrxCodeNotBeginningBalance, TrxCodeBeginningBalance)\nRelationDBbeginningbalanceonly select(mapColumn(\n\t\tRelationBB_Trx_Code = Trx_Code,\n\t\tRelationBB_Fund_ID = Fund_ID,\n\t\tRelationBB_Asset_ID = Asset_ID,\n\t\tRelationBB_GL_Code = GL_Code,\n\t\tRelationBB_Trx_Type = Trx_Type,\n\t\tRelationBB_Trx_Date = Trx_Date,\n\t\tRelationBB_Trx_Desc = Trx_Desc\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectDBcolumnsBeginningBalance\nIsTrxCodeBeginningBalance@TrxCodeBeginningBalance, SelectDBcolumnsBeginningBalance lookup(Trx_Code == RelationBB_Trx_Code,\n\tmultiple: true,\n\tbroadcast: 'none')~> LookupDBbeginningBalance\nLookupDBbeginningBalance split(isNull(RelationBB_Trx_Code),\n\tdisjoint: false) ~> IsTrxCodeBeginningBalanceExist@(NewTrxCodeBeginningBalance, ExistingTrxCodeBeginningBalance)\nIsTrxCodeBeginningBalanceExist@NewTrxCodeBeginningBalance select(mapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tDebit_Credit,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Amount,\n\t\tCash_Flow_Code\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectBeginingBalanceColumns\nSelectNewStagingRow, SelectBeginingBalanceColumns union(byName: true)~> UnionNewTransactions\nAddAuditColumns sink(input(\n\t\tTrx_ID as long,\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Type as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Amount as decimal(18,2),\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string,\n\t\tStart_Date_Tag as date,\n\t\tEnd_Date_Tag as date\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tTrx_Type,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Amount,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t)) ~> InsertRow"
 				}
 			},
 			"dependsOn": []
@@ -312,16 +304,14 @@
 								"referenceName": "SQLstagingfctrefasset_ds",
 								"type": "DatasetReference"
 							},
-							"name": "StagingDB",
-							"typeProperties": {}
+							"name": "StagingDB"
 						},
 						{
 							"dataset": {
 								"referenceName": "SQLrelationfctrefasset_ds",
 								"type": "DatasetReference"
 							},
-							"name": "RelationDB",
-							"typeProperties": {}
+							"name": "RelationDB"
 						}
 					],
 					"sinks": [
@@ -392,8 +382,7 @@
 								"referenceName": "SQLstagingfctrefasset_ds",
 								"type": "DatasetReference"
 							},
-							"name": "StagingDB",
-							"typeProperties": {}
+							"name": "StagingDB"
 						}
 					],
 					"sinks": [
@@ -431,8 +420,7 @@
 								"referenceName": "SQLstagingfctrefasset_ds",
 								"type": "DatasetReference"
 							},
-							"name": "StagingDB",
-							"typeProperties": {}
+							"name": "StagingDB"
 						}
 					],
 					"sinks": [
@@ -476,8 +464,7 @@
 								"referenceName": "SQLstagingasset_ds",
 								"type": "DatasetReference"
 							},
-							"name": "StagingDB",
-							"typeProperties": {}
+							"name": "StagingDB"
 						}
 					],
 					"sinks": [
@@ -500,7 +487,7 @@
 							"name": "AlterRowInsert"
 						}
 					],
-					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tPeriod_Date as timestamp,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tStatus as string,\n\t\tProduct as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tPerpetual_Amount as decimal(25,10),\n\t\tCurrent_Amount as decimal(25,10),\n\t\tFuture_Amount as decimal(25,10),\n\t\tDebit_Credit as string,\n\t\tForecast_Type as string,\n\t\tVersion_name as string,\n\t\tUOM as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT \\n --REF.ASSET_OFFSET AS REF_ASSET_OFFSET , PAR.ASSET_OFFSET AS PAR_ASSET_OFFSET, PAR.DESC_YEAR, DAT.PERIOD,\\n CASE WHEN REF.ASSET_OFFSET = PAR.ASSET_OFFSET \\n          THEN DATEADD(YEAR,CAST(REF.ASSET_OFFSET AS INT)+( CAST(DAT.PERIOD AS INT) - 1 ),CAST(CONCAT(PAR.DESC_YEAR,\\'-01-01\\') AS DATETIME)) \\n          ELSE DATEADD(YEAR,CAST(REF.ASSET_OFFSET AS INT)-CAST(PAR.ASSET_OFFSET AS INT)+( CAST(DAT.PERIOD AS INT) - 1 ),CAST(CONCAT(PAR.DESC_YEAR,\\'-01-01\\') AS DATETIME)) \\n END AS Period_Date,\\n REF.FUND_ID AS Fund_ID,\\n REF.ASSET_ID AS Asset_ID,\\n DAT.STATUS AS Status, \\n DAT.PRODUCT AS Product, \\n CASE WHEN PRD.GL_CODE IS NULL THEN \\'IGNORE\\' ELSE PRD.GL_CODE END AS GL_Code,\\n CAST(NULL AS VARCHAR(100)) AS Cash_Flow_Code,\\n ABS(( CAST(CAST(DAT.CURENT_AMOUNT AS FLOAT) + CAST(DAT.FUTURE_AMOUNT AS FLOAT) AS DECIMAL(25,10)) )) AS Perpetual_Amount,\\n CAST(CAST(DAT.CURENT_AMOUNT AS FLOAT) AS DECIMAL(25,10)) AS Current_Amount, \\n CAST(CAST(DAT.FUTURE_AMOUNT AS FLOAT) AS DECIMAL(25,10)) AS Future_Amount,\\n CASE WHEN UPPER(COA.DEBIT_CREDIT) = \\'DR\\' AND ( CAST(CAST(DAT.CURENT_AMOUNT AS FLOAT) + CAST(DAT.FUTURE_AMOUNT AS FLOAT) AS DECIMAL(25,10)) ) >= 0 THEN \\'DR\\'\\n      WHEN UPPER(COA.DEBIT_CREDIT) = \\'DR\\' AND ( CAST(CAST(DAT.CURENT_AMOUNT AS FLOAT) + CAST(DAT.FUTURE_AMOUNT AS FLOAT) AS DECIMAL(25,10)) ) < 0 THEN \\'CR\\'\\n\t  WHEN UPPER(COA.DEBIT_CREDIT) = \\'CR\\' AND ( CAST(CAST(DAT.CURENT_AMOUNT AS FLOAT) + CAST(DAT.FUTURE_AMOUNT AS FLOAT) AS DECIMAL(25,10)) ) >= 0 THEN \\'CR\\'\\n\t  WHEN UPPER(COA.DEBIT_CREDIT) = \\'CR\\' AND ( CAST(CAST(DAT.CURENT_AMOUNT AS FLOAT) + CAST(DAT.FUTURE_AMOUNT AS FLOAT) AS DECIMAL(25,10)) ) < 0 THEN \\'DR\\'\\n\t  WHEN COA.DEBIT_CREDIT IS NULL AND ( CAST(CAST(DAT.CURENT_AMOUNT AS FLOAT) + CAST(DAT.FUTURE_AMOUNT AS FLOAT) AS DECIMAL(25,10)) ) >= 0 THEN \\'DR\\'\\n\t  ELSE \\'CR\\'\\n END AS Debit_Credit,\\n-- CASE WHEN ( CAST(CAST(DAT.CURENT_AMOUNT AS FLOAT) + CAST(DAT.FUTURE_AMOUNT AS FLOAT) AS DECIMAL(25,10)) ) >= 0 THEN \\'DR\\' ElSE \\'CR\\' END AS Debit_Credit,\\n \\'Forecast\\' AS Forecast_Type,\\n REF.VERSION_NAME AS Version_name,\\n DAT.UOM\\nFROM RELATIONAL.FORECAST_ASSET_REFERENCE REF\\nJOIN STAGING.FORECAST_PARAM PAR\\nON REF.FUND_ID = PAR.FUND_ID AND REF.ASSET_ID = PAR.ASSET_ID AND REF.VERSION_NAME = PAR.VERSION_NAME \\nJOIN STAGING.FORECAST_DATA DAT\\nON REF.FUND_ID = DAT.FUND_ID AND REF.ASSET_ID = DAT.ASSET_ID AND REF.VERSION_NAME = DAT.VERSION_NAME \\nLEFT JOIN RELATIONAL.FORECAST_GL_PRODUCT_MAP PRD\\nON DAT.FUND_ID = PRD.FUND_ID AND DAT.ASSET_ID = PRD.ASSET_ID AND DAT.STATUS = PRD.STATUS AND DAT.PRODUCT = PRD.Product AND PRD.RECORD_DELETED_FLAG = 0\\nLEFT JOIN RELATIONAL.CHART_OF_ACCOUNT COA\\nON PRD.GL_CODE = COA.GL_CODE AND COA.RECORD_DELETED_FLAG = 0\\nWHERE REF.ISPROCESSED = 0 AND REF.RECORD_DELETED_FLAG = 0 \\nAND DAT.STATUS != \\'\\' AND DAT.STATUS IS NOT NULL\\nAND CAST(REF.ASSET_OFFSET AS INT) >= CAST(PAR.ASSET_OFFSET AS INT)',\n\tformat: 'query') ~> StagingDB\nStagingDB select(mapColumn(\n\t\tPeriod_Date,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tStatus,\n\t\tProduct,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tPerpetual_Amount,\n\t\tCurrent_Amount,\n\t\tFuture_Amount,\n\t\tDebit_Credit,\n\t\tForecast_Type,\n\t\tVersion_name,\n\t\tUOM\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectNewStagingRow\nSelectNewStagingRow derive(Update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> AddAuditColumns\nAddAuditColumns alterRow(insertIf(record_deleted_flag==toInteger(0))) ~> AlterRowInsert\nAlterRowInsert sink(input(\n\t\tPeriod_Date as timestamp,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tStatus as string,\n\t\tProduct as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tPerpetual_Amount as decimal(25,10),\n\t\tCurrent_Amount as decimal(25,10),\n\t\tFuture_Amount as decimal(25,10),\n\t\tDebit_Credit as string,\n\t\tForecast_Type as string,\n\t\tVersion_name as string,\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string,\n\t\tUOM as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tkeys:['Asset_ID','Fund_ID'],\n\tformat: 'table',\n\tmapColumn(\n\t\tPeriod_Date,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tStatus,\n\t\tProduct,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tPerpetual_Amount,\n\t\tCurrent_Amount,\n\t\tFuture_Amount,\n\t\tDebit_Credit,\n\t\tForecast_Type,\n\t\tVersion_name,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name,\n\t\tUOM\n\t)) ~> InsertUpdateRow"
+					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tPeriod_Date as timestamp,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tStatus as string,\n\t\tProduct as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tPerpetual_Amount as decimal(25,10),\n\t\tCurrent_Amount as decimal(25,10),\n\t\tFuture_Amount as decimal(25,10),\n\t\tDebit_Credit as string,\n\t\tForecast_Type as string,\n\t\tVersion_name as string,\n\t\tUOM as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT \\n --REF.ASSET_OFFSET AS REF_ASSET_OFFSET , PAR.ASSET_OFFSET AS PAR_ASSET_OFFSET, PAR.DESC_YEAR, DAT.PERIOD,\\n CASE WHEN REF.ASSET_OFFSET = PAR.ASSET_OFFSET \\n          THEN DATEADD(YEAR,CAST(REF.ASSET_OFFSET AS INT)+( CAST(DAT.PERIOD AS INT) - 1 ),CAST(CONCAT(PAR.DESC_YEAR,\\'-01-01\\') AS DATETIME)) \\n          ELSE DATEADD(YEAR,CAST(REF.ASSET_OFFSET AS INT)-CAST(PAR.ASSET_OFFSET AS INT)+( CAST(DAT.PERIOD AS INT) - 1 ),CAST(CONCAT(PAR.DESC_YEAR,\\'-01-01\\') AS DATETIME)) \\n END AS Period_Date,\\n REF.FUND_ID AS Fund_ID,\\n REF.ASSET_ID AS Asset_ID,\\n DAT.STATUS AS Status, \\n DAT.PRODUCT AS Product, \\n CASE WHEN PRD.GL_CODE IS NULL THEN \\'IGNORE\\' ELSE PRD.GL_CODE END AS GL_Code,\\n CAST(NULL AS VARCHAR(100)) AS Cash_Flow_Code,\\n ABS(( CAST(CAST(DAT.CURENT_AMOUNT AS FLOAT) + CAST(DAT.FUTURE_AMOUNT AS FLOAT) AS DECIMAL(25,10)) )) AS Perpetual_Amount,\\n CAST(CAST(DAT.CURENT_AMOUNT AS FLOAT) AS DECIMAL(25,10)) AS Current_Amount, \\n CAST(CAST(DAT.FUTURE_AMOUNT AS FLOAT) AS DECIMAL(25,10)) AS Future_Amount,\\n CASE WHEN UPPER(COA.DEBIT_CREDIT) = \\'DR\\' AND ( CAST(CAST(DAT.CURENT_AMOUNT AS FLOAT) + CAST(DAT.FUTURE_AMOUNT AS FLOAT) AS DECIMAL(25,10)) ) >= 0 THEN \\'DR\\'\\n      WHEN UPPER(COA.DEBIT_CREDIT) = \\'DR\\' AND ( CAST(CAST(DAT.CURENT_AMOUNT AS FLOAT) + CAST(DAT.FUTURE_AMOUNT AS FLOAT) AS DECIMAL(25,10)) ) < 0 THEN \\'CR\\'\\n\t  WHEN UPPER(COA.DEBIT_CREDIT) = \\'CR\\' AND ( CAST(CAST(DAT.CURENT_AMOUNT AS FLOAT) + CAST(DAT.FUTURE_AMOUNT AS FLOAT) AS DECIMAL(25,10)) ) >= 0 THEN \\'CR\\'\\n\t  WHEN UPPER(COA.DEBIT_CREDIT) = \\'CR\\' AND ( CAST(CAST(DAT.CURENT_AMOUNT AS FLOAT) + CAST(DAT.FUTURE_AMOUNT AS FLOAT) AS DECIMAL(25,10)) ) < 0 THEN \\'DR\\'\\n\t  WHEN COA.DEBIT_CREDIT IS NULL AND ( CAST(CAST(DAT.CURENT_AMOUNT AS FLOAT) + CAST(DAT.FUTURE_AMOUNT AS FLOAT) AS DECIMAL(25,10)) ) >= 0 THEN \\'DR\\'\\n\t  ELSE \\'CR\\'\\n END AS Debit_Credit,\\n-- CASE WHEN ( CAST(CAST(DAT.CURENT_AMOUNT AS FLOAT) + CAST(DAT.FUTURE_AMOUNT AS FLOAT) AS DECIMAL(25,10)) ) >= 0 THEN \\'DR\\' ElSE \\'CR\\' END AS Debit_Credit,\\n \\'Forecast\\' AS Forecast_Type,\\n REF.VERSION_NAME AS Version_name,\\n DAT.UOM\\nFROM RELATIONAL.FORECAST_ASSET_REFERENCE REF\\nJOIN STAGING.FORECAST_PARAM PAR\\nON REF.FUND_ID = PAR.FUND_ID AND REF.ASSET_ID = PAR.ASSET_ID AND REF.VERSION_NAME = PAR.VERSION_NAME \\nJOIN STAGING.FORECAST_DATA DAT\\nON REF.FUND_ID = DAT.FUND_ID AND REF.ASSET_ID = DAT.ASSET_ID AND REF.VERSION_NAME = DAT.VERSION_NAME \\nLEFT JOIN RELATIONAL.FORECAST_GL_PRODUCT_MAP PRD\\nON DAT.FUND_ID = PRD.FUND_ID AND DAT.ASSET_ID = PRD.ASSET_ID AND DAT.STATUS = PRD.STATUS AND DAT.PRODUCT = PRD.Product AND PRD.RECORD_DELETED_FLAG = 0\\nLEFT JOIN RELATIONAL.CHART_OF_ACCOUNT COA\\nON PRD.GL_CODE = COA.GL_CODE AND COA.RECORD_DELETED_FLAG = 0\\nWHERE REF.ISPROCESSED = 0 AND REF.RECORD_DELETED_FLAG = 0 \\nAND DAT.STATUS != \\'\\' AND DAT.STATUS IS NOT NULL\\nAND CAST(REF.ASSET_OFFSET AS INT) >= CAST(PAR.ASSET_OFFSET AS INT)',\n\tformat: 'query') ~> StagingDB\nStagingDB select(mapColumn(\n\t\tPeriod_Date,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tStatus,\n\t\tProduct,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tPerpetual_Amount,\n\t\tCurrent_Amount,\n\t\tFuture_Amount,\n\t\tDebit_Credit,\n\t\tForecast_Type,\n\t\tVersion_name,\n\t\tUOM\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectNewStagingRow\nSelectNewStagingRow derive(Update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> AddAuditColumns\nAddAuditColumns alterRow(insertIf(record_deleted_flag==toInteger(0))) ~> AlterRowInsert\nAlterRowInsert sink(input(\n\t\tPeriod_Date as timestamp,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tStatus as string,\n\t\tProduct as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tPerpetual_Amount as decimal(25,10),\n\t\tCurrent_Amount as decimal(25,10),\n\t\tFuture_Amount as decimal(25,10),\n\t\tDebit_Credit as string,\n\t\tForecast_Type as string,\n\t\tVersion_name as string,\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string,\n\t\tUOM as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tPeriod_Date,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tStatus,\n\t\tProduct,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tPerpetual_Amount,\n\t\tCurrent_Amount,\n\t\tFuture_Amount,\n\t\tDebit_Credit,\n\t\tForecast_Type,\n\t\tVersion_name,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name,\n\t\tUOM\n\t)) ~> InsertUpdateRow"
 				}
 			},
 			"dependsOn": []
@@ -518,16 +505,14 @@
 								"referenceName": "SQLstagingforex_ds",
 								"type": "DatasetReference"
 							},
-							"name": "StagingDB",
-							"typeProperties": {}
+							"name": "StagingDB"
 						},
 						{
 							"dataset": {
 								"referenceName": "SQLrelationforex_ds",
 								"type": "DatasetReference"
 							},
-							"name": "RelationDB",
-							"typeProperties": {}
+							"name": "RelationDB"
 						}
 					],
 					"sinks": [
@@ -601,16 +586,14 @@
 								"referenceName": "SQLstagingfund_ds",
 								"type": "DatasetReference"
 							},
-							"name": "StagingDB",
-							"typeProperties": {}
+							"name": "StagingDB"
 						},
 						{
 							"dataset": {
 								"referenceName": "SQLrelationfund_ds",
 								"type": "DatasetReference"
 							},
-							"name": "RelationDB",
-							"typeProperties": {}
+							"name": "RelationDB"
 						}
 					],
 					"sinks": [
@@ -681,16 +664,14 @@
 								"referenceName": "SQLstagingglallocate_ds",
 								"type": "DatasetReference"
 							},
-							"name": "StagingDB",
-							"typeProperties": {}
+							"name": "StagingDB"
 						},
 						{
 							"dataset": {
 								"referenceName": "SQLrelationglallocate_ds",
 								"type": "DatasetReference"
 							},
-							"name": "RelationDB",
-							"typeProperties": {}
+							"name": "RelationDB"
 						}
 					],
 					"sinks": [
@@ -761,16 +742,14 @@
 								"referenceName": "SQLstagingglproduct_ds",
 								"type": "DatasetReference"
 							},
-							"name": "StagingDB",
-							"typeProperties": {}
+							"name": "StagingDB"
 						},
 						{
 							"dataset": {
 								"referenceName": "SQLrelationglproduct_ds",
 								"type": "DatasetReference"
 							},
-							"name": "RelationDB",
-							"typeProperties": {}
+							"name": "RelationDB"
 						}
 					],
 					"sinks": [
@@ -841,8 +820,7 @@
 								"referenceName": "SQLstagingmyobactuals_ds",
 								"type": "DatasetReference"
 							},
-							"name": "StagingDB",
-							"typeProperties": {}
+							"name": "StagingDB"
 						}
 					],
 					"sinks": [
@@ -880,8 +858,7 @@
 								"referenceName": "SQLstagingmyobactuals_ds",
 								"type": "DatasetReference"
 							},
-							"name": "StagingDB",
-							"typeProperties": {}
+							"name": "StagingDB"
 						}
 					],
 					"sinks": [
@@ -925,8 +902,7 @@
 								"referenceName": "SQLstagingopsanswers_ds",
 								"type": "DatasetReference"
 							},
-							"name": "StagingDB",
-							"typeProperties": {}
+							"name": "StagingDB"
 						}
 					],
 					"sinks": [
@@ -967,16 +943,14 @@
 								"referenceName": "SQLstagingopsanswers_ds",
 								"type": "DatasetReference"
 							},
-							"name": "StagingDB",
-							"typeProperties": {}
+							"name": "StagingDB"
 						},
 						{
 							"dataset": {
 								"referenceName": "SQLrelationopsanswers_ds",
 								"type": "DatasetReference"
 							},
-							"name": "RelationDB",
-							"typeProperties": {}
+							"name": "RelationDB"
 						}
 					],
 					"sinks": [
@@ -1044,8 +1018,7 @@
 								"referenceName": "SQLstagingopsanswers_ds",
 								"type": "DatasetReference"
 							},
-							"name": "StagingDB",
-							"typeProperties": {}
+							"name": "StagingDB"
 						}
 					],
 					"sinks": [
@@ -1092,16 +1065,14 @@
 								"referenceName": "SQLstagingopsaudit_ds",
 								"type": "DatasetReference"
 							},
-							"name": "StagingDB",
-							"typeProperties": {}
+							"name": "StagingDB"
 						},
 						{
 							"dataset": {
 								"referenceName": "SQLrelationopsaudit_ds",
 								"type": "DatasetReference"
 							},
-							"name": "RelationalAudit",
-							"typeProperties": {}
+							"name": "RelationalAudit"
 						}
 					],
 					"sinks": [
@@ -1172,16 +1143,14 @@
 								"referenceName": "SQLstagingopscertification_ds",
 								"type": "DatasetReference"
 							},
-							"name": "StagingDB",
-							"typeProperties": {}
+							"name": "StagingDB"
 						},
 						{
 							"dataset": {
 								"referenceName": "SQLrelationopscertification_ds",
 								"type": "DatasetReference"
 							},
-							"name": "RelationalCertification",
-							"typeProperties": {}
+							"name": "RelationalCertification"
 						}
 					],
 					"sinks": [
@@ -1252,16 +1221,14 @@
 								"referenceName": "SQLstagingopscontract_ds",
 								"type": "DatasetReference"
 							},
-							"name": "StagingDB",
-							"typeProperties": {}
+							"name": "StagingDB"
 						},
 						{
 							"dataset": {
 								"referenceName": "SQLrelationopscontract_ds",
 								"type": "DatasetReference"
 							},
-							"name": "RelationalContract",
-							"typeProperties": {}
+							"name": "RelationalContract"
 						}
 					],
 					"sinks": [
