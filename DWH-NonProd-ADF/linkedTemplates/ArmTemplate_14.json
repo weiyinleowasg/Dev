@@ -144,87 +144,11 @@
 						}
 					},
 					{
-						"name": "RunPipelineFCTREFASSET",
-						"type": "ExecutePipeline",
-						"dependsOn": [
-							{
-								"activity": "RunPipelineGLPRODUCT",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"pipeline": {
-								"referenceName": "ProcessSourceBlob_fctrefasset_pl",
-								"type": "PipelineReference"
-							},
-							"waitOnCompletion": true,
-							"parameters": {}
-						}
-					},
-					{
-						"name": "SetVarFCTREFASSET",
-						"type": "SetVariable",
-						"dependsOn": [
-							{
-								"activity": "RunPipelineFCTREFASSET",
-								"dependencyConditions": [
-									"Failed"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"variableName": "PipelineName",
-							"value": {
-								"value": "@activity('RunPipelineFCTREFASSET').output",
-								"type": "Expression"
-							}
-						}
-					},
-					{
-						"name": "SendFailMail_FCTREFASSET",
-						"type": "WebActivity",
-						"dependsOn": [
-							{
-								"activity": "UpdateMasterRunLog_FCTREFASSET",
-								"dependencyConditions": [
-									"Completed"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"url": "https://prod-12.australiaeast.logic.azure.com:443/workflows/f7a9fbbc810043f28c16fd6bcf3b2f68/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=8yphnNtSS85GDIgCI8OiOwpDghciKo7S9hRjuy5ITI4",
-							"method": "POST",
-							"headers": {
-								"Content-Type": "application/json"
-							},
-							"body": {
-								"dataFactoryName": "@pipeline().DataFactory",
-								"pipelineName": "@pipeline().Pipeline",
-								"messageHeader": "!!!MASTER FORECAST FAILED!!!",
-								"messageProcessed": "@variables('PipelineName')",
-								"messageNotProcessed": "",
-								"messageErrorDuringProcess": ""
-							}
-						}
-					},
-					{
 						"name": "RunPipelineForecastMaster",
 						"type": "ExecutePipeline",
 						"dependsOn": [
 							{
-								"activity": "RunPipelineFCTREFASSET",
+								"activity": "RunPipelineGLPRODUCT",
 								"dependencyConditions": [
 									"Succeeded"
 								]
@@ -301,56 +225,6 @@
 						"dependsOn": [
 							{
 								"activity": "SetVarGLPRODUCT",
-								"dependencyConditions": [
-									"Completed"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"storedProcedureName": "[[log].[UpdateMasterRunLog]",
-							"storedProcedureParameters": {
-								"MasterUtcTag": {
-									"value": {
-										"value": "@variables('MasterUTCtag')",
-										"type": "Expression"
-									},
-									"type": "String"
-								},
-								"RunMessage": {
-									"value": {
-										"value": "@variables('PipelineName')",
-										"type": "Expression"
-									},
-									"type": "String"
-								},
-								"RunStatus": {
-									"value": {
-										"value": "FAILED",
-										"type": "Expression"
-									},
-									"type": "String"
-								}
-							}
-						},
-						"linkedServiceName": {
-							"referenceName": "SQLdbConnection",
-							"type": "LinkedServiceReference"
-						}
-					},
-					{
-						"name": "UpdateMasterRunLog_FCTREFASSET",
-						"type": "SqlServerStoredProcedure",
-						"dependsOn": [
-							{
-								"activity": "SetVarFCTREFASSET",
 								"dependencyConditions": [
 									"Completed"
 								]
