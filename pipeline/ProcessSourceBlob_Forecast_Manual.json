@@ -268,7 +268,7 @@
 										"type": "Copy",
 										"dependsOn": [
 											{
-												"activity": "RunProcessSourceBlobMyobActuals_spl",
+												"activity": "ProcessSourceBlob_manual_forecast_spl",
 												"dependencyConditions": [
 													"Succeeded"
 												]
@@ -321,7 +321,7 @@
 										]
 									},
 									{
-										"name": "LoadTxtToDBstaging_ds",
+										"name": "LoadTxtToDBstaging_Forecast_ds",
 										"type": "ExecuteDataFlow",
 										"dependsOn": [
 											{
@@ -513,49 +513,11 @@
 										}
 									},
 									{
-										"name": "RunProcessSourceBlobMyobActuals_spl",
-										"type": "ExecutePipeline",
-										"dependsOn": [
-											{
-												"activity": "LoadTxtToDBstaging_ds",
-												"dependencyConditions": [
-													"Succeeded"
-												]
-											}
-										],
-										"userProperties": [],
-										"typeProperties": {
-											"pipeline": {
-												"referenceName": "ProcessSourceBlob_myob_actuals_spl",
-												"type": "PipelineReference"
-											},
-											"waitOnCompletion": true,
-											"parameters": {
-												"ProcessName": {
-													"value": "@pipeline().Pipeline",
-													"type": "Expression"
-												},
-												"FileName": {
-													"value": "@item().DATALAKE_FULL_PATHFILE",
-													"type": "Expression"
-												},
-												"Etl_Utc_Tag": {
-													"value": "@variables('Etl_Utc_Tag')",
-													"type": "Expression"
-												},
-												"OriginalBlobName": {
-													"value": "@item().ORIGINAL_BLOB_NAME",
-													"type": "Expression"
-												}
-											}
-										}
-									},
-									{
 										"name": "UpdateSourceRegisterFailedAbort_Staging",
 										"type": "SqlServerStoredProcedure",
 										"dependsOn": [
 											{
-												"activity": "LoadTxtToDBstaging_ds",
+												"activity": "LoadTxtToDBstaging_Forecast_ds",
 												"dependencyConditions": [
 													"Failed"
 												]
@@ -596,14 +558,7 @@
 									{
 										"name": "UpdateSourceRegisterFailedAbort_Type2Process",
 										"type": "SqlServerStoredProcedure",
-										"dependsOn": [
-											{
-												"activity": "RunProcessSourceBlobMyobActuals_spl",
-												"dependencyConditions": [
-													"Failed"
-												]
-											}
-										],
+										"dependsOn": [],
 										"policy": {
 											"timeout": "7.00:00:00",
 											"retry": 0,
@@ -677,6 +632,26 @@
 										"linkedServiceName": {
 											"referenceName": "SQLdbConnection",
 											"type": "LinkedServiceReference"
+										}
+									},
+									{
+										"name": "ProcessSourceBlob_manual_forecast_spl",
+										"type": "ExecutePipeline",
+										"dependsOn": [
+											{
+												"activity": "LoadTxtToDBstaging_Forecast_ds",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"userProperties": [],
+										"typeProperties": {
+											"pipeline": {
+												"referenceName": "ProcessSourceBlob_manual_forecast_spl",
+												"type": "PipelineReference"
+											},
+											"waitOnCompletion": true
 										}
 									}
 								]
