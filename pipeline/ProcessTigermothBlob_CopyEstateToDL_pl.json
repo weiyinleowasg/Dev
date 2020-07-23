@@ -263,63 +263,6 @@
 										}
 									},
 									{
-										"name": "CopyScrubbedToDataLake",
-										"type": "Copy",
-										"dependsOn": [
-											{
-												"activity": "UpdateSourceRegisterRun",
-												"dependencyConditions": [
-													"Succeeded"
-												]
-											}
-										],
-										"policy": {
-											"timeout": "7.00:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
-											"secureOutput": false,
-											"secureInput": false
-										},
-										"userProperties": [],
-										"typeProperties": {
-											"source": {
-												"type": "DelimitedTextSource",
-												"storeSettings": {
-													"type": "AzureBlobStorageReadSettings",
-													"recursive": false,
-													"enablePartitionDiscovery": false
-												},
-												"formatSettings": {
-													"type": "DelimitedTextReadSettings"
-												}
-											},
-											"sink": {
-												"type": "DelimitedTextSink",
-												"storeSettings": {
-													"type": "AzureBlobStorageWriteSettings"
-												},
-												"formatSettings": {
-													"type": "DelimitedTextWriteSettings",
-													"quoteAllText": true,
-													"fileExtension": ".txt"
-												}
-											},
-											"enableStaging": false
-										},
-										"inputs": [
-											{
-												"referenceName": "DelimitedText_sourcelandingscrubbed_ds",
-												"type": "DatasetReference"
-											}
-										],
-										"outputs": [
-											{
-												"referenceName": "DelimitedText_datalake_financial_ds",
-												"type": "DatasetReference"
-											}
-										]
-									},
-									{
 										"name": "UpdateSourceRegisterFailedAbort_CopyToArchive",
 										"type": "SqlServerStoredProcedure",
 										"dependsOn": [
@@ -367,7 +310,7 @@
 										"type": "Copy",
 										"dependsOn": [
 											{
-												"activity": "CopyScrubbedToDataLake",
+												"activity": "UnpivotandCopyScrubbedtoStaging",
 												"dependencyConditions": [
 													"Succeeded"
 												]
@@ -484,14 +427,7 @@
 									{
 										"name": "UpdateSourceRegisterFailedAbort_CopyToDL",
 										"type": "SqlServerStoredProcedure",
-										"dependsOn": [
-											{
-												"activity": "CopyScrubbedToDataLake",
-												"dependencyConditions": [
-													"Failed"
-												]
-											}
-										],
+										"dependsOn": [],
 										"policy": {
 											"timeout": "7.00:00:00",
 											"retry": 0,
@@ -522,6 +458,36 @@
 										"linkedServiceName": {
 											"referenceName": "SQLdbConnection",
 											"type": "LinkedServiceReference"
+										}
+									},
+									{
+										"name": "UnpivotandCopyScrubbedtoStaging",
+										"type": "ExecuteDataFlow",
+										"dependsOn": [
+											{
+												"activity": "UpdateSourceRegisterRun",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "7.00:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"dataflow": {
+												"referenceName": "DSOPEstate_DF",
+												"type": "DataFlowReference"
+											},
+											"compute": {
+												"coreCount": 8,
+												"computeType": "General"
+											}
 										}
 									}
 								]
