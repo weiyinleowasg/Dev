@@ -71,10 +71,6 @@
 			"type": "string",
 			"defaultValue": "https://NFDWHProdAKV.vault.azure.net/"
 		},
-		"SRTEST-IR-LinkedSelfHosted_properties_typeProperties_linkedInfo_resourceId": {
-			"type": "string",
-			"defaultValue": "/subscriptions/b5b26990-35a0-4da1-bda1-100e9dbdb97e/resourceGroups/DWH-NonProd-RG/providers/Microsoft.DataFactory/factories/DWH-NonProd-ADF/integrationruntimes/IRVM1-SH-integrationRuntime"
-		},
 		"App1SQLServer_LS_properties_typeProperties_connectionString_secretName": {
 			"type": "string",
 			"defaultValue": "TigermothConn"
@@ -278,21 +274,6 @@
 			"dependsOn": []
 		},
 		{
-			"name": "[concat(parameters('factoryName'), '/SRTEST-IR-LinkedSelfHosted')]",
-			"type": "Microsoft.DataFactory/factories/integrationRuntimes",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"type": "SelfHosted",
-				"typeProperties": {
-					"linkedInfo": {
-						"resourceId": "[parameters('SRTEST-IR-LinkedSelfHosted_properties_typeProperties_linkedInfo_resourceId')]",
-						"authorizationType": "Rbac"
-					}
-				}
-			},
-			"dependsOn": []
-		},
-		{
 			"name": "[concat(parameters('factoryName'), '/BinaryDataSourceFileshareDirectory_MoveFile_ds')]",
 			"type": "Microsoft.DataFactory/factories/datasets",
 			"apiVersion": "2018-06-01",
@@ -433,6 +414,49 @@
 			]
 		},
 		{
+			"name": "[concat(parameters('factoryName'), '/SourceDataset_i34')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "FileStore_nfdwhsourcelanding",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureFileStorageLocation",
+						"fileName": "SPECIES_LIST.csv"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": [
+					{
+						"name": "Species_Code"
+					},
+					{
+						"name": "Species"
+					},
+					{
+						"name": "Species_Group"
+					},
+					{
+						"name": "Active_YN"
+					},
+					{
+						"name": "Updated Date"
+					}
+				]
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/FileStore_nfdwhsourcelanding')]"
+			]
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/App1SQLServer_LS')]",
 			"type": "Microsoft.DataFactory/factories/linkedServices",
 			"apiVersion": "2018-06-01",
@@ -448,14 +472,9 @@
 						},
 						"secretName": "[parameters('App1SQLServer_LS_properties_typeProperties_connectionString_secretName')]"
 					}
-				},
-				"connectVia": {
-					"referenceName": "SRTEST-IR-LinkedSelfHosted",
-					"type": "IntegrationRuntimeReference"
 				}
 			},
 			"dependsOn": [
-				"[concat(variables('factoryId'), '/integrationRuntimes/SRTEST-IR-LinkedSelfHosted')]",
 				"[concat(variables('factoryId'), '/linkedServices/NFDWHProdAKV_LS')]"
 			]
 		},
