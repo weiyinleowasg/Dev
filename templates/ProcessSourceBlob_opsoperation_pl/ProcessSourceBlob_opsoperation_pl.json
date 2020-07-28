@@ -1,0 +1,1960 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory name"
+		},
+		"SQLdbConnection": {
+			"type": "string"
+		},
+		"BlobStore_nfdwhstaging": {
+			"type": "string"
+		},
+		"BlobStore_nfdwhdatalake": {
+			"type": "string"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/ProcessSourceBlob_opsoperation_pl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "GetUnprocessedBlobFromRegister",
+						"type": "Lookup",
+						"dependsOn": [
+							{
+								"activity": "SetEtlUtcTag",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": "SELECT [ORIGINAL_BLOB_LANDING_CONTAINER],\n\t[ORIGINAL_BLOB_NAME],\n\t[ORIGINAL_BLOP_FULLPATH],\n\t[TARGET_BLOB_LANDING_CONTAINER],\n\t[TARGET_BLOB_NAME],\n\t[DATALAKE_CONTAINER],\n\t[DATALAKE_FILE_PATH],\n\t[ORIGINAL_BLOB_ARCHIVE_CONTAINER],\n\t[ORIGINAL_BLOB_ARCHIVE_FULLPATH],\n\tCONCAT(DATALAKE_CONTAINER,'/',DATALAKE_FILE_PATH,'/',TARGET_BLOB_NAME) AS DATALAKE_FULL_PATHFILE\nFROM [log].[SOURCE_REGISTER_TABLE]\nWHERE [ETL_IS_PROCESSED] = 'N'\nAND [ORIGINAL_BLOB_NAME] LIKE 'OPS_OPERATION_%'\nORDER BY [ORIGINAL_BLOB_NAME];"
+							},
+							"dataset": {
+								"referenceName": "SQLsourceRegisterTable_ds",
+								"type": "DatasetReference"
+							},
+							"firstRowOnly": false
+						}
+					},
+					{
+						"name": "CheckProcessArchiveBlobUpdateRegister",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "GetUnprocessedBlobFromRegister",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('GetUnprocessedBlobFromRegister').output.value",
+								"type": "Expression"
+							},
+							"isSequential": true,
+							"activities": [
+								{
+									"name": "GetBlopPath",
+									"type": "GetMetadata",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"dataset": {
+											"referenceName": "DelimitedText_sourcelandingraw_ds",
+											"type": "DatasetReference"
+										},
+										"fieldList": [
+											"itemName",
+											"exists"
+										],
+										"storeSettings": {
+											"type": "AzureBlobStorageReadSettings",
+											"recursive": true
+										},
+										"formatSettings": {
+											"type": "DelimitedTextReadSettings"
+										}
+									}
+								},
+								{
+									"name": "IsPhysicalFileExist",
+									"type": "IfCondition",
+									"dependsOn": [
+										{
+											"activity": "GetBlopPath",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"expression": {
+											"value": "@activity('GetBlopPath').output.exists",
+											"type": "Expression"
+										},
+										"ifFalseActivities": [
+											{
+												"name": "UpdateSourceRegisterNoFile",
+												"type": "SqlServerStoredProcedure",
+												"dependsOn": [
+													{
+														"activity": "DeleteFromScrubbedNoFile",
+														"dependencyConditions": [
+															"Completed"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"storedProcedureName": "[[log].[UpdateSourceRegisterNoFile]",
+													"storedProcedureParameters": {
+														"EtlUtcTag": {
+															"value": {
+																"value": "@variables('Etl_Utc_Tag')",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"FileName": {
+															"value": {
+																"value": "@{item().ORIGINAL_BLOB_NAME}",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"JobName": {
+															"value": {
+																"value": "@pipeline().Pipeline",
+																"type": "Expression"
+															},
+															"type": "String"
+														}
+													}
+												},
+												"linkedServiceName": {
+													"referenceName": "[parameters('SQLdbConnection')]",
+													"type": "LinkedServiceReference"
+												}
+											},
+											{
+												"name": "DeleteFromScrubbedNoFile",
+												"type": "Delete",
+												"dependsOn": [],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"dataset": {
+														"referenceName": "DelimitedText_sourcelandingscrubbed_opsoperation_ds",
+														"type": "DatasetReference"
+													},
+													"enableLogging": false,
+													"storeSettings": {
+														"type": "AzureBlobStorageReadSettings",
+														"recursive": false
+													}
+												}
+											}
+										],
+										"ifTrueActivities": [
+											{
+												"name": "UpdateSourceRegisterRun",
+												"type": "SqlServerStoredProcedure",
+												"dependsOn": [],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"storedProcedureName": "[[log].[UpdateSourceRegisterRun]",
+													"storedProcedureParameters": {
+														"EtlUtcTag": {
+															"value": {
+																"value": "@variables('Etl_Utc_Tag')",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"FileName": {
+															"value": {
+																"value": "@{item().ORIGINAL_BLOB_NAME}",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"JobName": {
+															"value": {
+																"value": "@pipeline().Pipeline",
+																"type": "Expression"
+															},
+															"type": "String"
+														}
+													}
+												},
+												"linkedServiceName": {
+													"referenceName": "[parameters('SQLdbConnection')]",
+													"type": "LinkedServiceReference"
+												}
+											},
+											{
+												"name": "UpdateSourceRegisterPassed",
+												"type": "SqlServerStoredProcedure",
+												"dependsOn": [
+													{
+														"activity": "DeleteFromScrubbed",
+														"dependencyConditions": [
+															"Completed"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"storedProcedureName": "[[log].[UpdateSourceRegisterPassed]",
+													"storedProcedureParameters": {
+														"EtlUtcTag": {
+															"value": {
+																"value": "@variables('Etl_Utc_Tag')",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"FileName": {
+															"value": {
+																"value": "@{item().ORIGINAL_BLOB_NAME}",
+																"type": "Expression"
+															},
+															"type": "String"
+														}
+													}
+												},
+												"linkedServiceName": {
+													"referenceName": "[parameters('SQLdbConnection')]",
+													"type": "LinkedServiceReference"
+												}
+											},
+											{
+												"name": "CopyScrubbedToDataLake",
+												"type": "Copy",
+												"dependsOn": [
+													{
+														"activity": "LoadStagingDBtoRelationDB_spl_df",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "DelimitedTextSource",
+														"storeSettings": {
+															"type": "AzureBlobStorageReadSettings",
+															"recursive": false,
+															"enablePartitionDiscovery": false
+														},
+														"formatSettings": {
+															"type": "DelimitedTextReadSettings"
+														}
+													},
+													"sink": {
+														"type": "DelimitedTextSink",
+														"storeSettings": {
+															"type": "AzureBlobStorageWriteSettings"
+														},
+														"formatSettings": {
+															"type": "DelimitedTextWriteSettings",
+															"quoteAllText": true,
+															"fileExtension": ".txt"
+														}
+													},
+													"enableStaging": false
+												},
+												"inputs": [
+													{
+														"referenceName": "DelimitedText_sourcelandingscrubbed_opsoperation_ds",
+														"type": "DatasetReference"
+													}
+												],
+												"outputs": [
+													{
+														"referenceName": "DelimitedText_datalake_nonfinancial_ds",
+														"type": "DatasetReference"
+													}
+												]
+											},
+											{
+												"name": "LoadTxtToDBstaging_ds",
+												"type": "ExecuteDataFlow",
+												"dependsOn": [
+													{
+														"activity": "UpdateSourceRegisterRun",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"dataflow": {
+														"referenceName": "LoadTxtToDBstaging_opsoperation_df",
+														"type": "DataFlowReference"
+													},
+													"compute": {
+														"coreCount": 8,
+														"computeType": "General"
+													}
+												}
+											},
+											{
+												"name": "UpdateSourceRegisterFailedAbort_CopyToArchive",
+												"type": "SqlServerStoredProcedure",
+												"dependsOn": [
+													{
+														"activity": "CopyOriginalToArchive",
+														"dependencyConditions": [
+															"Failed"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"storedProcedureName": "[[log].[UpdateSourceRegisterFailedAbort]",
+													"storedProcedureParameters": {
+														"EtlUtcTag": {
+															"value": {
+																"value": "@variables('Etl_Utc_Tag')",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"FileName": {
+															"value": {
+																"value": "@{item().ORIGINAL_BLOB_NAME}",
+																"type": "Expression"
+															},
+															"type": "String"
+														}
+													}
+												},
+												"linkedServiceName": {
+													"referenceName": "[parameters('SQLdbConnection')]",
+													"type": "LinkedServiceReference"
+												}
+											},
+											{
+												"name": "CopyOriginalToArchive",
+												"type": "Copy",
+												"dependsOn": [
+													{
+														"activity": "CopyScrubbedToDataLake",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "DelimitedTextSource",
+														"storeSettings": {
+															"type": "AzureBlobStorageReadSettings",
+															"recursive": false,
+															"enablePartitionDiscovery": false
+														},
+														"formatSettings": {
+															"type": "DelimitedTextReadSettings"
+														}
+													},
+													"sink": {
+														"type": "DelimitedTextSink",
+														"storeSettings": {
+															"type": "AzureBlobStorageWriteSettings"
+														},
+														"formatSettings": {
+															"type": "DelimitedTextWriteSettings",
+															"quoteAllText": true,
+															"fileExtension": ".txt"
+														}
+													},
+													"enableStaging": false
+												},
+												"inputs": [
+													{
+														"referenceName": "DelimitedText_sourcelandingraw_ds",
+														"type": "DatasetReference"
+													}
+												],
+												"outputs": [
+													{
+														"referenceName": "DelimitedText_sourcearchive_ds",
+														"type": "DatasetReference"
+													}
+												]
+											},
+											{
+												"name": "DeleteSourceRaw",
+												"type": "Delete",
+												"dependsOn": [
+													{
+														"activity": "CopyOriginalToArchive",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"dataset": {
+														"referenceName": "DelimitedText_sourcelandingraw_ds",
+														"type": "DatasetReference"
+													},
+													"enableLogging": false,
+													"storeSettings": {
+														"type": "AzureBlobStorageReadSettings",
+														"recursive": false
+													}
+												}
+											},
+											{
+												"name": "DeleteFromScrubbed",
+												"type": "Delete",
+												"dependsOn": [
+													{
+														"activity": "DeleteSourceRaw",
+														"dependencyConditions": [
+															"Completed"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"dataset": {
+														"referenceName": "DelimitedText_sourcelandingscrubbed_opsoperation_ds",
+														"type": "DatasetReference"
+													},
+													"enableLogging": false,
+													"storeSettings": {
+														"type": "AzureBlobStorageReadSettings",
+														"recursive": false
+													}
+												}
+											},
+											{
+												"name": "UpdateSourceRegisterFailedAbort_Staging",
+												"type": "SqlServerStoredProcedure",
+												"dependsOn": [
+													{
+														"activity": "LoadTxtToDBstaging_ds",
+														"dependencyConditions": [
+															"Failed"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"storedProcedureName": "[[log].[UpdateSourceRegisterFailedAbort]",
+													"storedProcedureParameters": {
+														"EtlUtcTag": {
+															"value": {
+																"value": "@variables('Etl_Utc_Tag')",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"FileName": {
+															"value": {
+																"value": "@{item().ORIGINAL_BLOB_NAME}",
+																"type": "Expression"
+															},
+															"type": "String"
+														}
+													}
+												},
+												"linkedServiceName": {
+													"referenceName": "[parameters('SQLdbConnection')]",
+													"type": "LinkedServiceReference"
+												}
+											},
+											{
+												"name": "UpdateSourceRegisterFailedAbort_LoadDW",
+												"type": "SqlServerStoredProcedure",
+												"dependsOn": [
+													{
+														"activity": "LoadStagingDBtoRelationDB_spl_df",
+														"dependencyConditions": [
+															"Failed"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"storedProcedureName": "[[log].[UpdateSourceRegisterFailedAbort]",
+													"storedProcedureParameters": {
+														"EtlUtcTag": {
+															"value": {
+																"value": "@variables('Etl_Utc_Tag')",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"FileName": {
+															"value": {
+																"value": "@{item().ORIGINAL_BLOB_NAME}",
+																"type": "Expression"
+															},
+															"type": "String"
+														}
+													}
+												},
+												"linkedServiceName": {
+													"referenceName": "[parameters('SQLdbConnection')]",
+													"type": "LinkedServiceReference"
+												}
+											},
+											{
+												"name": "UpdateSourceRegisterFailedAbort_CopyToDL",
+												"type": "SqlServerStoredProcedure",
+												"dependsOn": [
+													{
+														"activity": "CopyScrubbedToDataLake",
+														"dependencyConditions": [
+															"Failed"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"storedProcedureName": "[[log].[UpdateSourceRegisterFailedAbort]",
+													"storedProcedureParameters": {
+														"EtlUtcTag": {
+															"value": {
+																"value": "@variables('Etl_Utc_Tag')",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"FileName": {
+															"value": {
+																"value": "@{item().ORIGINAL_BLOB_NAME}",
+																"type": "Expression"
+															},
+															"type": "String"
+														}
+													}
+												},
+												"linkedServiceName": {
+													"referenceName": "[parameters('SQLdbConnection')]",
+													"type": "LinkedServiceReference"
+												}
+											},
+											{
+												"name": "LoadStagingDBtoRelationDB_spl_df",
+												"type": "ExecutePipeline",
+												"dependsOn": [
+													{
+														"activity": "LoadTxtToDBstaging_ds",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"userProperties": [],
+												"typeProperties": {
+													"pipeline": {
+														"referenceName": "ProcessSourceBlob_opsoperation_spl",
+														"type": "PipelineReference"
+													},
+													"waitOnCompletion": true,
+													"parameters": {
+														"ProcessName": {
+															"value": "@pipeline().Pipeline",
+															"type": "Expression"
+														},
+														"FileName": {
+															"value": "@item().DATALAKE_FULL_PATHFILE",
+															"type": "Expression"
+														},
+														"Etl_Utc_Tag": {
+															"value": "@variables('Etl_Utc_Tag')",
+															"type": "Expression"
+														},
+														"OriginalBlobName": {
+															"value": "@item().ORIGINAL_BLOB_NAME",
+															"type": "Expression"
+														}
+													}
+												}
+											}
+										]
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "SetEtlUtcTag",
+						"type": "SetVariable",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "Etl_Utc_Tag",
+							"value": {
+								"value": "@utcnow()",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "SendPipelineMailSuccess",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "CheckProcessArchiveBlobUpdateRegister",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "PipelineSendMail_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"Parent_DataFactory": {
+									"value": "@pipeline().DataFactory",
+									"type": "Expression"
+								},
+								"Parent_Pipeline": {
+									"value": "@pipeline().Pipeline",
+									"type": "Expression"
+								},
+								"Success_Fail_Header": "***SUCCESS***",
+								"Etl_Utc_Tag": {
+									"value": "@variables('Etl_Utc_Tag')",
+									"type": "Expression"
+								},
+								"File_Pattern": "OPS_OPERATION_%"
+							}
+						}
+					},
+					{
+						"name": "SendPipelineMailFail",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "CheckProcessArchiveBlobUpdateRegister",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "PipelineSendMail_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"Parent_DataFactory": {
+									"value": "@pipeline().DataFactory",
+									"type": "Expression"
+								},
+								"Parent_Pipeline": {
+									"value": "@pipeline().Pipeline",
+									"type": "Expression"
+								},
+								"Success_Fail_Header": "!!!FAILED!!!",
+								"Etl_Utc_Tag": {
+									"value": "@variables('Etl_Utc_Tag')",
+									"type": "Expression"
+								},
+								"File_Pattern": "OPS_OPERATION_%"
+							}
+						}
+					}
+				],
+				"variables": {
+					"Success_Fail_Header": {
+						"type": "String",
+						"defaultValue": "***SUCCESS***"
+					},
+					"Etl_Utc_Tag": {
+						"type": "String",
+						"defaultValue": "2019-10-22"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/SQLsourceRegisterTable_ds')]",
+				"[concat(variables('factoryId'), '/pipelines/PipelineSendMail_pl')]",
+				"[concat(variables('factoryId'), '/datasets/DelimitedText_sourcelandingraw_ds')]",
+				"[concat(variables('factoryId'), '/datasets/DelimitedText_sourcelandingscrubbed_opsoperation_ds')]",
+				"[concat(variables('factoryId'), '/datasets/DelimitedText_datalake_nonfinancial_ds')]",
+				"[concat(variables('factoryId'), '/dataflows/LoadTxtToDBstaging_opsoperation_df')]",
+				"[concat(variables('factoryId'), '/datasets/DelimitedText_sourcearchive_ds')]",
+				"[concat(variables('factoryId'), '/pipelines/ProcessSourceBlob_opsoperation_spl')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SQLsourceRegisterTable_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "[parameters('SQLdbConnection')]",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "ORIGINAL_BLOB_LANDING_CONTAINER",
+						"type": "varchar"
+					},
+					{
+						"name": "ORIGINAL_BLOB_NAME",
+						"type": "varchar"
+					},
+					{
+						"name": "ORIGINAL_BLOP_FULLPATH",
+						"type": "varchar"
+					},
+					{
+						"name": "TARGET_BLOB_LANDING_CONTAINER",
+						"type": "varchar"
+					},
+					{
+						"name": "TARGET_BLOB_NAME",
+						"type": "varchar"
+					},
+					{
+						"name": "DATALAKE_CONTAINER",
+						"type": "varchar"
+					},
+					{
+						"name": "DATALAKE_FILE_PATH",
+						"type": "varchar"
+					},
+					{
+						"name": "ORIGINAL_BLOB_ARCHIVE_CONTAINER",
+						"type": "varchar"
+					},
+					{
+						"name": "ORIGINAL_BLOB_ARCHIVE_FULLPATH",
+						"type": "varchar"
+					},
+					{
+						"name": "INSERT_TIMESTAMP",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					},
+					{
+						"name": "UPDATE_TIMESTAMP",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					},
+					{
+						"name": "ETL_IS_PROCESSED",
+						"type": "char"
+					},
+					{
+						"name": "IS_ARCHIVED",
+						"type": "char"
+					},
+					{
+						"name": "ETL_RUN_STATUS",
+						"type": "varchar"
+					},
+					{
+						"name": "FUNCAPP_NAME",
+						"type": "varchar"
+					},
+					{
+						"name": "ETL_JOBNAME",
+						"type": "varchar"
+					}
+				],
+				"typeProperties": {
+					"schema": "log",
+					"table": "Source_Register_table"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/PipelineSendMail_pl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "CheckReportableUtcTag",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": {
+									"value": "SELECT COUNT(*) as UTC_TAG_COUNT FROM log.source_register_table\nWHERE etl_utc_tag = '@{pipeline().parameters.Etl_Utc_Tag}'\n;",
+									"type": "Expression"
+								}
+							},
+							"dataset": {
+								"referenceName": "SQLsourceRegisterTable_ds",
+								"type": "DatasetReference"
+							}
+						}
+					},
+					{
+						"name": "If Condition1",
+						"type": "IfCondition",
+						"dependsOn": [
+							{
+								"activity": "CheckReportableUtcTag",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@greater(activity('CheckReportableUtcTag').output.firstRow.UTC_TAG_COUNT,0)",
+								"type": "Expression"
+							},
+							"ifTrueActivities": [
+								{
+									"name": "GetProcessedFiles",
+									"type": "Lookup",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "AzureSqlSource",
+											"sqlReaderQuery": {
+												"value": "SELECT \n       stuff( (SELECT ', '+original_blob_name \n               FROM log.source_register_table\n\t\t\t   where etl_is_processed = 'Y'\n\t\t\t   and etl_utc_tag = '@{pipeline().parameters.Etl_Utc_Tag}'\n\t\t\t   order by original_blob_name\n               FOR XML PATH(''), TYPE).value('.', 'varchar(max)'),1,1,'') as Processed_Files\n;",
+												"type": "Expression"
+											}
+										},
+										"dataset": {
+											"referenceName": "SQLsourceRegisterTable_ds",
+											"type": "DatasetReference"
+										}
+									}
+								},
+								{
+									"name": "GetNotProcessedFiles",
+									"type": "Lookup",
+									"dependsOn": [
+										{
+											"activity": "GetProcessedFiles",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "AzureSqlSource",
+											"sqlReaderQuery": {
+												"value": "SELECT \n       stuff( (SELECT ', '+original_blob_name \n               FROM log.source_register_table\n\t\t\t   where etl_is_processed = 'N'\n\t\t\t   and etl_utc_tag is null\n\t\t\t   and original_blob_name like '@{pipeline().parameters.File_Pattern}'\n\t\t\t   order by original_blob_name\n               FOR XML PATH(''), TYPE).value('.', 'varchar(max)'),1,1,'') as Not_Processed_Files\n;",
+												"type": "Expression"
+											}
+										},
+										"dataset": {
+											"referenceName": "SQLsourceRegisterTable_ds",
+											"type": "DatasetReference"
+										}
+									}
+								},
+								{
+									"name": "GetErrorDuringProcessFiles",
+									"type": "Lookup",
+									"dependsOn": [
+										{
+											"activity": "GetNotProcessedFiles",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "AzureSqlSource",
+											"sqlReaderQuery": {
+												"value": "SELECT \n       stuff( (SELECT ', '+original_blob_name \n               FROM log.source_register_table\n\t\t\t   where etl_is_processed = 'N'\n\t\t\t   and (etl_run_status like 'FAIL%' or etl_run_status like 'RUN%')\n\t\t\t   and etl_utc_tag = '@{pipeline().parameters.Etl_Utc_Tag}'\n\t\t\t   order by original_blob_name\n               FOR XML PATH(''), TYPE).value('.', 'varchar(max)'),1,1,'') as ErrorDuringProcess_Files\n;",
+												"type": "Expression"
+											}
+										},
+										"dataset": {
+											"referenceName": "SQLsourceRegisterTable_ds",
+											"type": "DatasetReference"
+										}
+									}
+								},
+								{
+									"name": "SuccessOrFailMail",
+									"type": "WebActivity",
+									"dependsOn": [
+										{
+											"activity": "GetErrorDuringProcessFiles",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"url": "https://prod-12.australiaeast.logic.azure.com:443/workflows/f7a9fbbc810043f28c16fd6bcf3b2f68/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=8yphnNtSS85GDIgCI8OiOwpDghciKo7S9hRjuy5ITI4",
+										"method": "POST",
+										"headers": {
+											"Content-Type": "application/json"
+										},
+										"body": {
+											"dataFactoryName": "@pipeline().parameters.Parent_DataFactory",
+											"pipelineName": "@pipeline().parameters.Parent_Pipeline",
+											"messageHeader": "@pipeline().parameters.Success_Fail_Header",
+											"messageProcessed": "@activity('GetProcessedFiles').output.firstRow",
+											"messageNotProcessed": "@activity('GetNotProcessedFiles').output.firstRow",
+											"messageErrorDuringProcess": "@activity('GetErrorDuringProcessFiles').output.firstRow"
+										}
+									}
+								}
+							]
+						}
+					}
+				],
+				"parameters": {
+					"Parent_DataFactory": {
+						"type": "string"
+					},
+					"Parent_Pipeline": {
+						"type": "string"
+					},
+					"Success_Fail_Header": {
+						"type": "string"
+					},
+					"Etl_Utc_Tag": {
+						"type": "string"
+					},
+					"File_Pattern": {
+						"type": "string"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/SQLsourceRegisterTable_ds')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DelimitedText_sourcelandingraw_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "[parameters('BlobStore_nfdwhstaging')]",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": {
+							"value": "@{item().ORIGINAL_BLOB_NAME}",
+							"type": "Expression"
+						},
+						"container": "sourcelandingraw"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DelimitedText_sourcelandingscrubbed_opsoperation_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "[parameters('BlobStore_nfdwhstaging')]",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": {
+							"value": "@{item().TARGET_BLOB_NAME}",
+							"type": "Expression"
+						},
+						"container": "sourcelandingscrubbed"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": [
+					{
+						"name": "Asset_ID",
+						"type": "String"
+					},
+					{
+						"name": "Fund_ID",
+						"type": "String"
+					},
+					{
+						"name": "Operation_Id",
+						"type": "String"
+					},
+					{
+						"name": "Reporting_Period",
+						"type": "String"
+					},
+					{
+						"name": "Operation_Type_Code",
+						"type": "String"
+					},
+					{
+						"name": "Area_Treated",
+						"type": "String"
+					},
+					{
+						"name": "Treatment_Cost",
+						"type": "String"
+					},
+					{
+						"name": "Unit_Cost",
+						"type": "String"
+					},
+					{
+						"name": "Last_Age_Class_Date",
+						"type": "String"
+					},
+					{
+						"name": "Species_Survived",
+						"type": "String"
+					},
+					{
+						"name": "Last_Age_Class_Survival_Rate",
+						"type": "String"
+					},
+					{
+						"name": "Budget_Area_Treated",
+						"type": "String"
+					},
+					{
+						"name": "Budget_Treatment_Cost",
+						"type": "String"
+					},
+					{
+						"name": "Budget_Unit_Cost",
+						"type": "String"
+					}
+				]
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DelimitedText_datalake_nonfinancial_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Generic",
+				"linkedServiceName": {
+					"referenceName": "[parameters('BlobStore_nfdwhdatalake')]",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": {
+							"value": "@{item().TARGET_BLOB_NAME}",
+							"type": "Expression"
+						},
+						"folderPath": {
+							"value": "@{item().DATALAKE_FILE_PATH}",
+							"type": "Expression"
+						},
+						"container": "nonfinancial"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadTxtToDBstaging_opsoperation_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "DelimitedText_sourcelandingscrubbed_opsoperation_ds",
+								"type": "DatasetReference"
+							},
+							"name": "LoadFromScrubbedToStagingDB"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLrelationasset_ds",
+								"type": "DatasetReference"
+							},
+							"name": "RelationalAsset"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLrelationopsoperationtype_ds",
+								"type": "DatasetReference"
+							},
+							"name": "RelationalOperationType"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLstagingopsoperation_ds",
+								"type": "DatasetReference"
+							},
+							"name": "StagingDB"
+						}
+					],
+					"transformations": [
+						{
+							"name": "LookupRelationAsset"
+						},
+						{
+							"name": "SelectValidRecord"
+						},
+						{
+							"name": "ValidatedDerivedData"
+						},
+						{
+							"name": "DerivedFields"
+						},
+						{
+							"name": "SelectInvalidDerivedData"
+						},
+						{
+							"name": "InvalidDerivedDataErrormessage"
+						},
+						{
+							"name": "SelectRelationalAsset"
+						},
+						{
+							"name": "ValidatedAsset"
+						},
+						{
+							"name": "InvalidFundOrAsseterrormessage"
+						},
+						{
+							"name": "SelectInvalidFundOrAsset"
+						},
+						{
+							"name": "UnionAll"
+						},
+						{
+							"name": "LookupRelationalOperationType"
+						},
+						{
+							"name": "SelectRelationalOperationType"
+						},
+						{
+							"name": "IsValidOperationType"
+						},
+						{
+							"name": "InvalidOperationTypeErrormessage"
+						},
+						{
+							"name": "SelectInvalidOperationType"
+						}
+					],
+					"script": "source(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tOperation_Id as string,\n\t\tReporting_Period as string,\n\t\tOperation_Type_Code as string,\n\t\tArea_Treated as string,\n\t\tTreatment_Cost as string,\n\t\tUnit_Cost as string,\n\t\tLast_Age_Class_Date as string,\n\t\tSpecies_Survived as string,\n\t\tLast_Age_Class_Survival_Rate as string,\n\t\tBudget_Area_Treated as string,\n\t\tBudget_Treatment_Cost as string,\n\t\tBudget_Unit_Cost as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> LoadFromScrubbedToStagingDB\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT [Asset_ID],[Fund_ID]\\nFROM [relational].[Asset]\\nWHERE record_deleted_flag = 0',\n\tformat: 'query') ~> RelationalAsset\nsource(output(\n\t\tOperation_Type_Code as string,\n\t\tOperation_Type as string,\n\t\tActive_YN as string,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> RelationalOperationType\nValidatedDerivedData@ValidDerivedData, SelectRelationalAsset lookup(Asset_ID == Relation_Asset_ID\n\t&& Fund_ID == Relation_Fund_ID,\n\tmultiple: true,\n\tbroadcast: 'auto')~> LookupRelationAsset\nIsValidOperationType@ValidOperationType select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tOperation_Id,\n\t\tReporting_Period,\n\t\tOperation_Type_Code,\n\t\tArea_Treated,\n\t\tTreatment_Cost,\n\t\tUnit_Cost,\n\t\tLast_Age_Class_Date,\n\t\tSpecies_Survived,\n\t\tLast_Age_Class_Survival_Rate,\n\t\tBudget_Area_Treated,\n\t\tBudget_Treatment_Cost,\n\t\tBudget_Unit_Cost\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectValidRecord\nDerivedFields split(not(isNull(Derived_Operation_Id)) && not(isNull(Derived_Reporting_Period)) && \r\niif(not(isNull(Area_Treated)),not(isNull(Derived_Area_Treated)),true()) && \r\niif(not(isNull(Treatment_Cost)),not(isNull(Derived_Treatment_Cost)),true()) && \r\niif(not(isNull(Last_Age_Class_Survival_Rate)),not(isNull(Derived_Last_Age_Class_Survival_Rate)),true()) && \r\niif(not(isNull(Budget_Area_Treated)),not(isNull(Derived_Budget_Area_Treated)),true()) && \r\niif(not(isNull(Budget_Treatment_Cost)),not(isNull(Derived_Budget_Treatment_Cost)),true()),\n\tdisjoint: false) ~> ValidatedDerivedData@(ValidDerivedData, InvalidDerivedData)\nLoadFromScrubbedToStagingDB derive(Derived_Reporting_Period = toDate(Reporting_Period,\"dd/MM/yyyy\"),\n\t\tDerived_Last_Age_Class_Date = toDate(Last_Age_Class_Date,\"dd/MM/yyyy\"),\n\t\tDerived_Operation_Id = toInteger(Operation_Id),\n\t\tDerived_Area_Treated = toDecimal(Area_Treated, 19, 4, \"###,###.####\"),\n\t\tDerived_Treatment_Cost = toDecimal(Treatment_Cost, 19, 4, \"###,###.####\"),\n\t\tDerived_Unit_Cost = toDecimal(Unit_Cost, 19, 4, \"###,###.####\"),\n\t\tDerived_Last_Age_Class_Survival_Rate = toDecimal(Last_Age_Class_Survival_Rate, 5, 2, \"###.##\"),\n\t\tDerived_Budget_Area_Treated = toDecimal(Budget_Area_Treated, 19, 4, \"###,###.####\"),\n\t\tDerived_Budget_Treatment_Cost = toDecimal(Budget_Treatment_Cost, 19, 4, \"###,###.####\"),\n\t\tDerived_Budget_Unit_Cost = toDecimal(Budget_Unit_Cost, 19, 4, \"###,###.####\")) ~> DerivedFields\nInvalidDerivedDataErrormessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tOperation_Id,\n\t\tReporting_Period,\n\t\tOperation_Type_Code,\n\t\tArea_Treated,\n\t\tTreatment_Cost,\n\t\tUnit_Cost,\n\t\tLast_Age_Class_Date,\n\t\tSpecies_Survived,\n\t\tLast_Age_Class_Survival_Rate,\n\t\tBudget_Area_Treated,\n\t\tBudget_Treatment_Cost,\n\t\tBudget_Unit_Cost,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidDerivedData\nValidatedDerivedData@InvalidDerivedData derive(Validation_Error = toString(\"Invalid Reporting Period / Operation ID / Area Treated / Treatment Cost / Unit Cost / Last Age Class Date / Last Age Class Survival Rate / Budget Area Treated / Budget Treatment Cost / Budget Unit Cost\")) ~> InvalidDerivedDataErrormessage\nRelationalAsset select(mapColumn(\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_Fund_ID = Fund_ID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRelationalAsset\nLookupRelationAsset split(not(isNull(Relation_Asset_ID)),\n\tdisjoint: false) ~> ValidatedAsset@(ValidFundAndAsset, InvalidFundOrAsset)\nValidatedAsset@InvalidFundOrAsset derive(Validation_Error = toString(\"Invalid Fund Or Asset\")) ~> InvalidFundOrAsseterrormessage\nInvalidFundOrAsseterrormessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tOperation_Id,\n\t\tReporting_Period,\n\t\tOperation_Type_Code,\n\t\tArea_Treated,\n\t\tTreatment_Cost,\n\t\tUnit_Cost,\n\t\tLast_Age_Class_Date,\n\t\tSpecies_Survived,\n\t\tLast_Age_Class_Survival_Rate,\n\t\tBudget_Area_Treated,\n\t\tBudget_Treatment_Cost,\n\t\tBudget_Unit_Cost,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidFundOrAsset\nSelectValidRecord, SelectInvalidDerivedData, SelectInvalidFundOrAsset, SelectInvalidOperationType union(byName: true)~> UnionAll\nValidatedAsset@ValidFundAndAsset, SelectRelationalOperationType lookup(Operation_Type_Code == Relation_Operation_Type_Code,\n\tmultiple: true,\n\tbroadcast: 'auto')~> LookupRelationalOperationType\nRelationalOperationType select(mapColumn(\n\t\tRelation_Operation_Type_Code = Operation_Type_Code\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRelationalOperationType\nLookupRelationalOperationType split(not(isNull(Relation_Operation_Type_Code)),\n\tdisjoint: false) ~> IsValidOperationType@(ValidOperationType, InvalidOpeartionType)\nIsValidOperationType@InvalidOpeartionType derive(Validation_Error = toString(\"Invalid Operation Type Code\")) ~> InvalidOperationTypeErrormessage\nInvalidOperationTypeErrormessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tOperation_Id,\n\t\tReporting_Period,\n\t\tOperation_Type_Code,\n\t\tArea_Treated,\n\t\tTreatment_Cost,\n\t\tUnit_Cost,\n\t\tLast_Age_Class_Date,\n\t\tSpecies_Survived,\n\t\tLast_Age_Class_Survival_Rate,\n\t\tBudget_Area_Treated,\n\t\tBudget_Treatment_Cost,\n\t\tBudget_Unit_Cost,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidOperationType\nUnionAll sink(input(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tOperation_Id as string,\n\t\tReporting_Period as string,\n\t\tOperation_Type_Code as string,\n\t\tArea_Treated as string,\n\t\tTreatment_Cost as string,\n\t\tUnit_Cost as string,\n\t\tLast_Age_Class_Date as string,\n\t\tSpecies_Survived as string,\n\t\tLast_Age_Class_Survival_Rate as string,\n\t\tBudget_Area_Treated as string,\n\t\tBudget_Treatment_Cost as string,\n\t\tBudget_Unit_Cost as string,\n\t\tValidation_Error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tOperation_Id,\n\t\tReporting_Period,\n\t\tOperation_Type_Code,\n\t\tArea_Treated,\n\t\tTreatment_Cost,\n\t\tUnit_Cost,\n\t\tLast_Age_Class_Date,\n\t\tSpecies_Survived,\n\t\tLast_Age_Class_Survival_Rate,\n\t\tBudget_Area_Treated,\n\t\tBudget_Treatment_Cost,\n\t\tBudget_Unit_Cost,\n\t\tValidation_Error\n\t)) ~> StagingDB"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/DelimitedText_sourcelandingscrubbed_opsoperation_ds')]",
+				"[concat(variables('factoryId'), '/datasets/SQLrelationasset_ds')]",
+				"[concat(variables('factoryId'), '/datasets/SQLrelationopsoperationtype_ds')]",
+				"[concat(variables('factoryId'), '/datasets/SQLstagingopsoperation_ds')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DelimitedText_sourcearchive_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "[parameters('BlobStore_nfdwhstaging')]",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": {
+							"value": "@{item().ORIGINAL_BLOB_NAME}",
+							"type": "Expression"
+						},
+						"folderPath": {
+							"value": "@{item().ORIGINAL_BLOB_ARCHIVE_FULLPATH}",
+							"type": "Expression"
+						},
+						"container": "sourcearchive"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ProcessSourceBlob_opsoperation_spl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "LookupStagingOpsOperation",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": "SELECT count(*) Total_Error\n  FROM [staging].[OPS_Operation]\n  WHERE [Validation_Error] IS NOT NULL"
+							},
+							"dataset": {
+								"referenceName": "SQLstagingopsoperation_ds",
+								"type": "DatasetReference"
+							}
+						}
+					},
+					{
+						"name": "ProcessStagingToRelational",
+						"type": "IfCondition",
+						"dependsOn": [
+							{
+								"activity": "LookupStagingOpsOperation",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@greater(activity('LookupStagingOpsOperation').output.firstRow.TOTAL_ERROR,0)",
+								"type": "Expression"
+							},
+							"ifFalseActivities": [
+								{
+									"name": "LoadStagingDBtoRelationDB_opsoperation_df",
+									"type": "ExecuteDataFlow",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"dataflow": {
+											"referenceName": "LoadStagingDBtoRelationDB_opsoperation_df",
+											"type": "DataFlowReference",
+											"parameters": {
+												"ProcessName": {
+													"value": "'@{pipeline().parameters.ProcessName}'",
+													"type": "Expression"
+												},
+												"FileName": {
+													"value": "'@{pipeline().parameters.FileName}'",
+													"type": "Expression"
+												},
+												"Etl_Utc_Tag": {
+													"value": "'@{pipeline().parameters.Etl_Utc_Tag}'",
+													"type": "Expression"
+												}
+											}
+										},
+										"compute": {
+											"coreCount": 8,
+											"computeType": "General"
+										}
+									}
+								}
+							],
+							"ifTrueActivities": [
+								{
+									"name": "UpdateSourceRegisterTableAbort",
+									"type": "SqlServerStoredProcedure",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"storedProcedureName": "[[log].[UpdateSourceRegisterFailedAbort]",
+										"storedProcedureParameters": {
+											"EtlUtcTag": {
+												"value": {
+													"value": "@pipeline().parameters.Etl_Utc_Tag",
+													"type": "Expression"
+												},
+												"type": "String"
+											},
+											"FileName": {
+												"value": {
+													"value": "@pipeline().parameters.OriginalBlobName",
+													"type": "Expression"
+												},
+												"type": "String"
+											}
+										}
+									},
+									"linkedServiceName": {
+										"referenceName": "[parameters('SQLdbConnection')]",
+										"type": "LinkedServiceReference"
+									}
+								}
+							]
+						}
+					}
+				],
+				"parameters": {
+					"ProcessName": {
+						"type": "string"
+					},
+					"FileName": {
+						"type": "string"
+					},
+					"Etl_Utc_Tag": {
+						"type": "string"
+					},
+					"OriginalBlobName": {
+						"type": "string"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/SQLstagingopsoperation_ds')]",
+				"[concat(variables('factoryId'), '/dataflows/LoadStagingDBtoRelationDB_opsoperation_df')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SQLrelationasset_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "[parameters('SQLdbConnection')]",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "Asset_ID",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Asset_Name",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Asset_Curency",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Fund_ID",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Asset_Alloc_Per",
+						"type": "decimal",
+						"precision": 18,
+						"scale": 2
+					},
+					{
+						"name": "Asset_country",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Fund_Region",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Fund_State",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Prop_Mgr_Name",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Prop_Mgr_Company",
+						"type": "nvarchar"
+					},
+					{
+						"name": "start_datetime",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					},
+					{
+						"name": "end_datetime",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					},
+					{
+						"name": "record_deleted_flag",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "process_name",
+						"type": "nvarchar"
+					},
+					{
+						"name": "RH_Level_1",
+						"type": "nvarchar"
+					},
+					{
+						"name": "RH_Level_2",
+						"type": "nvarchar"
+					},
+					{
+						"name": "RH_Level_3",
+						"type": "nvarchar"
+					},
+					{
+						"name": "RH_Level_4",
+						"type": "nvarchar"
+					},
+					{
+						"name": "RH_Level_5",
+						"type": "nvarchar"
+					}
+				],
+				"typeProperties": {
+					"schema": "relational",
+					"table": "Asset"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SQLrelationopsoperationtype_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "[parameters('SQLdbConnection')]",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "Operation_Type_Code",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Operation_Type",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Active_YN",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Insert_Datetime",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					},
+					{
+						"name": "Update_Datetime",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					},
+					{
+						"name": "Process_Name",
+						"type": "nvarchar"
+					}
+				],
+				"typeProperties": {
+					"schema": "relational",
+					"table": "OPS_OPERATION_TYPE"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SQLstagingopsoperation_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "[parameters('SQLdbConnection')]",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "Asset_ID",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Fund_ID",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Operation_Id",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Reporting_Period",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Operation_Type_Code",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Area_Treated",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Treatment_Cost",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Unit_Cost",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Last_Age_Class_Date",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Species_Survived",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Last_Age_Class_Survival_Rate",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Budget_Area_Treated",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Budget_Treatment_Cost",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Budget_Unit_Cost",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Validation_Error",
+						"type": "nvarchar"
+					}
+				],
+				"typeProperties": {
+					"schema": "staging",
+					"table": "OPS_OPERATION"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadStagingDBtoRelationDB_opsoperation_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "SQLstagingopsoperation_ds",
+								"type": "DatasetReference"
+							},
+							"name": "StagingDB"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLrelationopsoperation",
+								"type": "DatasetReference"
+							},
+							"name": "RelationalOperation"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLrelationopsoperation",
+								"type": "DatasetReference"
+							},
+							"name": "UpserttRow"
+						}
+					],
+					"transformations": [
+						{
+							"name": "SelectStagingData"
+						},
+						{
+							"name": "AddAuditColumns"
+						},
+						{
+							"name": "GenerateRelationalChecksum"
+						},
+						{
+							"name": "SelectRelationalData"
+						},
+						{
+							"name": "GenerateStagingChecksum"
+						},
+						{
+							"name": "CompareKeys"
+						},
+						{
+							"name": "UnionNewAndExisting"
+						},
+						{
+							"name": "SelectNewRecordData"
+						},
+						{
+							"name": "AlterRowUpsert"
+						},
+						{
+							"name": "ConvertDatesAndIdAndNumbers"
+						},
+						{
+							"name": "NewAndExistingOperation"
+						},
+						{
+							"name": "ChangedAddAuditData"
+						},
+						{
+							"name": "SelectChangeRecord"
+						}
+					],
+					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tOperation_Id as string,\n\t\tReporting_Period as string,\n\t\tOperation_Type_Code as string,\n\t\tArea_Treated as string,\n\t\tTreatment_Cost as string,\n\t\tUnit_Cost as string,\n\t\tLast_Age_Class_Date as string,\n\t\tSpecies_Survived as string,\n\t\tLast_Age_Class_Survival_Rate as string,\n\t\tBudget_Area_Treated as string,\n\t\tBudget_Treatment_Cost as string,\n\t\tBudget_Unit_Cost as string,\n\t\tValidation_Error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> StagingDB\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tOperation_Id as integer,\n\t\tReporting_Period as date,\n\t\tOperation_Type_Code as string,\n\t\tArea_Treated as decimal(19,4),\n\t\tTreatment_Cost as decimal(19,4),\n\t\tUnit_Cost as decimal(19,4),\n\t\tLast_Age_Class_Date as date,\n\t\tSpecies_Survived as string,\n\t\tLast_Age_Class_Survival_Rate as decimal(5,2),\n\t\tBudget_Area_Treated as decimal(19,4),\n\t\tBudget_Treatment_Cost as decimal(19,4),\n\t\tBudget_Unit_Cost as decimal(19,4),\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> RelationalOperation\nGenerateStagingChecksum select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tOperation_Id,\n\t\tReporting_Period,\n\t\tOperation_Type_Code,\n\t\tArea_Treated,\n\t\tTreatment_Cost,\n\t\tUnit_Cost,\n\t\tLast_Age_Class_Date,\n\t\tSpecies_Survived,\n\t\tLast_Age_Class_Survival_Rate,\n\t\tBudget_Area_Treated,\n\t\tBudget_Treatment_Cost,\n\t\tBudget_Unit_Cost,\n\t\tStagingChecksum\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectStagingData\nSelectNewRecordData derive(insert_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> AddAuditColumns\nRelationalOperation derive(RelationalChecksum = sha2(256, Reporting_Period,Operation_Type_Code,Area_Treated,Treatment_Cost,Unit_Cost,Last_Age_Class_Date,Species_Survived,Last_Age_Class_Survival_Rate,Budget_Area_Treated,Budget_Treatment_Cost,Budget_Unit_Cost)) ~> GenerateRelationalChecksum\nGenerateRelationalChecksum select(mapColumn(\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_Fund_ID = Fund_ID,\n\t\tRelation_Operation_Id = Operation_Id,\n\t\tRelation_Reporting_Period = Reporting_Period,\n\t\tRelation_Operation_Type_Code = Operation_Type_Code,\n\t\tRelation_Area_Treated = Area_Treated,\n\t\tRelation_Treatment_Cost = Treatment_Cost,\n\t\tRelation_Unit_Cost = Unit_Cost,\n\t\tRelation_Last_Age_Class_Date = Last_Age_Class_Date,\n\t\tRelation_Species_Survived = Species_Survived,\n\t\tRelation_Last_Age_Class_Survival_Rate = Last_Age_Class_Survival_Rate,\n\t\tRelation_Budget_Area_Treated = Budget_Area_Treated,\n\t\tRelation_Budget_Treatment_Cost = Budget_Treatment_Cost,\n\t\tRelation_Budget_Unit_Cost = Budget_Unit_Cost,\n\t\tRelation_Insert_Datetime = Insert_Datetime,\n\t\tRelation_Update_Datetime = Update_Datetime,\n\t\tRelation_Process_Name = Process_Name,\n\t\tRelation_RelationalChecksum = RelationalChecksum\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRelationalData\nConvertDatesAndIdAndNumbers derive(StagingChecksum = sha2(256, Reporting_Period,Operation_Type_Code,Area_Treated,Treatment_Cost,Unit_Cost,Last_Age_Class_Date,Species_Survived,Last_Age_Class_Survival_Rate,Budget_Area_Treated,Budget_Treatment_Cost,Budget_Unit_Cost)) ~> GenerateStagingChecksum\nSelectStagingData, SelectRelationalData lookup(Asset_ID == Relation_Asset_ID\n\t&& Fund_ID == Relation_Fund_ID\n\t&& Operation_Id == Relation_Operation_Id,\n\tmultiple: true,\n\tbroadcast: 'auto')~> CompareKeys\nAddAuditColumns, SelectChangeRecord union(byName: true)~> UnionNewAndExisting\nNewAndExistingOperation@NewOperation select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tOperation_Id,\n\t\tReporting_Period,\n\t\tOperation_Type_Code,\n\t\tArea_Treated,\n\t\tTreatment_Cost,\n\t\tUnit_Cost,\n\t\tLast_Age_Class_Date,\n\t\tSpecies_Survived,\n\t\tLast_Age_Class_Survival_Rate,\n\t\tBudget_Area_Treated,\n\t\tBudget_Treatment_Cost,\n\t\tBudget_Unit_Cost\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectNewRecordData\nUnionNewAndExisting alterRow(upsertIf(true())) ~> AlterRowUpsert\nStagingDB derive(Reporting_Period = toDate(Reporting_Period, \"dd/MM/yyyy\"),\n\t\tLast_Age_Class_Date = toDate(Last_Age_Class_Date, \"dd/MM/yyyy\"),\n\t\tOperation_Id = toInteger(Operation_Id),\n\t\tArea_Treated = toDecimal(Area_Treated, 19, 4, \"###,###.####\"),\n\t\tTreatment_Cost = toDecimal(Treatment_Cost, 19, 4, \"###,###.####\"),\n\t\tUnit_Cost = toDecimal(Unit_Cost, 19, 4, \"###,###.####\"),\n\t\tLast_Age_Class_Survival_Rate = toDecimal(Last_Age_Class_Survival_Rate, 5, 2, \"###.##\"),\n\t\tBudget_Area_Treated = toDecimal(Budget_Area_Treated, 19, 4, \"###,###.####\"),\n\t\tBudget_Treatment_Cost = toDecimal(Budget_Treatment_Cost, 19, 4, \"###,###.####\"),\n\t\tBudget_Unit_Cost = toDecimal(Budget_Unit_Cost, 19, 4, \"###,###.####\")) ~> ConvertDatesAndIdAndNumbers\nCompareKeys split(isNull(Relation_RelationalChecksum),\n\tStagingChecksum != Relation_RelationalChecksum || \r\nArea_Treated != Relation_Area_Treated || \r\nTreatment_Cost != Relation_Treatment_Cost || \r\nUnit_Cost != Relation_Unit_Cost || \r\nLast_Age_Class_Survival_Rate != Relation_Last_Age_Class_Survival_Rate || \r\nBudget_Area_Treated != Relation_Budget_Area_Treated || \r\nBudget_Treatment_Cost != Relation_Budget_Treatment_Cost|| \r\nBudget_Unit_Cost != Relation_Budget_Unit_Cost,\n\tdisjoint: false) ~> NewAndExistingOperation@(NewOperation, ChangedOperation, ExistingNoChange)\nNewAndExistingOperation@ChangedOperation derive(update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> ChangedAddAuditData\nChangedAddAuditData select(mapColumn(\n\t\tAsset_ID = Relation_Asset_ID,\n\t\tFund_ID = Relation_Fund_ID,\n\t\tOperation_Id = Relation_Operation_Id,\n\t\tReporting_Period,\n\t\tOperation_Type_Code,\n\t\tArea_Treated,\n\t\tTreatment_Cost,\n\t\tUnit_Cost,\n\t\tLast_Age_Class_Date,\n\t\tSpecies_Survived,\n\t\tLast_Age_Class_Survival_Rate,\n\t\tBudget_Area_Treated,\n\t\tBudget_Treatment_Cost,\n\t\tBudget_Unit_Cost,\n\t\tinsert_datetime = Relation_Insert_Datetime,\n\t\tupdate_datetime,\n\t\tprocess_name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectChangeRecord\nAlterRowUpsert sink(input(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tOperation_Id as integer,\n\t\tReporting_Period as date,\n\t\tOperation_Type_Code as string,\n\t\tArea_Treated as decimal(19,4),\n\t\tTreatment_Cost as decimal(19,4),\n\t\tUnit_Cost as decimal(19,4),\n\t\tLast_Age_Class_Date as date,\n\t\tSpecies_Survived as string,\n\t\tLast_Age_Class_Survival_Rate as decimal(5,2),\n\t\tBudget_Area_Treated as decimal(19,4),\n\t\tBudget_Treatment_Cost as decimal(19,4),\n\t\tBudget_Unit_Cost as decimal(19,4),\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:true,\n\tkeys:['Asset_ID','Fund_ID','Operation_Id'],\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tOperation_Id,\n\t\tReporting_Period,\n\t\tOperation_Type_Code,\n\t\tArea_Treated,\n\t\tTreatment_Cost,\n\t\tUnit_Cost,\n\t\tLast_Age_Class_Date,\n\t\tSpecies_Survived,\n\t\tLast_Age_Class_Survival_Rate,\n\t\tBudget_Area_Treated,\n\t\tBudget_Treatment_Cost,\n\t\tBudget_Unit_Cost,\n\t\tInsert_Datetime = insert_datetime,\n\t\tUpdate_Datetime = update_datetime,\n\t\tProcess_Name = process_name\n\t)) ~> UpserttRow"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/SQLstagingopsoperation_ds')]",
+				"[concat(variables('factoryId'), '/datasets/SQLrelationopsoperation')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SQLrelationopsoperation')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "[parameters('SQLdbConnection')]",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "Asset_ID",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Fund_ID",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Operation_Id",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "Reporting_Period",
+						"type": "date"
+					},
+					{
+						"name": "Operation_Type_Code",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Area_Treated",
+						"type": "decimal",
+						"precision": 19,
+						"scale": 4
+					},
+					{
+						"name": "Treatment_Cost",
+						"type": "decimal",
+						"precision": 19,
+						"scale": 4
+					},
+					{
+						"name": "Unit_Cost",
+						"type": "decimal",
+						"precision": 19,
+						"scale": 4
+					},
+					{
+						"name": "Last_Age_Class_Date",
+						"type": "date"
+					},
+					{
+						"name": "Species_Survived",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Last_Age_Class_Survival_Rate",
+						"type": "decimal",
+						"precision": 5,
+						"scale": 2
+					},
+					{
+						"name": "Budget_Area_Treated",
+						"type": "decimal",
+						"precision": 19,
+						"scale": 4
+					},
+					{
+						"name": "Budget_Treatment_Cost",
+						"type": "decimal",
+						"precision": 19,
+						"scale": 4
+					},
+					{
+						"name": "Budget_Unit_Cost",
+						"type": "decimal",
+						"precision": 19,
+						"scale": 4
+					},
+					{
+						"name": "Insert_Datetime",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					},
+					{
+						"name": "Update_Datetime",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					},
+					{
+						"name": "Process_Name",
+						"type": "nvarchar"
+					}
+				],
+				"typeProperties": {
+					"schema": "relational",
+					"table": "OPS_OPERATION"
+				}
+			},
+			"dependsOn": []
+		}
+	]
+}
