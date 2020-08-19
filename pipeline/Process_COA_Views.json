@@ -6,7 +6,14 @@
 			{
 				"name": "copyfilefromcorporatetoblob",
 				"type": "Copy",
-				"dependsOn": [],
+				"dependsOn": [
+					{
+						"activity": "Set ETL local time",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
 				"policy": {
 					"timeout": "0.00:10:00",
 					"retry": 0,
@@ -37,173 +44,6 @@
 					"enableStaging": false,
 					"translator": {
 						"type": "TabularTranslator",
-						"mappings": [
-							{
-								"source": {
-									"name": "View_Name",
-									"type": "String",
-									"physicalType": "String"
-								},
-								"sink": {
-									"name": "View_Name",
-									"type": "String"
-								}
-							},
-							{
-								"source": {
-									"name": "Category_Index",
-									"type": "String",
-									"physicalType": "String"
-								},
-								"sink": {
-									"name": "Category_Index",
-									"type": "String"
-								}
-							},
-							{
-								"source": {
-									"name": "Category",
-									"type": "String",
-									"physicalType": "String"
-								},
-								"sink": {
-									"name": "Category",
-									"type": "String"
-								}
-							},
-							{
-								"source": {
-									"name": "Sub_Category_Index",
-									"type": "String",
-									"physicalType": "String"
-								},
-								"sink": {
-									"name": "Sub_Category_Index",
-									"type": "String"
-								}
-							},
-							{
-								"source": {
-									"name": "Sub_Category",
-									"type": "String",
-									"physicalType": "String"
-								},
-								"sink": {
-									"name": "Sub_Category",
-									"type": "String"
-								}
-							},
-							{
-								"source": {
-									"name": "Item_Index",
-									"type": "String",
-									"physicalType": "String"
-								},
-								"sink": {
-									"name": "Item_Index",
-									"type": "String"
-								}
-							},
-							{
-								"source": {
-									"name": "Item",
-									"type": "String",
-									"physicalType": "String"
-								},
-								"sink": {
-									"name": "Item",
-									"type": "String"
-								}
-							},
-							{
-								"source": {
-									"name": "GL_Code",
-									"type": "String",
-									"physicalType": "String"
-								},
-								"sink": {
-									"name": "GL_Code",
-									"type": "String"
-								}
-							},
-							{
-								"source": {
-									"name": "Description",
-									"type": "String",
-									"physicalType": "String"
-								},
-								"sink": {
-									"name": "Description",
-									"type": "String"
-								}
-							},
-							{
-								"source": {
-									"name": "CF_Code",
-									"type": "String",
-									"physicalType": "String"
-								},
-								"sink": {
-									"name": "CF_Code",
-									"type": "String"
-								}
-							},
-							{
-								"source": {
-									"name": "CF_Description",
-									"type": "String",
-									"physicalType": "String"
-								},
-								"sink": {
-									"name": "CF_Description",
-									"type": "String"
-								}
-							},
-							{
-								"source": {
-									"name": "CPM_Code",
-									"type": "String",
-									"physicalType": "String"
-								},
-								"sink": {
-									"name": "CPM_Code",
-									"type": "String"
-								}
-							},
-							{
-								"source": {
-									"name": "Insert_datetime",
-									"type": "String",
-									"physicalType": "String"
-								},
-								"sink": {
-									"name": "Insert_datetime",
-									"type": "String"
-								}
-							},
-							{
-								"source": {
-									"name": "Update_datetime",
-									"type": "String",
-									"physicalType": "String"
-								},
-								"sink": {
-									"name": "Update_datetime",
-									"type": "String"
-								}
-							},
-							{
-								"source": {
-									"name": "Process_Name",
-									"type": "String",
-									"physicalType": "String"
-								},
-								"sink": {
-									"name": "Process_Name",
-									"type": "String"
-								}
-							}
-						],
 						"typeConversion": true,
 						"typeConversionSettings": {
 							"allowDataTruncation": true,
@@ -246,15 +86,107 @@
 				"typeProperties": {
 					"dataflow": {
 						"referenceName": "BudgetMappingtoDB",
-						"type": "DataFlowReference"
+						"type": "DataFlowReference",
+						"parameters": {
+							"process_name": {
+								"value": "'@{pipeline().Pipeline}'",
+								"type": "Expression"
+							},
+							"ETL_local": {
+								"value": "'@{variables('ETL_Local_Time')}'",
+								"type": "Expression"
+							}
+						}
 					},
 					"compute": {
 						"coreCount": 8,
 						"computeType": "General"
 					}
 				}
+			},
+			{
+				"name": "CopyTexttoArchive",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Update_COA_Views_Table",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.00:05:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "DelimitedTextSource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": true
+						},
+						"formatSettings": {
+							"type": "DelimitedTextReadSettings"
+						}
+					},
+					"sink": {
+						"type": "DelimitedTextSink",
+						"storeSettings": {
+							"type": "AzureBlobStorageWriteSettings"
+						},
+						"formatSettings": {
+							"type": "DelimitedTextWriteSettings",
+							"quoteAllText": true,
+							"fileExtension": ".txt"
+						}
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "BudgetMappingText",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "ArchiveBudgetMapping",
+						"type": "DatasetReference"
+					}
+				]
+			},
+			{
+				"name": "Set ETL local time",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "ETL_Local_Time",
+					"value": {
+						"value": "@substring(formatDateTime(getFutureTime(10,'Hour')),0,19)",
+						"type": "Expression"
+					}
+				}
 			}
 		],
+		"variables": {
+			"ETL_Local_Time": {
+				"type": "String"
+			}
+		},
 		"annotations": []
 	}
 }
