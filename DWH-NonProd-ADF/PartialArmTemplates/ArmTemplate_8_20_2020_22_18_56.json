@@ -1,0 +1,384 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory name",
+			"defaultValue": "DWH-NonProd-ADF"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/Process_COA_Views')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Copy file to Source Landing, extract view data, Insert or Update to relational.COA_Views, move to archive",
+				"activities": [
+					{
+						"name": "copyfilefromcorporatetoblob",
+						"type": "Copy",
+						"dependsOn": [
+							{
+								"activity": "Set ETL local time",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.00:10:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "ExcelSource",
+								"storeSettings": {
+									"type": "AzureFileStorageReadSettings",
+									"recursive": true,
+									"enablePartitionDiscovery": false
+								}
+							},
+							"sink": {
+								"type": "DelimitedTextSink",
+								"storeSettings": {
+									"type": "AzureBlobStorageWriteSettings"
+								},
+								"formatSettings": {
+									"type": "DelimitedTextWriteSettings",
+									"quoteAllText": true,
+									"fileExtension": ".txt"
+								}
+							},
+							"enableStaging": false,
+							"translator": {
+								"type": "TabularTranslator",
+								"typeConversion": true,
+								"typeConversionSettings": {
+									"allowDataTruncation": true,
+									"treatBooleanAsNumber": false
+								}
+							}
+						},
+						"inputs": [
+							{
+								"referenceName": "ExcelBudgetMapping",
+								"type": "DatasetReference"
+							}
+						],
+						"outputs": [
+							{
+								"referenceName": "BudgetMappingText",
+								"type": "DatasetReference"
+							}
+						]
+					},
+					{
+						"name": "Update_COA_Views_Table",
+						"type": "ExecuteDataFlow",
+						"dependsOn": [
+							{
+								"activity": "DeleteTempExcelFile",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "BudgetMappingtoDB",
+								"type": "DataFlowReference",
+								"parameters": {
+									"process_name": {
+										"value": "'@{pipeline().Pipeline}'",
+										"type": "Expression"
+									},
+									"ETL_local": {
+										"value": "'@{variables('ETL_Local_Time')}'",
+										"type": "Expression"
+									},
+									"useremail": {
+										"value": "'@{pipeline().parameters.useremail}'",
+										"type": "Expression"
+									}
+								}
+							},
+							"compute": {
+								"coreCount": 8,
+								"computeType": "General"
+							}
+						}
+					},
+					{
+						"name": "CopyTexttoArchive",
+						"type": "Copy",
+						"dependsOn": [
+							{
+								"activity": "Update_COA_Views_Table",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.00:05:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "DelimitedTextSource",
+								"storeSettings": {
+									"type": "AzureBlobStorageReadSettings",
+									"recursive": true
+								},
+								"formatSettings": {
+									"type": "DelimitedTextReadSettings"
+								}
+							},
+							"sink": {
+								"type": "DelimitedTextSink",
+								"storeSettings": {
+									"type": "AzureBlobStorageWriteSettings"
+								},
+								"formatSettings": {
+									"type": "DelimitedTextWriteSettings",
+									"quoteAllText": true,
+									"fileExtension": ".txt"
+								}
+							},
+							"enableStaging": false,
+							"translator": {
+								"type": "TabularTranslator",
+								"typeConversion": true,
+								"typeConversionSettings": {
+									"allowDataTruncation": true,
+									"treatBooleanAsNumber": false
+								}
+							}
+						},
+						"inputs": [
+							{
+								"referenceName": "BudgetMappingText",
+								"type": "DatasetReference"
+							}
+						],
+						"outputs": [
+							{
+								"referenceName": "ArchiveBudgetMapping",
+								"type": "DatasetReference"
+							}
+						]
+					},
+					{
+						"name": "Set ETL local time",
+						"type": "SetVariable",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "ETL_Local_Time",
+							"value": {
+								"value": "@substring(formatDateTime(getFutureTime(10,'Hour')),0,19)",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "DeleteTempExcelFile",
+						"type": "Delete",
+						"dependsOn": [
+							{
+								"activity": "copyfilefromcorporatetoblob",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.00:10:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataset": {
+								"referenceName": "ExcelBudgetMapping",
+								"type": "DatasetReference"
+							},
+							"enableLogging": false,
+							"storeSettings": {
+								"type": "AzureFileStorageReadSettings",
+								"recursive": true
+							}
+						}
+					}
+				],
+				"parameters": {
+					"useremail": {
+						"type": "string"
+					}
+				},
+				"variables": {
+					"ETL_Local_Time": {
+						"type": "String"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/dataflows/BudgetMappingtoDB')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/relationalCOA_Views')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "GL_Code",
+						"type": "nvarchar"
+					},
+					{
+						"name": "GL_Desc",
+						"type": "nvarchar"
+					},
+					{
+						"name": "View_Name",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Category",
+						"type": "nvarchar"
+					},
+					{
+						"name": "process_name",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Sub_Category",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Item",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Category_Index",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "Sub_Category_Index",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "Item_Index",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "CF_Code",
+						"type": "nvarchar"
+					},
+					{
+						"name": "CF_Description",
+						"type": "nvarchar"
+					},
+					{
+						"name": "CPM_Code",
+						"type": "nvarchar"
+					},
+					{
+						"name": "CPM_Description",
+						"type": "nvarchar"
+					},
+					{
+						"name": "update_datetime",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					},
+					{
+						"name": "update_user",
+						"type": "nvarchar"
+					}
+				],
+				"typeProperties": {
+					"schema": "relational",
+					"table": "COA_Views"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/BudgetMappingtoDB')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Update or insert budget mapping for source text and move source to archive",
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "BudgetMappingText",
+								"type": "DatasetReference"
+							},
+							"name": "MappingText"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "relationalCOA_Views",
+								"type": "DatasetReference"
+							},
+							"name": "COAViews"
+						}
+					],
+					"transformations": [
+						{
+							"name": "AlterRow1"
+						},
+						{
+							"name": "AuditFields"
+						}
+					],
+					"script": "parameters{\n\tprocess_name as string,\n\tETL_local as string,\n\tuseremail as string\n}\nsource(output(\n\t\tView_Name as string,\n\t\tCategory_Index as integer,\n\t\tCategory as string,\n\t\tSub_Category_Index as integer,\n\t\tSub_Category as string,\n\t\tItem_Index as integer,\n\t\tItem as string,\n\t\tGL_Code as string,\n\t\tGL_Desc as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> MappingText\nAuditFields alterRow(upsertIf(true())) ~> AlterRow1\nMappingText derive(Update_Time = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tProcess_Name = $process_name,\n\t\tUserEmail = $useremail) ~> AuditFields\nAlterRow1 sink(input(\n\t\tGL_Code as string,\n\t\tGL_Desc as string,\n\t\tView_Name as string,\n\t\tCategory as string,\n\t\tprocess_name as string,\n\t\tSub_Category as string,\n\t\tItem as string,\n\t\tCategory_Index as integer,\n\t\tSub_Category_Index as integer,\n\t\tItem_Index as integer,\n\t\tCF_Code as string,\n\t\tCF_Description as string,\n\t\tCPM_Code as string,\n\t\tCPM_Description as string,\n\t\tupdate_datetime as timestamp,\n\t\tupdate_user as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:true,\n\tkeys:['View_Name','GL_Code'],\n\tformat: 'table',\n\tpostSQLs:['UPDATE relational.COA_Views\\nSET CPM_Code = COA.Reporting_5, GL_Desc = COA.GL_Desc\\n\\nFROM\\n\\nrelational.Chart_of_Account COA JOIN relational.COA_Views v on COA.GL_Code = v.GL_Code\\n\\nWHERE COA.record_deleted_flag = 0'],\n\tmapColumn(\n\t\tGL_Code,\n\t\tView_Name,\n\t\tCategory,\n\t\tprocess_name = Process_Name,\n\t\tSub_Category,\n\t\tItem,\n\t\tCategory_Index,\n\t\tSub_Category_Index,\n\t\tItem_Index,\n\t\tupdate_datetime = Update_Time,\n\t\tupdate_user = UserEmail\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> COAViews"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/relationalCOA_Views')]"
+			]
+		}
+	]
+}
