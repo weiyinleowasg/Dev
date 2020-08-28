@@ -10,12 +10,60 @@
 		"Tigermoth_LS_connectionString": {
 			"type": "secureString",
 			"metadata": "Secure string for 'connectionString' of 'Tigermoth_LS'"
+		},
+		"BlobStore_nfdwhstaging_properties_typeProperties_connectionString_secretName": {
+			"type": "string",
+			"defaultValue": "NFDWHNonProdBlobstagingConn"
+		},
+		"SQLdbConnection_properties_typeProperties_connectionString_secretName": {
+			"type": "string",
+			"defaultValue": "NFDWHDEVSQLConn"
 		}
 	},
 	"variables": {
 		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
 	},
 	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/BlobStore_nfdwhstaging')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureBlobStorage",
+				"typeProperties": {
+					"connectionString": {
+						"type": "AzureKeyVaultSecret",
+						"store": {
+							"referenceName": "NFDWHAKV_LS",
+							"type": "LinkedServiceReference"
+						},
+						"secretName": "[parameters('BlobStore_nfdwhstaging_properties_typeProperties_connectionString_secretName')]"
+					}
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SQLdbConnection')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureSqlDatabase",
+				"typeProperties": {
+					"connectionString": {
+						"type": "AzureKeyVaultSecret",
+						"store": {
+							"referenceName": "NFDWHAKV_LS",
+							"type": "LinkedServiceReference"
+						},
+						"secretName": "[parameters('SQLdbConnection_properties_typeProperties_connectionString_secretName')]"
+					}
+				}
+			},
+			"dependsOn": []
+		},
 		{
 			"name": "[concat(parameters('factoryName'), '/Tigermoth_LS')]",
 			"type": "Microsoft.DataFactory/factories/linkedServices",
@@ -80,7 +128,9 @@
 				},
 				"schema": []
 			},
-			"dependsOn": []
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/BlobStore_nfdwhstaging')]"
+			]
 		},
 		{
 			"name": "[concat(parameters('factoryName'), '/BinaryDataBlobSourceLandingRaw_ds')]",
@@ -101,7 +151,9 @@
 					}
 				}
 			},
-			"dependsOn": []
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/BlobStore_nfdwhstaging')]"
+			]
 		},
 		{
 			"name": "[concat(parameters('factoryName'), '/BinaryDataDestinationBlob_MoveFile_ds')]",
@@ -127,7 +179,9 @@
 					}
 				}
 			},
-			"dependsOn": []
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/BlobStore_nfdwhstaging')]"
+			]
 		},
 		{
 			"name": "[concat(parameters('factoryName'), '/BinaryDataDestination_bak')]",
@@ -166,7 +220,9 @@
 					}
 				}
 			},
-			"dependsOn": []
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/BlobStore_nfdwhstaging')]"
+			]
 		},
 		{
 			"name": "[concat(parameters('factoryName'), '/BudgetMappingText')]",
@@ -229,7 +285,9 @@
 					}
 				]
 			},
-			"dependsOn": []
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/BlobStore_nfdwhstaging')]"
+			]
 		},
 		{
 			"name": "[concat(parameters('factoryName'), '/BudgetTextwithDate')]",
@@ -316,7 +374,9 @@
 					}
 				]
 			},
-			"dependsOn": []
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/BlobStore_nfdwhstaging')]"
+			]
 		},
 		{
 			"name": "[concat(parameters('factoryName'), '/DelimitedText1')]",
@@ -463,7 +523,9 @@
 					}
 				]
 			},
-			"dependsOn": []
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/BlobStore_nfdwhstaging')]"
+			]
 		},
 		{
 			"name": "[concat(parameters('factoryName'), '/DelimitedText_Estate')]",
@@ -580,7 +642,9 @@
 					}
 				]
 			},
-			"dependsOn": []
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/BlobStore_nfdwhstaging')]"
+			]
 		},
 		{
 			"name": "[concat(parameters('factoryName'), '/DelimitedText_adjustment_loadready_dsx')]",
@@ -666,7 +730,9 @@
 					}
 				]
 			},
-			"dependsOn": []
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/BlobStore_nfdwhstaging')]"
+			]
 		},
 		{
 			"name": "[concat(parameters('factoryName'), '/DelimitedText_budget_loadready_ds')]",
@@ -752,7 +818,9 @@
 					}
 				]
 			},
-			"dependsOn": []
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/BlobStore_nfdwhstaging')]"
+			]
 		},
 		{
 			"name": "[concat(parameters('factoryName'), '/DelimitedText_datalake_financial_ds')]",
@@ -960,74 +1028,6 @@
 		},
 		{
 			"name": "[concat(parameters('factoryName'), '/DelimitedText_datalake_nonfinancial_ds5')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"description": "Generic",
-				"linkedServiceName": {
-					"referenceName": "BlobStore_nfdwhdatalake",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "DelimitedText",
-				"typeProperties": {
-					"location": {
-						"type": "AzureBlobStorageLocation",
-						"fileName": {
-							"value": "@{item().TARGET_BLOB_NAME}",
-							"type": "Expression"
-						},
-						"folderPath": {
-							"value": "@{item().DATALAKE_FILE_PATH}",
-							"type": "Expression"
-						},
-						"container": "nonfinancial"
-					},
-					"columnDelimiter": ",",
-					"escapeChar": "\\",
-					"firstRowAsHeader": true,
-					"quoteChar": "\""
-				},
-				"schema": []
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/DelimitedText_datalake_nonfinancial_ds6')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"description": "Generic",
-				"linkedServiceName": {
-					"referenceName": "BlobStore_nfdwhdatalake",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "DelimitedText",
-				"typeProperties": {
-					"location": {
-						"type": "AzureBlobStorageLocation",
-						"fileName": {
-							"value": "@{item().TARGET_BLOB_NAME}",
-							"type": "Expression"
-						},
-						"folderPath": {
-							"value": "@{item().DATALAKE_FILE_PATH}",
-							"type": "Expression"
-						},
-						"container": "nonfinancial"
-					},
-					"columnDelimiter": ",",
-					"escapeChar": "\\",
-					"firstRowAsHeader": true,
-					"quoteChar": "\""
-				},
-				"schema": []
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/DelimitedText_datalake_nonfinancial_ds7')]",
 			"type": "Microsoft.DataFactory/factories/datasets",
 			"apiVersion": "2018-06-01",
 			"properties": {
