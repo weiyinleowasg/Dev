@@ -15,18 +15,24 @@
 			"sinks": [
 				{
 					"dataset": {
-						"referenceName": "Parquet1_test",
+						"referenceName": "ParquetOutput",
 						"type": "DatasetReference"
 					},
-					"name": "TargetPersistentCSV"
+					"name": "TargetPersistentParquet"
 				}
 			],
 			"transformations": [
 				{
 					"name": "ValidateMandatoryColumns"
+				},
+				{
+					"name": "SegregateValidInvalidRows"
+				},
+				{
+					"name": "SelectedColumnsOutput"
 				}
 			],
-			"script": "parameters{\n\tMasterUtcTag as string,\n\tCurrentRunDateTime as string,\n\tWorkbookName as string,\n\tTabName as string\n}\nsource(output(\n\t\tCertification_ID as double,\n\t\t{Validation Flag} as double,\n\t\t{Certification Type} as string,\n\t\t{Certification Number} as string,\n\t\t{Next Audit Date} as string,\n\t\t{Certifying Body} as string,\n\t\t{Certification Date} as date,\n\t\t{Certification End Date} as date,\n\t\t{Certified Entity} as string,\n\t\t{Number of Open Minor CARS} as string,\n\t\t{Number of Open Major CARS} as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> SourceDataTab\nSourceDataTab derive(CertificationTypeValidateMsg = iif(length(trim({Certification Type})) > 0, \"\", \"Certification Type\"),\n\t\tCertificationEndDateValidateMsg = iif(isNull({Certification End Date}), \"\", \"Certification End Date\")) ~> ValidateMandatoryColumns\nValidateMandatoryColumns sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tformat: 'parquet',\n\tpartitionFileNames:['testParquetCert'],\n\tmapColumn(\n\t\tCertification_ID,\n\t\t{Validation Flag},\n\t\t{Certification Type},\n\t\t{Certification Number},\n\t\t{Next Audit Date},\n\t\t{Certifying Body},\n\t\t{Certification Date},\n\t\t{Certification End Date},\n\t\t{Certified Entity},\n\t\t{Number of Open Minor CARS},\n\t\t{Number of Open Major CARS}\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetPersistentCSV"
+			"script": "parameters{\n\tMasterUtcTag as string,\n\tCurrentRunDateTime as string,\n\tWorkbookName as string,\n\tTabName as string\n}\nsource(output(\n\t\tCertification_ID as double,\n\t\t{Validation Flag} as double,\n\t\t{Certification Type} as string,\n\t\t{Certification Number} as string,\n\t\t{Next Audit Date} as string,\n\t\t{Certifying Body} as string,\n\t\t{Certification Date} as date,\n\t\t{Certification End Date} as date,\n\t\t{Certified Entity} as string,\n\t\t{Number of Open Minor CARS} as string,\n\t\t{Number of Open Major CARS} as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> SourceDataTab\nSourceDataTab derive(CertificationTypeValidateMsg = iif(length(trim({Certification Type})) > 0, \"\", \"Certification Type\"),\n\t\tCertificationEndDateValidateMsg = iif(isNull({Certification End Date}), \"\", \"Certification End Date\")) ~> ValidateMandatoryColumns\nValidateMandatoryColumns split(length(concatWS('',CertificationTypeValidateMsg,CertificationEndDateValidateMsg)) == 0,\n\tdisjoint: false) ~> SegregateValidInvalidRows@(ValidRows, InvalidRows)\nSegregateValidInvalidRows@ValidRows select(mapColumn(\n\t\tCertification_ID,\n\t\t{Validation Flag},\n\t\t{Certification Type},\n\t\t{Certification Number},\n\t\t{Next Audit Date},\n\t\t{Certifying Body},\n\t\t{Certification Date},\n\t\t{Certification End Date},\n\t\t{Certified Entity},\n\t\t{Number of Open Minor CARS},\n\t\t{Number of Open Major CARS}\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectedColumnsOutput\nSelectedColumnsOutput sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tformat: 'parquet',\n\tpartitionFileNames:[(concatWS(\"-\", $WorkbookName, $TabName))],\n\tmapColumn(\n\t\tCertification_ID,\n\t\tValidation_Flag = {Validation Flag},\n\t\t{Certification Type},\n\t\t{Certification Number},\n\t\t{Next Audit Date},\n\t\t{Certifying Body},\n\t\t{Certification Date},\n\t\t{Certification End Date},\n\t\t{Certified Entity},\n\t\t{Number of Open Minor CARS},\n\t\t{Number of Open Major CARS}\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetPersistentParquet"
 		}
 	}
 }
