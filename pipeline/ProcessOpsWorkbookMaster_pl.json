@@ -87,9 +87,9 @@
 				"type": "Wait",
 				"dependsOn": [
 					{
-						"activity": "Wait1_Success_DeleteWorkBookFromSourceLandingRaw",
+						"activity": "DeleteFileFromSourceLandingRaw",
 						"dependencyConditions": [
-							"Succeeded"
+							"Completed"
 						]
 					}
 				],
@@ -136,22 +136,6 @@
 				"dependsOn": [
 					{
 						"activity": "Wait2_WriteFailedEntryInSourceRegisterTable",
-						"dependencyConditions": [
-							"Completed"
-						]
-					}
-				],
-				"userProperties": [],
-				"typeProperties": {
-					"waitTimeInSeconds": 1
-				}
-			},
-			{
-				"name": "Wait1_Success_DeleteWorkBookFromSourceLandingRaw",
-				"type": "Wait",
-				"dependsOn": [
-					{
-						"activity": "CopyToDataLake",
 						"dependencyConditions": [
 							"Completed"
 						]
@@ -394,6 +378,43 @@
 						}
 					}
 				]
+			},
+			{
+				"name": "DeleteFileFromSourceLandingRaw",
+				"type": "Delete",
+				"dependsOn": [
+					{
+						"activity": "CopyToDataLake",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "BinaryFromSourceLandingRaw_ds",
+						"type": "DatasetReference",
+						"parameters": {
+							"file": {
+								"value": "@pipeline().parameters.WorkbookName",
+								"type": "Expression"
+							}
+						}
+					},
+					"enableLogging": false,
+					"storeSettings": {
+						"type": "AzureBlobStorageReadSettings",
+						"recursive": false
+					}
+				}
 			}
 		],
 		"parameters": {
