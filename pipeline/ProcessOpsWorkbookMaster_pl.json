@@ -147,27 +147,11 @@
 				}
 			},
 			{
-				"name": "Wait1_Success_CopyWorkbookToDL",
-				"type": "Wait",
-				"dependsOn": [
-					{
-						"activity": "CopyToSourceArchive",
-						"dependencyConditions": [
-							"Completed"
-						]
-					}
-				],
-				"userProperties": [],
-				"typeProperties": {
-					"waitTimeInSeconds": 1
-				}
-			},
-			{
 				"name": "Wait1_Success_DeleteWorkBookFromSourceLandingRaw",
 				"type": "Wait",
 				"dependsOn": [
 					{
-						"activity": "Wait1_Success_CopyWorkbookToDL",
+						"activity": "CopyToDataLake",
 						"dependencyConditions": [
 							"Completed"
 						]
@@ -333,6 +317,74 @@
 						"parameters": {
 							"path": {
 								"value": "@concat(substring(pipeline().parameters.CurrentQuarterDate,0,4), '/', concat(if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'01'),'JAN',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'02'),'FEB',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'03'),'MAR',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'04'),'APR',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'05'),'MAY',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'06'),'JUN',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'07'),'JUL',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'08'),'AUG',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'09'),'SEP',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'10'),'OCT',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'11'),'NOV',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'12'),'DEC','')), '/', substring(pipeline().parameters.CurrentQuarterDate,8,2))",
+								"type": "Expression"
+							},
+							"file": {
+								"value": "@pipeline().parameters.WorkbookName",
+								"type": "Expression"
+							}
+						}
+					}
+				]
+			},
+			{
+				"name": "CopyToDataLake",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "CopyToSourceArchive",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "BinarySource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": false,
+							"deleteFilesAfterCompletion": false
+						},
+						"formatSettings": {
+							"type": "BinaryReadSettings"
+						}
+					},
+					"sink": {
+						"type": "BinarySink",
+						"storeSettings": {
+							"type": "AzureBlobStorageWriteSettings"
+						}
+					},
+					"enableStaging": false
+				},
+				"inputs": [
+					{
+						"referenceName": "BinaryFromSourceLandingRaw_ds",
+						"type": "DatasetReference",
+						"parameters": {
+							"file": {
+								"value": "@pipeline().parameters.WorkbookName",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "BinaryToDatalake_ds",
+						"type": "DatasetReference",
+						"parameters": {
+							"path": {
+								"value": "@concat('manual/',substring(pipeline().parameters.CurrentQuarterDate,0,4), '/', concat(if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'01'),'JAN',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'02'),'FEB',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'03'),'MAR',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'04'),'APR',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'05'),'MAY',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'06'),'JUN',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'07'),'JUL',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'08'),'AUG',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'09'),'SEP',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'10'),'OCT',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'11'),'NOV',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'12'),'DEC','')), '/', substring(pipeline().parameters.CurrentQuarterDate,8,2))",
 								"type": "Expression"
 							},
 							"file": {
