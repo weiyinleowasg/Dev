@@ -83,23 +83,7 @@
 				}
 			},
 			{
-				"name": "Wait1_Failed_LogEvent",
-				"type": "Wait",
-				"dependsOn": [
-					{
-						"activity": "Wait1_Failed_DeleteWorkbookFromSourceLandingRaw",
-						"dependencyConditions": [
-							"Completed"
-						]
-					}
-				],
-				"userProperties": [],
-				"typeProperties": {
-					"waitTimeInSeconds": 1
-				}
-			},
-			{
-				"name": "Wait1_Success_SendMail",
+				"name": "Pipeline_Wait1_Success_SendMail",
 				"type": "Wait",
 				"dependsOn": [
 					{
@@ -119,23 +103,7 @@
 				"type": "Wait",
 				"dependsOn": [
 					{
-						"activity": "Wait1_Failed_LogEvent",
-						"dependencyConditions": [
-							"Completed"
-						]
-					}
-				],
-				"userProperties": [],
-				"typeProperties": {
-					"waitTimeInSeconds": 1
-				}
-			},
-			{
-				"name": "Wait1_Failed_DeleteWorkbookFromSourceLandingRaw",
-				"type": "Wait",
-				"dependsOn": [
-					{
-						"activity": "Wait2_Failed_CopyWorkbookToArchive",
+						"activity": "RegisterStatusInMasterRunLog_Failed",
 						"dependencyConditions": [
 							"Completed"
 						]
@@ -177,22 +145,6 @@
 						"value": "@utcnow()",
 						"type": "Expression"
 					}
-				}
-			},
-			{
-				"name": "Wait2_Failed_CopyWorkbookToArchive",
-				"type": "Wait",
-				"dependsOn": [
-					{
-						"activity": "ProcessOpsWorkbookSubMaster_pl",
-						"dependencyConditions": [
-							"Failed"
-						]
-					}
-				],
-				"userProperties": [],
-				"typeProperties": {
-					"waitTimeInSeconds": 1
 				}
 			},
 			{
@@ -441,6 +393,193 @@
 						},
 						"RunStatus": {
 							"value": "SUCCESS",
+							"type": "String"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "CopyToSourceArchive_Failed",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "ProcessOpsWorkbookSubMaster_pl",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "BinarySource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": false,
+							"deleteFilesAfterCompletion": false
+						},
+						"formatSettings": {
+							"type": "BinaryReadSettings"
+						}
+					},
+					"sink": {
+						"type": "BinarySink",
+						"storeSettings": {
+							"type": "AzureBlobStorageWriteSettings"
+						}
+					},
+					"enableStaging": false
+				},
+				"inputs": [
+					{
+						"referenceName": "BinaryFromSourceLandingRaw_ds",
+						"type": "DatasetReference",
+						"parameters": {
+							"file": {
+								"value": "@pipeline().parameters.WorkbookName",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "BinaryToSourceArchive_ds",
+						"type": "DatasetReference",
+						"parameters": {
+							"path": {
+								"value": "@concat(substring(pipeline().parameters.CurrentQuarterDate,0,4), '/', concat(if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'01'),'JAN',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'02'),'FEB',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'03'),'MAR',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'04'),'APR',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'05'),'MAY',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'06'),'JUN',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'07'),'JUL',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'08'),'AUG',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'09'),'SEP',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'10'),'OCT',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'11'),'NOV',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'12'),'DEC','')), '/', substring(pipeline().parameters.CurrentQuarterDate,8,2))",
+								"type": "Expression"
+							},
+							"file": {
+								"value": "@pipeline().parameters.WorkbookName",
+								"type": "Expression"
+							}
+						}
+					}
+				]
+			},
+			{
+				"name": "DeleteFileFromSourceLandingRaw_Failed",
+				"type": "Delete",
+				"dependsOn": [
+					{
+						"activity": "CopyToSourceArchive_Failed",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "BinaryFromSourceLandingRaw_ds",
+						"type": "DatasetReference",
+						"parameters": {
+							"file": {
+								"value": "@pipeline().parameters.WorkbookName",
+								"type": "Expression"
+							}
+						}
+					},
+					"enableLogging": false,
+					"storeSettings": {
+						"type": "AzureBlobStorageReadSettings",
+						"recursive": false
+					}
+				}
+			},
+			{
+				"name": "DeleteAllRelatedAdf2PersistentArea_Failed",
+				"type": "Delete",
+				"dependsOn": [
+					{
+						"activity": "DeleteFileFromSourceLandingRaw_Failed",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataset": {
+						"referenceName": "BinaryFromAdf2PersistentArea_ds",
+						"type": "DatasetReference"
+					},
+					"enableLogging": false,
+					"storeSettings": {
+						"type": "AzureBlobStorageReadSettings",
+						"recursive": true,
+						"prefix": {
+							"value": "@{pipeline().parameters.WorkbookName}",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "RegisterStatusInMasterRunLog_Failed",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "DeleteAllRelatedAdf2PersistentArea_Failed",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[log].[UpdateMasterRunLog]",
+					"storedProcedureParameters": {
+						"MasterUtcTag": {
+							"value": {
+								"value": "@variables('MasterUtcTag')",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"RunMessage": {
+							"value": {
+								"value": "@pipeline().parameters.WorkbookName",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"RunStatus": {
+							"value": "FAILED",
 							"type": "String"
 						}
 					}
