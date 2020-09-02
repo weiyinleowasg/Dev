@@ -3,37 +3,7 @@
 	"properties": {
 		"activities": [
 			{
-				"name": "Web1",
-				"type": "WebActivity",
-				"dependsOn": [],
-				"policy": {
-					"timeout": "7.00:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"url": "https://prod-19.australiaeast.logic.azure.com:443/workflows/7139728b716a4500b96a2fa094f691fa/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=I30JtkHJ6p4mNeMF6USxTdCCjTwTvY1dmmNC2Mvte7o",
-					"method": "POST",
-					"headers": {
-						"Content-Type": "application/json"
-					},
-					"body": {
-						"dataFactoryName": "AAAA",
-						"pipelineName": "BBB",
-						"messageHeader": "SUCCESS",
-						"tableName": "cccc",
-						"errorCount": "0",
-						"emailAddress": "weiyin.leow@asggroup.com.au",
-						"lastName": "d",
-						"FirstName": "e"
-					}
-				}
-			},
-			{
-				"name": "Lookup1",
+				"name": "GetEmailDetails",
 				"type": "Lookup",
 				"dependsOn": [],
 				"policy": {
@@ -59,11 +29,11 @@
 				}
 			},
 			{
-				"name": "ForEach1",
+				"name": "ForEachWorkbookWorksheetEmail",
 				"type": "ForEach",
 				"dependsOn": [
 					{
-						"activity": "Lookup1",
+						"activity": "GetEmailDetails",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -72,13 +42,13 @@
 				"userProperties": [],
 				"typeProperties": {
 					"items": {
-						"value": "@activity('Lookup1').output.value",
+						"value": "@activity('GetEmailDetails').output.value",
 						"type": "Expression"
 					},
 					"isSequential": true,
 					"activities": [
 						{
-							"name": "Web2",
+							"name": "SendEmail",
 							"type": "WebActivity",
 							"dependsOn": [],
 							"policy": {
@@ -96,7 +66,7 @@
 									"Content-Type": "application/json"
 								},
 								"body": {
-									"value": "{\"dataFactoryName\":\"AAAA\",\"pipelineName\":\"BBB\",\"messageHeader\":\"SUCCESS\",\"tableName\":\"cccc\",\"errorCount\":\"0\",\"emailAddress\":\"@{item().Ops_Representative_Email}\",\"lastName\":\"d\",\"FirstName\":\"e\"}",
+									"value": "{\"dataFactoryName\":\"pipeline().DataFactory\",\"pipelineName\":\"pipeline().Pipeline\",\"messageHeader\":\"@{item().Message_Header}\",\"tableName\":\"@{item().Error_Table}\",\"errorCount\":\"@{item().Error_Count}\",\"emailAddress\":\"@{item().Ops_Representative_Email}\",\"lastName\":\"@{item().Ops_Representative_Last_Name}\",\"firstName\":\"@{item().Ops_Representative_First_Name}\"}",
 									"type": "Expression"
 								}
 							}
