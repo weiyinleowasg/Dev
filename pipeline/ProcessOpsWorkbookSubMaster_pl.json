@@ -80,7 +80,7 @@
 				"type": "ExecutePipeline",
 				"dependsOn": [
 					{
-						"activity": "TruncateCertificatesAuditTable",
+						"activity": "DeleteCertificatesAuditTable",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -164,7 +164,7 @@
 				"type": "ExecutePipeline",
 				"dependsOn": [
 					{
-						"activity": "TruncateTimberSalesAuditTable",
+						"activity": "DeleteTimberSalesAuditTable",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -202,7 +202,7 @@
 				}
 			},
 			{
-				"name": "TruncateCertificatesAuditTable",
+				"name": "DeleteCertificatesAuditTable",
 				"type": "SqlServerStoredProcedure",
 				"dependsOn": [],
 				"policy": {
@@ -214,10 +214,17 @@
 				},
 				"userProperties": [],
 				"typeProperties": {
-					"storedProcedureName": "[audit].[TruncateAuditTable]",
+					"storedProcedureName": "[audit].[DeleteAuditTable]",
 					"storedProcedureParameters": {
 						"TableName": {
 							"value": "OPS_Certification_Error",
+							"type": "String"
+						},
+						"WorkBookName": {
+							"value": {
+								"value": "@pipeline().parameters.WorkbookName",
+								"type": "Expression"
+							},
 							"type": "String"
 						}
 					}
@@ -228,7 +235,7 @@
 				}
 			},
 			{
-				"name": "TruncateTimberSalesAuditTable",
+				"name": "DeleteTimberSalesAuditTable",
 				"type": "SqlServerStoredProcedure",
 				"dependsOn": [],
 				"policy": {
@@ -240,10 +247,17 @@
 				},
 				"userProperties": [],
 				"typeProperties": {
-					"storedProcedureName": "[audit].[TruncateAuditTable]",
+					"storedProcedureName": "[audit].[DeleteAuditTable]",
 					"storedProcedureParameters": {
 						"TableName": {
 							"value": "OPS_Timber_Sales_Error",
+							"type": "String"
+						},
+						"WorkBookName": {
+							"value": {
+								"value": "@pipeline().parameters.WorkbookName",
+								"type": "Expression"
+							},
 							"type": "String"
 						}
 					}
@@ -251,6 +265,48 @@
 				"linkedServiceName": {
 					"referenceName": "SQLdbConnection",
 					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "LoadTimberSales",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "ProcessWorkbookTabTimberSales",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "ProcessOpsWorkbookTabTimberSales_spl",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"WorkbookName": {
+							"value": "@pipeline().parameters.WorkbookName",
+							"type": "Expression"
+						},
+						"CurrentQuarterDate": {
+							"value": "@pipeline().parameters.CurrentQuarterDate",
+							"type": "Expression"
+						},
+						"TimberSales": {
+							"value": "@pipeline().parameters.TimberSales",
+							"type": "Expression"
+						},
+						"CurrentRunDateTime": {
+							"value": "@pipeline().parameters.CurrentRunDateTime",
+							"type": "Expression"
+						},
+						"MasterUtcTag": {
+							"value": "@pipeline().parameters.MasterUtcTag",
+							"type": "Expression"
+						}
+					}
 				}
 			}
 		],
