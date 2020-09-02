@@ -13,6 +13,356 @@
 	},
 	"resources": [
 		{
+			"name": "[concat(parameters('factoryName'), '/ExcelWorkbook_AllTabs_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Generic dataset used by all Excel tabs",
+				"linkedServiceName": {
+					"referenceName": "BlobStore_nfdwhstaging",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"WorkbookName": {
+						"type": "string"
+					},
+					"TabName": {
+						"type": "string"
+					},
+					"Range": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "Excel",
+				"typeProperties": {
+					"sheetName": {
+						"value": "@dataset().TabName",
+						"type": "Expression"
+					},
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": {
+							"value": "@dataset().WorkbookName",
+							"type": "Expression"
+						},
+						"container": "sourcelandingraw"
+					},
+					"range": {
+						"value": "@dataset().Range",
+						"type": "Expression"
+					},
+					"firstRowAsHeader": true
+				},
+				"schema": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/Geo_sourcelandingscrubbed_geojsonmodified_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "BlobStore_nfdwhstaging",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "Json",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": "SHAPE-TIM-ANZFOF_Sub2-20200217.json",
+						"container": "sourcelandingscrubbed"
+					}
+				},
+				"schema": {
+					"type": "object",
+					"properties": {
+						"type": {
+							"type": "string"
+						},
+						"properties": {
+							"type": "object",
+							"properties": {
+								"Asset_Id": {
+									"type": "string"
+								},
+								"Fund_Id": {
+									"type": "string"
+								},
+								"OBJECTID": {
+									"type": "integer"
+								},
+								"Property": {
+									"type": "string"
+								},
+								"Crop_Type": {
+									"type": "string"
+								},
+								"Plant_Year": {
+									"type": "integer"
+								},
+								"State": {
+									"type": "string"
+								},
+								"Area_Ha": {
+									"type": "number"
+								},
+								"SHAPE_Leng": {
+									"type": "number"
+								},
+								"SHAPE_Area": {
+									"type": "number"
+								}
+							}
+						},
+						"geometry": {
+							"type": "object",
+							"properties": {
+								"type": {
+									"type": "string"
+								},
+								"coordinates": {
+									"type": "string"
+								}
+							}
+						}
+					}
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ParquetPersistentOpsWithTabParam_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "BlobStore_nfdwhstaging",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"ParquetFile": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "Parquet",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": {
+							"value": "@dataset().ParquetFile",
+							"type": "Expression"
+						},
+						"container": "adf2persistentarea"
+					},
+					"compressionCodec": "snappy"
+				},
+				"schema": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ParquetPersistentOps_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "BlobStore_nfdwhstaging",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "Parquet",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"container": "adf2persistentarea"
+					},
+					"compressionCodec": "snappy"
+				},
+				"schema": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SQLauditopsworkbookworksheetlist_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "Work_Book",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Work_Sheet",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Asset_Id",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Fund_Id",
+						"type": "nvarchar"
+					}
+				],
+				"typeProperties": {
+					"schema": "audit",
+					"table": "OPS_Workbook_Worksheet_Asset_List"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SQLrelationTrxType_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "Trx_Type_ID",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "Trx_Type",
+						"type": "varchar"
+					},
+					{
+						"name": "Trx_Type_Description",
+						"type": "varchar"
+					},
+					{
+						"name": "Application",
+						"type": "varchar"
+					}
+				],
+				"typeProperties": {
+					"schema": "relational",
+					"table": "COA_Trx_Type"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SQLrelationasset_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "Asset_ID",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Asset_Name",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Asset_Curency",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Fund_ID",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Asset_Alloc_Per",
+						"type": "decimal",
+						"precision": 18,
+						"scale": 2
+					},
+					{
+						"name": "Asset_country",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Fund_Region",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Fund_State",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Prop_Mgr_Name",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Prop_Mgr_Company",
+						"type": "nvarchar"
+					},
+					{
+						"name": "start_datetime",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					},
+					{
+						"name": "end_datetime",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					},
+					{
+						"name": "record_deleted_flag",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "process_name",
+						"type": "nvarchar"
+					},
+					{
+						"name": "RH_Level_1",
+						"type": "nvarchar"
+					},
+					{
+						"name": "RH_Level_2",
+						"type": "nvarchar"
+					},
+					{
+						"name": "RH_Level_3",
+						"type": "nvarchar"
+					},
+					{
+						"name": "RH_Level_4",
+						"type": "nvarchar"
+					},
+					{
+						"name": "RH_Level_5",
+						"type": "nvarchar"
+					}
+				],
+				"typeProperties": {
+					"schema": "relational",
+					"table": "Asset"
+				}
+			},
+			"dependsOn": []
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/SQLrelationasset_ds1')]",
 			"type": "Microsoft.DataFactory/factories/datasets",
 			"apiVersion": "2018-06-01",
@@ -1303,545 +1653,6 @@
 				"typeProperties": {
 					"schema": "relational",
 					"table": "Forecast_Asset_reference"
-				}
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/SQLrelationforecastdata_ds')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "SQLdbConnection",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "AzureSqlTable",
-				"schema": [
-					{
-						"name": "Period_Date",
-						"type": "datetime",
-						"precision": 23,
-						"scale": 3
-					},
-					{
-						"name": "Fund_ID",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Asset_ID",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Status",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Product",
-						"type": "nvarchar"
-					},
-					{
-						"name": "GL_Code",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Cash_Flow_Code",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Perpetual_Amount",
-						"type": "decimal",
-						"precision": 25,
-						"scale": 10
-					},
-					{
-						"name": "Current_Amount",
-						"type": "decimal",
-						"precision": 25,
-						"scale": 10
-					},
-					{
-						"name": "Future_Amount",
-						"type": "decimal",
-						"precision": 25,
-						"scale": 10
-					},
-					{
-						"name": "Debit_Credit",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Forecast_Type",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Version_name",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Update_datetime",
-						"type": "datetime",
-						"precision": 23,
-						"scale": 3
-					},
-					{
-						"name": "record_deleted_flag",
-						"type": "int",
-						"precision": 10
-					},
-					{
-						"name": "process_name",
-						"type": "nvarchar"
-					},
-					{
-						"name": "UOM",
-						"type": "nvarchar"
-					},
-					{
-						"name": "CPM_Code",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Share_Perpetual",
-						"type": "decimal",
-						"precision": 25,
-						"scale": 10
-					},
-					{
-						"name": "Entity",
-						"type": "nvarchar"
-					}
-				],
-				"typeProperties": {
-					"schema": "relational",
-					"table": "Forecast_Data"
-				}
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/SQLrelationforex_ds')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "SQLdbConnection",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "AzureSqlTable",
-				"schema": [
-					{
-						"name": "Forex_Date",
-						"type": "datetime",
-						"precision": 23,
-						"scale": 3
-					},
-					{
-						"name": "Base_Currency",
-						"type": "varchar"
-					},
-					{
-						"name": "Target_Currency",
-						"type": "varchar"
-					},
-					{
-						"name": "EOM_Rate",
-						"type": "decimal",
-						"precision": 18,
-						"scale": 7
-					},
-					{
-						"name": "Avg_Mon_Rate",
-						"type": "decimal",
-						"precision": 18,
-						"scale": 7
-					},
-					{
-						"name": "start_datetime",
-						"type": "datetime",
-						"precision": 23,
-						"scale": 3
-					},
-					{
-						"name": "end_datetime",
-						"type": "datetime",
-						"precision": 23,
-						"scale": 3
-					},
-					{
-						"name": "record_deleted_flag",
-						"type": "int",
-						"precision": 10
-					},
-					{
-						"name": "process_name",
-						"type": "nvarchar"
-					}
-				],
-				"typeProperties": {
-					"schema": "relational",
-					"table": "Forex_Rate"
-				}
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/SQLrelationfund_ds')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "SQLdbConnection",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "AzureSqlTable",
-				"schema": [
-					{
-						"name": "Fund_ID",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Company_Name",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Fund_Name",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Fund_Master",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Fund_master_Name",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Fund_Parent_Allocation_percentage",
-						"type": "decimal",
-						"precision": 18,
-						"scale": 2
-					},
-					{
-						"name": "Fund_ABN",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Fund_ARSN",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Fund_Country",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Fund_Region",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Fund_State",
-						"type": "nvarchar"
-					},
-					{
-						"name": "start_datetime",
-						"type": "datetime",
-						"precision": 23,
-						"scale": 3
-					},
-					{
-						"name": "end_datetime",
-						"type": "datetime",
-						"precision": 23,
-						"scale": 3
-					},
-					{
-						"name": "record_deleted_flag",
-						"type": "int",
-						"precision": 10
-					},
-					{
-						"name": "process_name",
-						"type": "nvarchar"
-					}
-				],
-				"typeProperties": {
-					"schema": "relational",
-					"table": "Fund"
-				}
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/SQLrelationglallocate_ds')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "SQLdbConnection",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "AzureSqlTable",
-				"schema": [
-					{
-						"name": "GL_Code",
-						"type": "nvarchar"
-					},
-					{
-						"name": "GL_Desc",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Fund_ID",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Asset_ID",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Allocation_percent",
-						"type": "decimal",
-						"precision": 18,
-						"scale": 4
-					},
-					{
-						"name": "start_datetime",
-						"type": "datetime",
-						"precision": 23,
-						"scale": 3
-					},
-					{
-						"name": "end_datetime",
-						"type": "datetime",
-						"precision": 23,
-						"scale": 3
-					},
-					{
-						"name": "record_deleted_flag",
-						"type": "int",
-						"precision": 10
-					},
-					{
-						"name": "process_name",
-						"type": "nvarchar"
-					}
-				],
-				"typeProperties": {
-					"schema": "relational",
-					"table": "Forecast_GL_Allocation"
-				}
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/SQLrelationglproduct_ds')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "SQLdbConnection",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "AzureSqlTable",
-				"schema": [
-					{
-						"name": "Fund_ID",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Asset_ID",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Status",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Product",
-						"type": "nvarchar"
-					},
-					{
-						"name": "GL_Code",
-						"type": "nvarchar"
-					},
-					{
-						"name": "start_datetime",
-						"type": "datetime",
-						"precision": 23,
-						"scale": 3
-					},
-					{
-						"name": "end_datetime",
-						"type": "datetime",
-						"precision": 23,
-						"scale": 3
-					},
-					{
-						"name": "record_deleted_flag",
-						"type": "int",
-						"precision": 10
-					},
-					{
-						"name": "process_name",
-						"type": "nvarchar"
-					}
-				],
-				"typeProperties": {
-					"schema": "relational",
-					"table": "Forecast_GL_Product_Map"
-				}
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/SQLrelationopsanswers_ds')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "SQLdbConnection",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "AzureSqlTable",
-				"schema": [
-					{
-						"name": "Asset_ID",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Fund_ID",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Reporting_Period",
-						"type": "date"
-					},
-					{
-						"name": "UID",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Attribute",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Answer_Number",
-						"type": "int",
-						"precision": 10
-					},
-					{
-						"name": "Text_Response",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Numeric_Response",
-						"type": "decimal",
-						"precision": 19,
-						"scale": 4
-					},
-					{
-						"name": "Insert_Datetime",
-						"type": "datetime",
-						"precision": 23,
-						"scale": 3
-					},
-					{
-						"name": "Update_Datetime",
-						"type": "datetime",
-						"precision": 23,
-						"scale": 3
-					},
-					{
-						"name": "Process_Name",
-						"type": "nvarchar"
-					}
-				],
-				"typeProperties": {
-					"schema": "relational",
-					"table": "OPS_ANSWERS"
-				}
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/SQLrelationopsaudit_ds')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "SQLdbConnection",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "AzureSqlTable",
-				"schema": [
-					{
-						"name": "Asset_ID",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Fund_ID",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Audit_ID",
-						"type": "int",
-						"precision": 10
-					},
-					{
-						"name": "Reporting_Period",
-						"type": "date"
-					},
-					{
-						"name": "Certification_Audit_Type_Code",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Corrective_Action_Identified",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Audit_Date",
-						"type": "date"
-					},
-					{
-						"name": "Audit_Classification",
-						"type": "nvarchar"
-					},
-					{
-						"name": "Corrective_Action_Due_Date",
-						"type": "date"
-					},
-					{
-						"name": "Date_Action_Closed",
-						"type": "date"
-					},
-					{
-						"name": "Insert_Datetime",
-						"type": "datetime",
-						"precision": 23,
-						"scale": 3
-					},
-					{
-						"name": "Update_Datetime",
-						"type": "datetime",
-						"precision": 23,
-						"scale": 3
-					},
-					{
-						"name": "Process_Name",
-						"type": "nvarchar"
-					}
-				],
-				"typeProperties": {
-					"schema": "relational",
-					"table": "OPS_AUDIT"
 				}
 			},
 			"dependsOn": []

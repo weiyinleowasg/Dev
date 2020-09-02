@@ -74,196 +74,20 @@
 		"BlobStore_nfdwhdatalake_properties_typeProperties_connectionString_secretName": {
 			"type": "string",
 			"defaultValue": "NFDWHNonProdBlobdatalakeConn"
+		},
+		"BlobStore_nfdwhstaging_properties_typeProperties_connectionString_secretName": {
+			"type": "string",
+			"defaultValue": "NFDWHNonProdBlobstagingConn"
+		},
+		"SQLdbConnection_properties_typeProperties_connectionString_secretName": {
+			"type": "string",
+			"defaultValue": "NFDWHDEVSQLConn"
 		}
 	},
 	"variables": {
 		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
 	},
 	"resources": [
-		{
-			"name": "[concat(parameters('factoryName'), '/ProcessOpsWorkbookMaster_pl')]",
-			"type": "Microsoft.DataFactory/factories/pipelines",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"description": "Master job to orchestrate multiple pipelines run. Each pipeline correspond to one tab in the Excel workbook.",
-				"activities": [
-					{
-						"name": "Wait1",
-						"type": "Wait",
-						"dependsOn": [],
-						"userProperties": [],
-						"typeProperties": {
-							"waitTimeInSeconds": 1
-						}
-					},
-					{
-						"name": "Set variable1",
-						"type": "SetVariable",
-						"dependsOn": [
-							{
-								"activity": "Wait1",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"variableName": "OtherSales",
-							"value": {
-								"value": "@pipeline().parameters.WorkbookName",
-								"type": "Expression"
-							}
-						}
-					},
-					{
-						"name": "Set variable2",
-						"type": "SetVariable",
-						"dependsOn": [
-							{
-								"activity": "Set variable1",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"variableName": "MajorSevereIncidents",
-							"value": {
-								"value": "@pipeline().parameters.CurrentQuarterDate",
-								"type": "Expression"
-							}
-						}
-					}
-				],
-				"parameters": {
-					"WorkbookName": {
-						"type": "string",
-						"defaultValue": "Wenita Forestry Products Q4 FY20 V2.xlsx"
-					},
-					"CurrentQuarterDate": {
-						"type": "string",
-						"defaultValue": "30/09/2020"
-					}
-				},
-				"variables": {
-					"OtherSales": {
-						"type": "String",
-						"defaultValue": "Other Sales"
-					},
-					"MajorSevereIncidents": {
-						"type": "String",
-						"defaultValue": "Major Severe Incidents"
-					},
-					"RiskOpportunityRegister": {
-						"type": "String",
-						"defaultValue": "Risk Opportunity Register"
-					},
-					"Certifications": {
-						"type": "String",
-						"defaultValue": "Certifications"
-					},
-					"RelatedPartyTransactions": {
-						"type": "String",
-						"defaultValue": "Related Party Transactions"
-					},
-					"TimberSales": {
-						"type": "String",
-						"defaultValue": "Timber Sales"
-					},
-					"HarvestReconcilliation": {
-						"type": "String",
-						"defaultValue": "Harvest Reconcilliation"
-					},
-					"Operations": {
-						"type": "String",
-						"defaultValue": "Operations"
-					},
-					"Contracts": {
-						"type": "String",
-						"defaultValue": "Contracts"
-					},
-					"StrategicProjects": {
-						"type": "String",
-						"defaultValue": "Strategic Projects"
-					}
-				},
-				"annotations": []
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/ProcessOpsWorkbookSubMaster_pl')]",
-			"type": "Microsoft.DataFactory/factories/pipelines",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"description": "Sub Master job to orchestrate multiple pipelines run. Each pipeline correspond to one tab in the Excel workbook.",
-				"activities": [
-					{
-						"name": "Wait1",
-						"type": "Wait",
-						"dependsOn": [],
-						"userProperties": [],
-						"typeProperties": {
-							"waitTimeInSeconds": 1
-						}
-					}
-				],
-				"parameters": {
-					"WorkbookName": {
-						"type": "string",
-						"defaultValue": "Wenita Forestry Products Q4 FY20 V2.xlsx"
-					},
-					"CurrentQuarterDate": {
-						"type": "string",
-						"defaultValue": "30/09/2020"
-					},
-					"OtherSales": {
-						"type": "string",
-						"defaultValue": "Other Sales"
-					},
-					"MajorSevereIncidents": {
-						"type": "string",
-						"defaultValue": "Major Severe Incidents"
-					},
-					"RiskOpportunityRegister": {
-						"type": "string",
-						"defaultValue": "Risk Opportunity Register"
-					},
-					"Certifications": {
-						"type": "string",
-						"defaultValue": "Certifications"
-					},
-					"RelatedPartyTransactions": {
-						"type": "string",
-						"defaultValue": "Related Party Transactions"
-					},
-					"TimberSales": {
-						"type": "string",
-						"defaultValue": "Timber Sales"
-					},
-					"HarvestReconcilliation": {
-						"type": "string",
-						"defaultValue": "Harvest Reconcilliation"
-					},
-					"Operations": {
-						"type": "string",
-						"defaultValue": "Operations"
-					},
-					"Contracts": {
-						"type": "string",
-						"defaultValue": "Contracts"
-					},
-					"StrategicProjects": {
-						"type": "string",
-						"defaultValue": "Strategic Projects"
-					}
-				},
-				"annotations": []
-			},
-			"dependsOn": []
-		},
 		{
 			"name": "[concat(parameters('factoryName'), '/ProcessTigermothSendmail_Completion_pl')]",
 			"type": "Microsoft.DataFactory/factories/pipelines",
@@ -729,6 +553,50 @@
 							"type": "LinkedServiceReference"
 						},
 						"secretName": "[parameters('BlobStore_nfdwhdatalake_properties_typeProperties_connectionString_secretName')]"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/NFDWHAKV_LS')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/BlobStore_nfdwhstaging')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureBlobStorage",
+				"typeProperties": {
+					"connectionString": {
+						"type": "AzureKeyVaultSecret",
+						"store": {
+							"referenceName": "NFDWHAKV_LS",
+							"type": "LinkedServiceReference"
+						},
+						"secretName": "[parameters('BlobStore_nfdwhstaging_properties_typeProperties_connectionString_secretName')]"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/NFDWHAKV_LS')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SQLdbConnection')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureSqlDatabase",
+				"typeProperties": {
+					"connectionString": {
+						"type": "AzureKeyVaultSecret",
+						"store": {
+							"referenceName": "NFDWHAKV_LS",
+							"type": "LinkedServiceReference"
+						},
+						"secretName": "[parameters('SQLdbConnection_properties_typeProperties_connectionString_secretName')]"
 					}
 				}
 			},

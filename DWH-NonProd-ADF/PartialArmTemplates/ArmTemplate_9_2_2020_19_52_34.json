@@ -1,0 +1,2258 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory name",
+			"defaultValue": "DWH-NonProd-ADF"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/ProcessOpsWorkbookMaster_pl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Master job to orchestrate multiple pipelines run. Each pipeline correspond to one tab in the Excel workbook.",
+				"activities": [
+					{
+						"name": "ProcessOpsWorkbookSubMaster_pl",
+						"description": "Sub Master to run children pipelines in parallel",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "DeleteWorkbookWorksheetAssetList",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "ProcessOpsWorkbookSubMaster_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"WorkbookName": {
+									"value": "@pipeline().parameters.WorkbookName",
+									"type": "Expression"
+								},
+								"CurrentQuarterDate": {
+									"value": "@pipeline().parameters.CurrentQuarterDate",
+									"type": "Expression"
+								},
+								"OtherSales": {
+									"value": "@variables('OtherSales')",
+									"type": "Expression"
+								},
+								"MajorSevereIncidents": {
+									"value": "@variables('MajorSevereIncidents')",
+									"type": "Expression"
+								},
+								"RiskOpportunityRegister": {
+									"value": "@variables('RiskOpportunityRegister')",
+									"type": "Expression"
+								},
+								"Certifications": {
+									"value": "@variables('Certifications')",
+									"type": "Expression"
+								},
+								"RelatedPartyTransactions": {
+									"value": "@variables('RelatedPartyTransactions')",
+									"type": "Expression"
+								},
+								"TimberSales": {
+									"value": "@variables('TimberSales')",
+									"type": "Expression"
+								},
+								"HarvestReconcilliation": {
+									"value": "@variables('HarvestReconcilliation')",
+									"type": "Expression"
+								},
+								"Operations": {
+									"value": "@variables('Operations')",
+									"type": "Expression"
+								},
+								"Contracts": {
+									"value": "@variables('Contracts')",
+									"type": "Expression"
+								},
+								"StrategicProjects": {
+									"value": "@variables('StrategicProjects')",
+									"type": "Expression"
+								},
+								"CurrentRunDateTime": {
+									"value": "@variables('CurrentRunDateTime')",
+									"type": "Expression"
+								},
+								"MasterUtcTag": {
+									"value": "@variables('MasterUtcTag')",
+									"type": "Expression"
+								}
+							}
+						}
+					},
+					{
+						"name": "Wait1_Failed_SendMail",
+						"type": "Wait",
+						"dependsOn": [
+							{
+								"activity": "RegisterStatusInMasterRunLog_Failed",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"waitTimeInSeconds": 1
+						}
+					},
+					{
+						"name": "GetCurrentDate",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "MaterUtcTag",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "CurrentRunDateTime",
+							"value": {
+								"value": "@formatDateTime(convertFromUtc(utcnow(),'AUS Eastern Standard Time'),'yyyy-MM-dd HH:mm:ss')",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "MaterUtcTag",
+						"type": "SetVariable",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "MasterUtcTag",
+							"value": {
+								"value": "@utcnow()",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "CopyToSourceArchive",
+						"type": "Copy",
+						"dependsOn": [
+							{
+								"activity": "ProcessOpsWorkbookSubMaster_pl",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "BinarySource",
+								"storeSettings": {
+									"type": "AzureBlobStorageReadSettings",
+									"recursive": false,
+									"deleteFilesAfterCompletion": false
+								},
+								"formatSettings": {
+									"type": "BinaryReadSettings"
+								}
+							},
+							"sink": {
+								"type": "BinarySink",
+								"storeSettings": {
+									"type": "AzureBlobStorageWriteSettings"
+								}
+							},
+							"enableStaging": false
+						},
+						"inputs": [
+							{
+								"referenceName": "BinaryFromSourceLandingRaw_ds",
+								"type": "DatasetReference",
+								"parameters": {
+									"file": {
+										"value": "@pipeline().parameters.WorkbookName",
+										"type": "Expression"
+									}
+								}
+							}
+						],
+						"outputs": [
+							{
+								"referenceName": "BinaryToSourceArchive_ds",
+								"type": "DatasetReference",
+								"parameters": {
+									"path": {
+										"value": "@concat(substring(pipeline().parameters.CurrentQuarterDate,0,4), '/', concat(if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'01'),'JAN',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'02'),'FEB',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'03'),'MAR',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'04'),'APR',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'05'),'MAY',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'06'),'JUN',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'07'),'JUL',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'08'),'AUG',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'09'),'SEP',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'10'),'OCT',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'11'),'NOV',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'12'),'DEC','')), '/', substring(pipeline().parameters.CurrentQuarterDate,8,2))",
+										"type": "Expression"
+									},
+									"file": {
+										"value": "@pipeline().parameters.WorkbookName",
+										"type": "Expression"
+									}
+								}
+							}
+						]
+					},
+					{
+						"name": "CopyToDataLake",
+						"type": "Copy",
+						"dependsOn": [
+							{
+								"activity": "CopyToSourceArchive",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "BinarySource",
+								"storeSettings": {
+									"type": "AzureBlobStorageReadSettings",
+									"recursive": false,
+									"deleteFilesAfterCompletion": false
+								},
+								"formatSettings": {
+									"type": "BinaryReadSettings"
+								}
+							},
+							"sink": {
+								"type": "BinarySink",
+								"storeSettings": {
+									"type": "AzureBlobStorageWriteSettings"
+								}
+							},
+							"enableStaging": false
+						},
+						"inputs": [
+							{
+								"referenceName": "BinaryFromSourceLandingRaw_ds",
+								"type": "DatasetReference",
+								"parameters": {
+									"file": {
+										"value": "@pipeline().parameters.WorkbookName",
+										"type": "Expression"
+									}
+								}
+							}
+						],
+						"outputs": [
+							{
+								"referenceName": "BinaryToDatalake_ds",
+								"type": "DatasetReference",
+								"parameters": {
+									"path": {
+										"value": "@concat('manual/',substring(pipeline().parameters.CurrentQuarterDate,0,4), '/', concat(if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'01'),'JAN',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'02'),'FEB',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'03'),'MAR',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'04'),'APR',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'05'),'MAY',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'06'),'JUN',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'07'),'JUL',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'08'),'AUG',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'09'),'SEP',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'10'),'OCT',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'11'),'NOV',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'12'),'DEC','')), '/', substring(pipeline().parameters.CurrentQuarterDate,8,2))",
+										"type": "Expression"
+									},
+									"file": {
+										"value": "@pipeline().parameters.WorkbookName",
+										"type": "Expression"
+									}
+								}
+							}
+						]
+					},
+					{
+						"name": "DeleteFileFromSourceLandingRaw",
+						"type": "Delete",
+						"dependsOn": [
+							{
+								"activity": "CopyToDataLake",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataset": {
+								"referenceName": "BinaryFromSourceLandingRaw_ds",
+								"type": "DatasetReference",
+								"parameters": {
+									"file": {
+										"value": "@pipeline().parameters.WorkbookName",
+										"type": "Expression"
+									}
+								}
+							},
+							"enableLogging": false,
+							"storeSettings": {
+								"type": "AzureBlobStorageReadSettings",
+								"recursive": false
+							}
+						}
+					},
+					{
+						"name": "DeleteAllRelatedAdf2PersistentArea",
+						"type": "Delete",
+						"dependsOn": [
+							{
+								"activity": "DeleteFileFromSourceLandingRaw",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataset": {
+								"referenceName": "BinaryFromAdf2PersistentArea_ds",
+								"type": "DatasetReference"
+							},
+							"enableLogging": false,
+							"storeSettings": {
+								"type": "AzureBlobStorageReadSettings",
+								"recursive": true,
+								"prefix": "none"
+							}
+						}
+					},
+					{
+						"name": "RegisterStatusInMasterRunLog",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "DeleteAllRelatedAdf2PersistentArea",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[log].[UpdateMasterRunLog]",
+							"storedProcedureParameters": {
+								"MasterUtcTag": {
+									"value": {
+										"value": "@variables('MasterUtcTag')",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"RunMessage": {
+									"value": {
+										"value": "@pipeline().parameters.WorkbookName",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"RunStatus": {
+									"value": "SUCCESS",
+									"type": "String"
+								}
+							}
+						},
+						"linkedServiceName": {
+							"referenceName": "SQLdbConnection",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "CopyToSourceArchive_Failed",
+						"type": "Copy",
+						"dependsOn": [
+							{
+								"activity": "ProcessOpsWorkbookSubMaster_pl",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "BinarySource",
+								"storeSettings": {
+									"type": "AzureBlobStorageReadSettings",
+									"recursive": false,
+									"deleteFilesAfterCompletion": false
+								},
+								"formatSettings": {
+									"type": "BinaryReadSettings"
+								}
+							},
+							"sink": {
+								"type": "BinarySink",
+								"storeSettings": {
+									"type": "AzureBlobStorageWriteSettings"
+								}
+							},
+							"enableStaging": false
+						},
+						"inputs": [
+							{
+								"referenceName": "BinaryFromSourceLandingRaw_ds",
+								"type": "DatasetReference",
+								"parameters": {
+									"file": {
+										"value": "@pipeline().parameters.WorkbookName",
+										"type": "Expression"
+									}
+								}
+							}
+						],
+						"outputs": [
+							{
+								"referenceName": "BinaryToSourceArchive_ds",
+								"type": "DatasetReference",
+								"parameters": {
+									"path": {
+										"value": "@concat(substring(pipeline().parameters.CurrentQuarterDate,0,4), '/', concat(if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'01'),'JAN',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'02'),'FEB',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'03'),'MAR',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'04'),'APR',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'05'),'MAY',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'06'),'JUN',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'07'),'JUL',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'08'),'AUG',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'09'),'SEP',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'10'),'OCT',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'11'),'NOV',''),if(equals(substring(pipeline().parameters.CurrentQuarterDate,5,2),'12'),'DEC','')), '/', substring(pipeline().parameters.CurrentQuarterDate,8,2))",
+										"type": "Expression"
+									},
+									"file": {
+										"value": "@pipeline().parameters.WorkbookName",
+										"type": "Expression"
+									}
+								}
+							}
+						]
+					},
+					{
+						"name": "DeleteFileFromSourceLandingRaw_Failed",
+						"type": "Delete",
+						"dependsOn": [
+							{
+								"activity": "CopyToSourceArchive_Failed",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataset": {
+								"referenceName": "BinaryFromSourceLandingRaw_ds",
+								"type": "DatasetReference",
+								"parameters": {
+									"file": {
+										"value": "@pipeline().parameters.WorkbookName",
+										"type": "Expression"
+									}
+								}
+							},
+							"enableLogging": false,
+							"storeSettings": {
+								"type": "AzureBlobStorageReadSettings",
+								"recursive": false
+							}
+						}
+					},
+					{
+						"name": "DeleteAllRelatedAdf2PersistentArea_Failed",
+						"type": "Delete",
+						"dependsOn": [
+							{
+								"activity": "DeleteFileFromSourceLandingRaw_Failed",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataset": {
+								"referenceName": "BinaryFromAdf2PersistentArea_ds",
+								"type": "DatasetReference"
+							},
+							"enableLogging": false,
+							"storeSettings": {
+								"type": "AzureBlobStorageReadSettings",
+								"recursive": true,
+								"prefix": {
+									"value": "@{pipeline().parameters.WorkbookName}",
+									"type": "Expression"
+								}
+							}
+						}
+					},
+					{
+						"name": "RegisterStatusInMasterRunLog_Failed",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "DeleteAllRelatedAdf2PersistentArea_Failed",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[log].[UpdateMasterRunLog]",
+							"storedProcedureParameters": {
+								"MasterUtcTag": {
+									"value": {
+										"value": "@variables('MasterUtcTag')",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"RunMessage": {
+									"value": {
+										"value": "@pipeline().parameters.WorkbookName",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"RunStatus": {
+									"value": "FAILED",
+									"type": "String"
+								}
+							}
+						},
+						"linkedServiceName": {
+							"referenceName": "SQLdbConnection",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "DeleteWorkbookWorksheetAssetList",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "GetCurrentDate",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[audit].[DeleteAuditWorkBookWorksheetListTable]",
+							"storedProcedureParameters": {
+								"WorkBookName": {
+									"value": {
+										"value": "@pipeline().parameters.WorkbookName",
+										"type": "Expression"
+									},
+									"type": "String"
+								}
+							}
+						},
+						"linkedServiceName": {
+							"referenceName": "SQLdbConnection",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "SendEmails",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "RegisterStatusInMasterRunLog",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "ProcessOpsWorkbookSendMail_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"DataFactoryName": {
+									"value": "@pipeline().DataFactory",
+									"type": "Expression"
+								},
+								"PipelineName": {
+									"value": "@pipeline().Pipeline",
+									"type": "Expression"
+								}
+							}
+						}
+					}
+				],
+				"parameters": {
+					"WorkbookName": {
+						"type": "string",
+						"defaultValue": "Wenita Forestry Products Q4 FY20 V2.xlsx"
+					},
+					"CurrentQuarterDate": {
+						"type": "string",
+						"defaultValue": "2020-08-31"
+					}
+				},
+				"variables": {
+					"OtherSales": {
+						"type": "String",
+						"defaultValue": "Other Sales"
+					},
+					"MajorSevereIncidents": {
+						"type": "String",
+						"defaultValue": "Major Severe Incidents"
+					},
+					"RiskOpportunityRegister": {
+						"type": "String",
+						"defaultValue": "Risk Opportunity Register"
+					},
+					"Certifications": {
+						"type": "String",
+						"defaultValue": "Certifications"
+					},
+					"RelatedPartyTransactions": {
+						"type": "String",
+						"defaultValue": "Related Party Transactions"
+					},
+					"TimberSales": {
+						"type": "String",
+						"defaultValue": "Timber Sales"
+					},
+					"HarvestReconcilliation": {
+						"type": "String",
+						"defaultValue": "Harvest Reconcilliation"
+					},
+					"Operations": {
+						"type": "String",
+						"defaultValue": "Operations"
+					},
+					"Contracts": {
+						"type": "String",
+						"defaultValue": "Contracts"
+					},
+					"StrategicProjects": {
+						"type": "String",
+						"defaultValue": "Strategic Projects"
+					},
+					"CurrentRunDateTime": {
+						"type": "String",
+						"defaultValue": "2020-08-01"
+					},
+					"MasterUtcTag": {
+						"type": "String",
+						"defaultValue": "2020-08-28T06:05:53.4181322Z"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/ProcessOpsWorkbookSubMaster_pl')]",
+				"[concat(variables('factoryId'), '/datasets/BinaryFromSourceLandingRaw_ds')]",
+				"[concat(variables('factoryId'), '/datasets/BinaryToSourceArchive_ds')]",
+				"[concat(variables('factoryId'), '/datasets/BinaryToDatalake_ds')]",
+				"[concat(variables('factoryId'), '/datasets/BinaryFromAdf2PersistentArea_ds')]",
+				"[concat(variables('factoryId'), '/pipelines/ProcessOpsWorkbookSendMail_pl')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ProcessOpsWorkbookSendMail_pl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "GetEmailDetails",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": {
+									"value": "SELECT CONCAT(CASE WHEN Error_Count = 0 THEN 'SUCCESSFUL LOAD : ' ELSE 'FAILED LOAD : ' END,Work_Sheet, ' - ', Work_Book) AS Message_Header,\nOps_Representative_Email, Ops_Representative_Last_Name, Ops_Representative_First_Name, Error_Table, Error_Count \nFROM (\nSELECT Work_Book, Work_Sheet, Ops_Representative_Email, Ops_Representative_Last_Name, Ops_Representative_First_Name,\nCASE WHEN Work_Sheet = 'Certifications' THEN 'audit.OPS_Certification_Error'\n     WHEN Work_Sheet = 'Timber Sales' THEN 'audit.OPS_Timber_Sales_Error'\nELSE NULL END AS Error_Table,\nCASE WHEN Work_Sheet = 'Certifications' THEN (SELECT COUNT(*) FROM audit.OPS_Certification_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}')\n     WHEN Work_Sheet = 'Timber Sales' THEN (SELECT COUNT(*) FROM audit.OPS_Timber_Sales_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}')\nELSE NULL END AS Error_Count\nFROM (\nSELECT Work_Book, Work_Sheet, wb.Asset_ID, wb.Fund_ID,\nra.Ops_Representative_First_Name, ra.Ops_Representative_Last_Name, ra.Ops_Representative_Email\nFROM [audit].[OPS_Workbook_Worksheet_Asset_List] wb\nJOIN [relational].[Asset] ra \nON wb.Asset_Id = ra.Asset_ID AND wb.Fund_Id = ra.Fund_ID AND wb.Work_Book = '@{pipeline().parameters.WorkbookName}') x\n)z;",
+									"type": "Expression"
+								},
+								"queryTimeout": "02:00:00",
+								"partitionOption": "None"
+							},
+							"dataset": {
+								"referenceName": "SQLauditopsworkbookworksheetlist_ds",
+								"type": "DatasetReference"
+							},
+							"firstRowOnly": false
+						}
+					},
+					{
+						"name": "ForEachWorkbookWorksheetEmail",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "GetEmailDetails",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('GetEmailDetails').output.value",
+								"type": "Expression"
+							},
+							"isSequential": true,
+							"activities": [
+								{
+									"name": "SendEmail",
+									"type": "WebActivity",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"url": "https://prod-19.australiaeast.logic.azure.com:443/workflows/7139728b716a4500b96a2fa094f691fa/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=I30JtkHJ6p4mNeMF6USxTdCCjTwTvY1dmmNC2Mvte7o",
+										"method": "POST",
+										"headers": {
+											"Content-Type": "application/json"
+										},
+										"body": {
+											"value": "{\"dataFactoryName\":\"DWH-Prod-ADF\",\"pipelineName\":\"ProcessOPSWorkbookMaster_pl\",\"messageHeader\":\"@{item().Message_Header}\",\"tableName\":\"@{item().Error_Table}\",\"errorCount\":\"@{item().Error_Count}\",\"emailAddress\":\"@{item().Ops_Representative_Email}\",\"lastName\":\"@{item().Ops_Representative_Last_Name}\",\"firstName\":\"@{item().Ops_Representative_First_Name}\"}",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					}
+				],
+				"parameters": {
+					"DataFactoryName": {
+						"type": "string",
+						"defaultValue": "myFactory"
+					},
+					"PipelineName": {
+						"type": "string",
+						"defaultValue": "myPipeline"
+					},
+					"WorkbookName": {
+						"type": "string",
+						"defaultValue": "Wenita Forestry Products Q4 FY20 V2.xlsx"
+					}
+				},
+				"variables": {
+					"var": {
+						"type": "Array"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/SQLauditopsworkbookworksheetlist_ds')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ProcessOpsWorkbookSubMaster_pl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Sub Master job to orchestrate multiple pipelines run. Each pipeline correspond to one tab in the Excel workbook.",
+				"activities": [
+					{
+						"name": "PipelineOtherSales",
+						"type": "Wait",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"waitTimeInSeconds": 1
+						}
+					},
+					{
+						"name": "PipelineMajorSevereIncidents",
+						"type": "Wait",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"waitTimeInSeconds": 1
+						}
+					},
+					{
+						"name": "PipelineRiskOpportunityRegister",
+						"type": "Wait",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"waitTimeInSeconds": 1
+						}
+					},
+					{
+						"name": "PipelineRelatedPartyTransactions",
+						"type": "Wait",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"waitTimeInSeconds": 1
+						}
+					},
+					{
+						"name": "PipelineHarvestReconcilliation",
+						"type": "Wait",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"waitTimeInSeconds": 1
+						}
+					},
+					{
+						"name": "PipelineOperations",
+						"type": "Wait",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"waitTimeInSeconds": 1
+						}
+					},
+					{
+						"name": "PipelineContracts",
+						"type": "Wait",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"waitTimeInSeconds": 1
+						}
+					},
+					{
+						"name": "PipelineStrategicProjects",
+						"type": "Wait",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"waitTimeInSeconds": 1
+						}
+					},
+					{
+						"name": "ProcessWorkbookTabCertificates",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "DeleteCertificatesAuditTable",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "ProcessOpsWorkbookTabCertificates_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"WorkbookName": {
+									"value": "@pipeline().parameters.WorkbookName",
+									"type": "Expression"
+								},
+								"CurrentQuarterDate": {
+									"value": "@pipeline().parameters.CurrentQuarterDate",
+									"type": "Expression"
+								},
+								"Certifications": {
+									"value": "@pipeline().parameters.Certifications",
+									"type": "Expression"
+								},
+								"CurrentRunDateTime": {
+									"value": "@pipeline().parameters.CurrentRunDateTime",
+									"type": "Expression"
+								},
+								"MasterUtcTag": {
+									"value": "@pipeline().parameters.MasterUtcTag",
+									"type": "Expression"
+								}
+							}
+						}
+					},
+					{
+						"name": "LoadCertificates",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "ProcessWorkbookTabCertificates",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "ProcessOpsWorkbookTabCertificates_spl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"WorkbookName": {
+									"value": "@pipeline().parameters.WorkbookName",
+									"type": "Expression"
+								},
+								"CurrentQuarterDate": {
+									"value": "@pipeline().parameters.CurrentQuarterDate",
+									"type": "Expression"
+								},
+								"Certifications": {
+									"value": "@pipeline().parameters.Certifications",
+									"type": "Expression"
+								},
+								"CurrentRunDateTime": {
+									"value": "@pipeline().parameters.CurrentRunDateTime",
+									"type": "Expression"
+								},
+								"MasterUtcTag": {
+									"value": "@pipeline().parameters.MasterUtcTag",
+									"type": "Expression"
+								}
+							}
+						}
+					},
+					{
+						"name": "ProcessWorkbookTabTimberSales",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "DeleteTimberSalesAuditTable",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "ProcessOpsWorkbookTabTimberSales_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"WorkbookName": {
+									"value": "@pipeline().parameters.WorkbookName",
+									"type": "Expression"
+								},
+								"CurrentQuarterDate": {
+									"value": "@pipeline().parameters.CurrentQuarterDate",
+									"type": "Expression"
+								},
+								"TimberSales": {
+									"value": "@pipeline().parameters.TimberSales",
+									"type": "Expression"
+								},
+								"CurrentRunDateTime": {
+									"value": "@pipeline().parameters.CurrentRunDateTime",
+									"type": "Expression"
+								},
+								"MasterUtcTag": {
+									"value": "@pipeline().parameters.MasterUtcTag",
+									"type": "Expression"
+								}
+							}
+						}
+					},
+					{
+						"name": "DeleteCertificatesAuditTable",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[audit].[DeleteAuditTable]",
+							"storedProcedureParameters": {
+								"TableName": {
+									"value": "OPS_Certification_Error",
+									"type": "String"
+								},
+								"WorkBookName": {
+									"value": {
+										"value": "@pipeline().parameters.WorkbookName",
+										"type": "Expression"
+									},
+									"type": "String"
+								}
+							}
+						},
+						"linkedServiceName": {
+							"referenceName": "SQLdbConnection",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "DeleteTimberSalesAuditTable",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[audit].[DeleteAuditTable]",
+							"storedProcedureParameters": {
+								"TableName": {
+									"value": "OPS_Timber_Sales_Error",
+									"type": "String"
+								},
+								"WorkBookName": {
+									"value": {
+										"value": "@pipeline().parameters.WorkbookName",
+										"type": "Expression"
+									},
+									"type": "String"
+								}
+							}
+						},
+						"linkedServiceName": {
+							"referenceName": "SQLdbConnection",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "LoadTimberSales",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "ProcessWorkbookTabTimberSales",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "ProcessOpsWorkbookTabTimberSales_spl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"WorkbookName": {
+									"value": "@pipeline().parameters.WorkbookName",
+									"type": "Expression"
+								},
+								"CurrentQuarterDate": {
+									"value": "@pipeline().parameters.CurrentQuarterDate",
+									"type": "Expression"
+								},
+								"TimberSales": {
+									"value": "@pipeline().parameters.TimberSales",
+									"type": "Expression"
+								},
+								"CurrentRunDateTime": {
+									"value": "@pipeline().parameters.CurrentRunDateTime",
+									"type": "Expression"
+								},
+								"MasterUtcTag": {
+									"value": "@pipeline().parameters.MasterUtcTag",
+									"type": "Expression"
+								}
+							}
+						}
+					}
+				],
+				"parameters": {
+					"WorkbookName": {
+						"type": "string",
+						"defaultValue": "Wenita Forestry Products Q4 FY20 V2.xlsx"
+					},
+					"CurrentQuarterDate": {
+						"type": "string",
+						"defaultValue": "30/09/2020"
+					},
+					"OtherSales": {
+						"type": "string",
+						"defaultValue": "Other Sales"
+					},
+					"MajorSevereIncidents": {
+						"type": "string",
+						"defaultValue": "Major Severe Incidents"
+					},
+					"RiskOpportunityRegister": {
+						"type": "string",
+						"defaultValue": "Risk Opportunity Register"
+					},
+					"Certifications": {
+						"type": "string",
+						"defaultValue": "Certifications"
+					},
+					"RelatedPartyTransactions": {
+						"type": "string",
+						"defaultValue": "Related Party Transactions"
+					},
+					"TimberSales": {
+						"type": "string",
+						"defaultValue": "Timber Sales"
+					},
+					"HarvestReconcilliation": {
+						"type": "string",
+						"defaultValue": "Harvest Reconcilliation"
+					},
+					"Operations": {
+						"type": "string",
+						"defaultValue": "Operations"
+					},
+					"Contracts": {
+						"type": "string",
+						"defaultValue": "Contracts"
+					},
+					"StrategicProjects": {
+						"type": "string",
+						"defaultValue": "Strategic Projects"
+					},
+					"CurrentRunDateTime": {
+						"type": "string",
+						"defaultValue": "2020-08-01"
+					},
+					"MasterUtcTag": {
+						"type": "string",
+						"defaultValue": "2020-08-28T06:05:53.4181322Z"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/ProcessOpsWorkbookTabCertificates_pl')]",
+				"[concat(variables('factoryId'), '/pipelines/ProcessOpsWorkbookTabCertificates_spl')]",
+				"[concat(variables('factoryId'), '/pipelines/ProcessOpsWorkbookTabTimberSales_pl')]",
+				"[concat(variables('factoryId'), '/pipelines/ProcessOpsWorkbookTabTimberSales_spl')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ProcessOpsWorkbookTabCertificates_pl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Certificates tab",
+				"activities": [
+					{
+						"name": "ProcessExcelWorkbookTab",
+						"type": "ExecuteDataFlow",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "LoadXlsxCertificates_Step1_df",
+								"type": "DataFlowReference",
+								"parameters": {
+									"MasterUtcTag": {
+										"value": "'@{pipeline().parameters.MasterUtcTag}'",
+										"type": "Expression"
+									},
+									"CurrentRunDateTime": {
+										"value": "'@{pipeline().parameters.CurrentRunDateTime}'",
+										"type": "Expression"
+									},
+									"WorkbookName": {
+										"value": "'@{pipeline().parameters.WorkbookName}'",
+										"type": "Expression"
+									},
+									"TabName": {
+										"value": "'@{pipeline().parameters.Certifications}'",
+										"type": "Expression"
+									},
+									"CurrentQuarterDate": {
+										"value": "'@{pipeline().parameters.CurrentQuarterDate}'",
+										"type": "Expression"
+									}
+								},
+								"datasetParameters": {
+									"SourceDataTab": {
+										"WorkbookName": {
+											"value": "@pipeline().parameters.WorkbookName",
+											"type": "Expression"
+										},
+										"TabName": {
+											"value": "@pipeline().parameters.Certifications",
+											"type": "Expression"
+										},
+										"Range": {
+											"value": "@variables('Range')",
+											"type": "Expression"
+										}
+									}
+								}
+							},
+							"compute": {
+								"coreCount": 8,
+								"computeType": "General"
+							}
+						}
+					}
+				],
+				"parameters": {
+					"WorkbookName": {
+						"type": "string",
+						"defaultValue": "Wenita Forestry Products Q4 FY20 V2.xlsx"
+					},
+					"CurrentQuarterDate": {
+						"type": "string",
+						"defaultValue": "30/09/2020"
+					},
+					"Certifications": {
+						"type": "string",
+						"defaultValue": "Certifications"
+					},
+					"CurrentRunDateTime": {
+						"type": "string",
+						"defaultValue": "2020-08-01"
+					},
+					"MasterUtcTag": {
+						"type": "string",
+						"defaultValue": "2020-08-28T06:05:53.4181322Z"
+					}
+				},
+				"variables": {
+					"Range": {
+						"type": "String",
+						"defaultValue": "A6:K99999"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/dataflows/LoadXlsxCertificates_Step1_df')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ProcessOpsWorkbookTabCertificates_spl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Certificates tab",
+				"activities": [
+					{
+						"name": "CountErrorInErrorTable",
+						"type": "Wait",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"waitTimeInSeconds": 1
+						}
+					},
+					{
+						"name": "DoThisAllornothingOrDoThisLoadRegardless",
+						"type": "Wait",
+						"dependsOn": [
+							{
+								"activity": "CountErrorInErrorTable",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"waitTimeInSeconds": 1
+						}
+					},
+					{
+						"name": "LoadValidatedDataset",
+						"type": "ExecuteDataFlow",
+						"dependsOn": [
+							{
+								"activity": "DoThisAllornothingOrDoThisLoadRegardless",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "LoadXlsxCertificates_Step2_df",
+								"type": "DataFlowReference",
+								"parameters": {
+									"WorkbookName": {
+										"value": "'@{pipeline().parameters.WorkbookName}'",
+										"type": "Expression"
+									},
+									"TabName": {
+										"value": "'@{pipeline().parameters.Certifications}'",
+										"type": "Expression"
+									}
+								},
+								"datasetParameters": {
+									"source1": {
+										"ParquetFile": {
+											"value": "@concat(pipeline().parameters.WorkbookName,'-',pipeline().parameters.Certifications)",
+											"type": "Expression"
+										}
+									}
+								}
+							},
+							"compute": {
+								"coreCount": 8,
+								"computeType": "General"
+							}
+						}
+					}
+				],
+				"parameters": {
+					"WorkbookName": {
+						"type": "string",
+						"defaultValue": "Wenita Forestry Products Q4 FY20 V2.xlsx"
+					},
+					"CurrentQuarterDate": {
+						"type": "string",
+						"defaultValue": "30/09/2020"
+					},
+					"Certifications": {
+						"type": "string",
+						"defaultValue": "Certifications"
+					},
+					"CurrentRunDateTime": {
+						"type": "string",
+						"defaultValue": "2020-08-01"
+					},
+					"MasterUtcTag": {
+						"type": "string",
+						"defaultValue": "2020-08-28T06:05:53.4181322Z"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/dataflows/LoadXlsxCertificates_Step2_df')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ProcessOpsWorkbookTabTimberSales_pl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Certificates tab",
+				"activities": [
+					{
+						"name": "ProcessExcelWorkbookTab",
+						"type": "ExecuteDataFlow",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "LoadXlsxTimberSales_Step1_df",
+								"type": "DataFlowReference",
+								"parameters": {
+									"MasterUtcTag": {
+										"value": "'@{pipeline().parameters.MasterUtcTag}'",
+										"type": "Expression"
+									},
+									"CurrentRunDateTime": {
+										"value": "'@{pipeline().parameters.CurrentRunDateTime}'",
+										"type": "Expression"
+									},
+									"WorkbookName": {
+										"value": "'@{pipeline().parameters.WorkbookName}'",
+										"type": "Expression"
+									},
+									"TabName": {
+										"value": "'@{pipeline().parameters.TimberSales}'",
+										"type": "Expression"
+									},
+									"CurrentQuarterDate": {
+										"value": "'@{pipeline().parameters.CurrentQuarterDate}'",
+										"type": "Expression"
+									}
+								},
+								"datasetParameters": {
+									"SourceDataTab": {
+										"WorkbookName": {
+											"value": "@pipeline().parameters.WorkbookName",
+											"type": "Expression"
+										},
+										"TabName": {
+											"value": "@pipeline().parameters.TimberSales",
+											"type": "Expression"
+										},
+										"Range": {
+											"value": "@variables('Range')",
+											"type": "Expression"
+										}
+									}
+								}
+							},
+							"compute": {
+								"coreCount": 8,
+								"computeType": "General"
+							}
+						}
+					}
+				],
+				"parameters": {
+					"WorkbookName": {
+						"type": "string",
+						"defaultValue": "Wenita Forestry Products Q4 FY20 V2.xlsx"
+					},
+					"CurrentQuarterDate": {
+						"type": "string",
+						"defaultValue": "30/09/2020"
+					},
+					"TimberSales": {
+						"type": "string",
+						"defaultValue": "Timber Sales"
+					},
+					"CurrentRunDateTime": {
+						"type": "string",
+						"defaultValue": "2020-08-01"
+					},
+					"MasterUtcTag": {
+						"type": "string",
+						"defaultValue": "2020-08-28T06:05:53.4181322Z"
+					}
+				},
+				"variables": {
+					"Range": {
+						"type": "String",
+						"defaultValue": "A6:W99999"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/dataflows/LoadXlsxTimberSales_Step1_df')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ProcessOpsWorkbookTabTimberSales_spl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Certificates tab",
+				"activities": [
+					{
+						"name": "CountErrorInErrorTable",
+						"type": "Wait",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"waitTimeInSeconds": 1
+						}
+					},
+					{
+						"name": "DoThisAllornothingOrDoThisLoadRegardless",
+						"type": "Wait",
+						"dependsOn": [
+							{
+								"activity": "CountErrorInErrorTable",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"waitTimeInSeconds": 1
+						}
+					},
+					{
+						"name": "LoadValidatedDataset",
+						"type": "ExecuteDataFlow",
+						"dependsOn": [
+							{
+								"activity": "DoThisAllornothingOrDoThisLoadRegardless",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "LoadXlsxTimberSales_Step2_df",
+								"type": "DataFlowReference",
+								"parameters": {
+									"WorkbookName": {
+										"value": "'@{pipeline().parameters.WorkbookName}'",
+										"type": "Expression"
+									},
+									"TabName": {
+										"value": "'@{pipeline().parameters.TimberSales}'",
+										"type": "Expression"
+									}
+								},
+								"datasetParameters": {
+									"source1": {
+										"ParquetFile": {
+											"value": "@concat(pipeline().parameters.WorkbookName,'-',pipeline().parameters.TimberSales)",
+											"type": "Expression"
+										}
+									}
+								}
+							},
+							"compute": {
+								"coreCount": 8,
+								"computeType": "General"
+							}
+						}
+					}
+				],
+				"parameters": {
+					"WorkbookName": {
+						"type": "string",
+						"defaultValue": "Wenita Forestry Products Q4 FY20 V2.xlsx"
+					},
+					"CurrentQuarterDate": {
+						"type": "string",
+						"defaultValue": "30/09/2020"
+					},
+					"TimberSales": {
+						"type": "string",
+						"defaultValue": "Timber Sales"
+					},
+					"CurrentRunDateTime": {
+						"type": "string",
+						"defaultValue": "2020-08-01"
+					},
+					"MasterUtcTag": {
+						"type": "string",
+						"defaultValue": "2020-08-28T06:05:53.4181322Z"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/dataflows/LoadXlsxTimberSales_Step2_df')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/BinaryFromAdf2PersistentArea_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "It describes the destination store.",
+				"linkedServiceName": {
+					"referenceName": "BlobStore_nfdwhstaging",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "Binary",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"container": "adf2persistentarea"
+					}
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/BinaryFromSourceLandingRaw_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "It describes the destination store.",
+				"linkedServiceName": {
+					"referenceName": "BlobStore_nfdwhstaging",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"file": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "Binary",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": {
+							"value": "@dataset().file",
+							"type": "Expression"
+						},
+						"container": "sourcelandingraw"
+					}
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/BinaryToDatalake_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "It describes the destination store.",
+				"linkedServiceName": {
+					"referenceName": "BlobStore_nfdwhdatalake",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"path": {
+						"type": "string"
+					},
+					"file": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "Binary",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": {
+							"value": "@dataset().file",
+							"type": "Expression"
+						},
+						"folderPath": {
+							"value": "@dataset().path",
+							"type": "Expression"
+						},
+						"container": "nonfinancial"
+					}
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/BinaryToSourceArchive_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "It describes the destination store.",
+				"linkedServiceName": {
+					"referenceName": "BlobStore_nfdwhstaging",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"path": {
+						"type": "string"
+					},
+					"file": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "Binary",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": {
+							"value": "@dataset().file",
+							"type": "Expression"
+						},
+						"folderPath": {
+							"value": "@dataset().path",
+							"type": "Expression"
+						},
+						"container": "sourcearchive"
+					}
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DelimitedOpsCertifications_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "BlobStore_nfdwhstaging",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"TargetFileName": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": {
+							"value": "@dataset().TargetFileName",
+							"type": "Expression"
+						},
+						"container": "adf2persistentarea"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ExcelWorkbook_AllTabs_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Generic dataset used by all Excel tabs",
+				"linkedServiceName": {
+					"referenceName": "BlobStore_nfdwhstaging",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"WorkbookName": {
+						"type": "string"
+					},
+					"TabName": {
+						"type": "string"
+					},
+					"Range": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "Excel",
+				"typeProperties": {
+					"sheetName": {
+						"value": "@dataset().TabName",
+						"type": "Expression"
+					},
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": {
+							"value": "@dataset().WorkbookName",
+							"type": "Expression"
+						},
+						"container": "sourcelandingraw"
+					},
+					"range": {
+						"value": "@dataset().Range",
+						"type": "Expression"
+					},
+					"firstRowAsHeader": true
+				},
+				"schema": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ParquetPersistentOpsWithTabParam_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "BlobStore_nfdwhstaging",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"ParquetFile": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "Parquet",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": {
+							"value": "@dataset().ParquetFile",
+							"type": "Expression"
+						},
+						"container": "adf2persistentarea"
+					},
+					"compressionCodec": "snappy"
+				},
+				"schema": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ParquetPersistentOps_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "BlobStore_nfdwhstaging",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "Parquet",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"container": "adf2persistentarea"
+					},
+					"compressionCodec": "snappy"
+				},
+				"schema": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SQLauditopsworkbookworksheetlist_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "Work_Book",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Work_Sheet",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Asset_Id",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Fund_Id",
+						"type": "nvarchar"
+					}
+				],
+				"typeProperties": {
+					"schema": "audit",
+					"table": "OPS_Workbook_Worksheet_Asset_List"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/testCSVoutput')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "BlobStore_nfdwhstaging",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"container": "adf2persistentarea"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/testCSVoutputFromParquet')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "BlobStore_nfdwhstaging",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"container": "adf2persistentarea"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/testDelimitedPersistent')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "BlobStore_nfdwhstaging",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": "Wenita-Email.csv",
+						"container": "adf2persistentarea"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": [
+					{
+						"name": "Asset_ID",
+						"type": "String"
+					},
+					{
+						"name": "Fund_ID",
+						"type": "String"
+					}
+				]
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadXlsxCertificates_Step1_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "ExcelWorkbook_AllTabs_ds",
+								"type": "DatasetReference"
+							},
+							"name": "SourceDataTab"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "ParquetPersistentOps_ds",
+								"type": "DatasetReference"
+							},
+							"name": "TargetPersistentParquet"
+						},
+						{
+							"dataset": {
+								"referenceName": "testCSVoutput",
+								"type": "DatasetReference"
+							},
+							"name": "sink1"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLauditopsworkbookworksheetlist_ds",
+								"type": "DatasetReference"
+							},
+							"name": "sink2"
+						}
+					],
+					"transformations": [
+						{
+							"name": "ValidateMandatoryColumns"
+						},
+						{
+							"name": "SegregateValidInvalidRows"
+						},
+						{
+							"name": "SelectedColumnsOutput"
+						},
+						{
+							"name": "ConcatenateInvalidColumnsMessage"
+						},
+						{
+							"name": "SelectedOutputColumnsError"
+						},
+						{
+							"name": "GenerateRowNumber"
+						},
+						{
+							"name": "ExcludeFirstRow"
+						},
+						{
+							"name": "DerivedColumn1"
+						},
+						{
+							"name": "Aggregate1"
+						},
+						{
+							"name": "Select1"
+						},
+						{
+							"name": "Select2"
+						}
+					],
+					"script": "parameters{\n\tMasterUtcTag as string,\n\tCurrentRunDateTime as string,\n\tWorkbookName as string,\n\tTabName as string,\n\tCurrentQuarterDate as string\n}\nsource(output(\n\t\tCertification_ID as double,\n\t\t{Validation Flag} as double,\n\t\t{Certification Type} as string,\n\t\t{Certification Number} as string,\n\t\t{Next Audit Date} as date,\n\t\t{Certifying Body} as string,\n\t\t{Certification Date} as date,\n\t\t{Certification End Date} as date,\n\t\t{Certified Entity} as string,\n\t\t{Number of Open Minor CARS} as double,\n\t\t{Number of Open Major CARS} as double\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tskipLines: 1,\n\tpartitionBy('hash', 1)) ~> SourceDataTab\nExcludeFirstRow derive(CertificationTypeValidateMsg = iif((length(trim({Certification Type})) > 0 || not(isNull({Certification Type}))), \"\", \"Certification Type\"),\n\t\tCertificationEndDateValidateMsg = iif(isNull({Certification End Date}), \"Certification End Date\", \"\"),\n\t\tReporting_Period = toDate($CurrentQuarterDate),\n\t\tCertification_ID = toInteger(Certification_ID)) ~> ValidateMandatoryColumns\nValidateMandatoryColumns split(length(concatWS('',CertificationTypeValidateMsg,CertificationEndDateValidateMsg)) == 0,\n\tdisjoint: false) ~> SegregateValidInvalidRows@(ValidRows, InvalidRows)\nSegregateValidInvalidRows@ValidRows select(mapColumn(\n\t\tCertification_ID,\n\t\t{Validation Flag},\n\t\t{Certification Type},\n\t\t{Certification Number},\n\t\t{Next Audit Date},\n\t\t{Certifying Body},\n\t\t{Certification Date},\n\t\t{Certification End Date},\n\t\t{Certified Entity},\n\t\t{Number of Open Minor CARS},\n\t\t{Number of Open Major CARS},\n\t\tReporting_Period\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectedColumnsOutput\nSegregateValidInvalidRows@InvalidRows derive(ConcatenatedMessage = concatWS(\"/\", CertificationTypeValidateMsg, CertificationEndDateValidateMsg)) ~> ConcatenateInvalidColumnsMessage\nConcatenateInvalidColumnsMessage select(mapColumn(\n\t\tRowNumber,\n\t\tCertification_ID,\n\t\t{Validation Flag},\n\t\t{Certification Type},\n\t\t{Certification Number},\n\t\t{Next Audit Date},\n\t\t{Certifying Body},\n\t\t{Certification Date},\n\t\t{Certification End Date},\n\t\t{Certified Entity},\n\t\t{Number of Open Minor CARS},\n\t\t{Number of Open Major CARS},\n\t\tConcatenatedMessage\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectedOutputColumnsError\nSourceDataTab keyGenerate(output(RowNumber as long),\n\tstartAt: 1L,\n\tpartitionBy('hash', 1)) ~> GenerateRowNumber\nGenerateRowNumber filter(RowNumber > 1) ~> ExcludeFirstRow\nExcludeFirstRow derive(Asset_ID = \"WFP\",\n\t\tFund_ID = \"ANZFOF2\",\n\t\tWork_Book = $WorkbookName,\n\t\tWork_Sheet = $TabName) ~> DerivedColumn1\nSelect1 aggregate(groupBy(Asset_ID,\n\t\tFund_ID,\n\t\tWork_Book,\n\t\tWork_Sheet),\n\tAggCount = count()) ~> Aggregate1\nDerivedColumn1 select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tWork_Book,\n\t\tWork_Sheet\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> Select1\nAggregate1 select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tWork_Book,\n\t\tWork_Sheet\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> Select2\nSelectedColumnsOutput sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tformat: 'parquet',\n\tpartitionFileNames:[(concatWS(\"-\", $WorkbookName, $TabName))],\n\tmapColumn(\n\t\tCertification_ID,\n\t\tValidation_Flag = {Validation Flag},\n\t\tCertification_Type = {Certification Type},\n\t\tCertification_Number = {Certification Number},\n\t\tNext_Audit_Date = {Next Audit Date},\n\t\tCertifying_Body = {Certifying Body},\n\t\tCertification_Date = {Certification Date},\n\t\tCertification_End_Date = {Certification End Date},\n\t\tCertified_Entity = {Certified Entity},\n\t\tNumber_of_Open_Minor_CARS = {Number of Open Minor CARS},\n\t\tNumber_of_Open_Major_CARS = {Number of Open Major CARS},\n\t\tReporting_Period\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetPersistentParquet\nSelectedOutputColumnsError sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tpartitionFileNames:['testCertificationsError,csv'],\n\tmapColumn(\n\t\tCertification_ID,\n\t\t{Validation Flag},\n\t\t{Certification Type},\n\t\t{Certification Number},\n\t\t{Next Audit Date},\n\t\t{Certifying Body},\n\t\t{Certification Date},\n\t\t{Certification End Date},\n\t\t{Certified Entity},\n\t\t{Number of Open Minor CARS},\n\t\t{Number of Open Major CARS},\n\t\tConcatenatedMessage\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> sink1\nSelect2 sink(input(\n\t\tWork_Book as string,\n\t\tWork_Sheet as string,\n\t\tAsset_Id as string,\n\t\tFund_Id as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tWork_Book,\n\t\tWork_Sheet,\n\t\tAsset_Id = Asset_ID,\n\t\tFund_Id = Fund_ID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> sink2"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ExcelWorkbook_AllTabs_ds')]",
+				"[concat(variables('factoryId'), '/datasets/ParquetPersistentOps_ds')]",
+				"[concat(variables('factoryId'), '/datasets/testCSVoutput')]",
+				"[concat(variables('factoryId'), '/datasets/SQLauditopsworkbookworksheetlist_ds')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadXlsxCertificates_Step2_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "ParquetPersistentOpsWithTabParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "source1"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "testCSVoutputFromParquet",
+								"type": "DatasetReference"
+							},
+							"name": "sink1"
+						}
+					],
+					"transformations": [],
+					"script": "parameters{\n\tWorkbookName as string,\n\tTabName as string\n}\nsource(output(\n\t\tCertification_ID as integer,\n\t\tValidation_Flag as double,\n\t\tCertification_Type as string,\n\t\tCertification_Number as string,\n\t\tNext_Audit_Date as string,\n\t\tCertifying_Body as string,\n\t\tCertification_Date as date,\n\t\tCertification_End_Date as date,\n\t\tCertified_Entity as string,\n\t\tNumber_of_Open_Minor_CARS as string,\n\t\tNumber_of_Open_Major_CARS as string,\n\t\tReporting_Period as date\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tformat: 'parquet',\n\tpartitionBy('hash', 1)) ~> source1\nsource1 sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tpartitionFileNames:['testoutputfromParquetCertifications.csv'],\n\tmapColumn(\n\t\tCertification_ID,\n\t\tValidation_Flag,\n\t\tCertification_Type,\n\t\tCertification_Number,\n\t\tNext_Audit_Date,\n\t\tCertifying_Body,\n\t\tCertification_Date,\n\t\tCertification_End_Date,\n\t\tCertified_Entity,\n\t\tNumber_of_Open_Minor_CARS,\n\t\tNumber_of_Open_Major_CARS\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> sink1"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ParquetPersistentOpsWithTabParam_ds')]",
+				"[concat(variables('factoryId'), '/datasets/testCSVoutputFromParquet')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadXlsxTimberSales_Step1_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "ExcelWorkbook_AllTabs_ds",
+								"type": "DatasetReference"
+							},
+							"name": "SourceDataTab"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "ParquetPersistentOps_ds",
+								"type": "DatasetReference"
+							},
+							"name": "TargetPersistentParquet"
+						},
+						{
+							"dataset": {
+								"referenceName": "testCSVoutput",
+								"type": "DatasetReference"
+							},
+							"name": "sink1"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLauditopsworkbookworksheetlist_ds",
+								"type": "DatasetReference"
+							},
+							"name": "AuditWorkbookWorkSheetList"
+						}
+					],
+					"transformations": [
+						{
+							"name": "ValidateMandatoryColumns"
+						},
+						{
+							"name": "SegregateValidInvalidRows"
+						},
+						{
+							"name": "SelectedColumnsOutput"
+						},
+						{
+							"name": "ConcatenateInvalidColumnsMessage"
+						},
+						{
+							"name": "SelectedOutputColumnsError"
+						},
+						{
+							"name": "GeneratedRowNumber"
+						},
+						{
+							"name": "ExcludeFirstRow"
+						},
+						{
+							"name": "AddWorkBookWorkSheet"
+						},
+						{
+							"name": "SelectColumnsForAggregate"
+						},
+						{
+							"name": "AggreateToGetUnique"
+						},
+						{
+							"name": "SelectOutputColumns"
+						},
+						{
+							"name": "SortColumns"
+						}
+					],
+					"script": "parameters{\n\tMasterUtcTag as string,\n\tCurrentRunDateTime as string,\n\tWorkbookName as string,\n\tTabName as string,\n\tCurrentQuarterDate as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as date,\n\t\t{Validation Flag} as double,\n\t\tCustomer as string,\n\t\t{Domestic or Export} as string,\n\t\tSpecies as string,\n\t\t{Product Type} as string,\n\t\t{Delivery Point} as string,\n\t\t{Price Point} as double,\n\t\t{Sales Unit} as string,\n\t\t{Sales Quantity} as double,\n\t\t{Average Sales Price} as double,\n\t\t{Sales Revenue} as double,\n\t\t{Production Cost} as double,\n\t\tStumpage as double,\n\t\t{Unit Stumpage} as double,\n\t\tCurrency as string,\n\t\tMonth as date,\n\t\t{Budget Sales Quantity} as double,\n\t\t{Budget Sales Revenue} as double,\n\t\t{Budget Production Cost} as double,\n\t\t{Budget Unit Stumpage} as double\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tskipLines: 1,\n\tpartitionBy('hash', 1)) ~> SourceDataTab\nExcludeFirstRow derive(CustomerValidateMsg = iif((length(trim(Customer)) > 0 || not(isNull(Customer))), \"\", \"Customer\"),\n\t\tDomesticExportValidateMsg = iif((length(trim({Domestic or Export})) > 0 || not(isNull({Domestic or Export}))), \"\", \"Domestic or Export\")) ~> ValidateMandatoryColumns\nValidateMandatoryColumns split(length(concatWS('',CustomerValidateMsg,DomesticExportValidateMsg)) == 0,\n\tdisjoint: false) ~> SegregateValidInvalidRows@(ValidRows, InvalidRows)\nSegregateValidInvalidRows@ValidRows select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tCustomer,\n\t\t{Domestic or Export},\n\t\tSpecies,\n\t\t{Product Type},\n\t\t{Delivery Point},\n\t\t{Price Point},\n\t\t{Sales Unit},\n\t\t{Sales Quantity},\n\t\t{Average Sales Price},\n\t\t{Sales Revenue},\n\t\t{Production Cost},\n\t\tStumpage,\n\t\t{Unit Stumpage},\n\t\tCurrency,\n\t\tMonth,\n\t\t{Budget Sales Quantity},\n\t\t{Budget Sales Revenue},\n\t\t{Budget Production Cost},\n\t\t{Budget Unit Stumpage}\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectedColumnsOutput\nSegregateValidInvalidRows@InvalidRows derive(ConcatenatedMessage = concatWS(\"/\", CustomerValidateMsg, DomesticExportValidateMsg)) ~> ConcatenateInvalidColumnsMessage\nConcatenateInvalidColumnsMessage select(mapColumn(\n\t\tRowNumber,\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\t{Validation Flag},\n\t\tCustomer,\n\t\t{Domestic or Export},\n\t\tSpecies,\n\t\t{Product Type},\n\t\t{Delivery Point},\n\t\t{Price Point},\n\t\t{Sales Unit},\n\t\t{Sales Quantity},\n\t\t{Average Sales Price},\n\t\t{Sales Revenue},\n\t\t{Production Cost},\n\t\tStumpage,\n\t\t{Unit Stumpage},\n\t\tCurrency,\n\t\tMonth,\n\t\t{Budget Sales Quantity},\n\t\t{Budget Sales Revenue},\n\t\t{Budget Production Cost},\n\t\t{Budget Unit Stumpage},\n\t\tConcatenatedMessage\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectedOutputColumnsError\nSourceDataTab keyGenerate(output(RowNumber as long),\n\tstartAt: 1L,\n\tpartitionBy('hash', 1)) ~> GeneratedRowNumber\nGeneratedRowNumber filter(RowNumber > 1) ~> ExcludeFirstRow\nExcludeFirstRow derive(Work_Book = $WorkbookName,\n\t\tWork_Sheet = $TabName) ~> AddWorkBookWorkSheet\nAddWorkBookWorkSheet select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tWork_Book,\n\t\tWork_Sheet\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectColumnsForAggregate\nSortColumns aggregate(groupBy(Asset_ID,\n\t\tFund_ID,\n\t\tWork_Book,\n\t\tWork_Sheet),\n\tAggCount = count()) ~> AggreateToGetUnique\nAggreateToGetUnique select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tWork_Book,\n\t\tWork_Sheet\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectOutputColumns\nSelectColumnsForAggregate sort(asc(Asset_ID, true),\n\tasc(Fund_ID, true),\n\tasc(Work_Book, true),\n\tasc(Work_Sheet, true)) ~> SortColumns\nSelectedColumnsOutput sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tformat: 'parquet',\n\tpartitionFileNames:[(concatWS(\"-\", $WorkbookName, $TabName))],\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tCustomer,\n\t\tDomestic_or_Export = {Domestic or Export},\n\t\tSpecies,\n\t\tProduct_Type = {Product Type},\n\t\tDelivery_Point = {Delivery Point},\n\t\tPrice_Point = {Price Point},\n\t\tSales_Unit = {Sales Unit},\n\t\tSales_Quantity = {Sales Quantity},\n\t\tAverage_Sales_Price = {Average Sales Price},\n\t\tSales_Revenue = {Sales Revenue},\n\t\tProduction_Cost = {Production Cost},\n\t\tStumpage,\n\t\tUnit_Stumpage = {Unit Stumpage},\n\t\tCurrency,\n\t\tMonth,\n\t\tBudget_Sales_Quantity = {Budget Sales Quantity},\n\t\tBudget_Sales_Revenue = {Budget Sales Revenue},\n\t\tBudget_Production_Cost = {Budget Production Cost},\n\t\tBudget_Unit_Stumpage = {Budget Unit Stumpage}\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetPersistentParquet\nSelectedOutputColumnsError sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tpartitionFileNames:['testTimberSalesError,csv'],\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\t{Validation Flag},\n\t\tCustomer,\n\t\t{Domestic or Export},\n\t\tSpecies,\n\t\t{Product Type},\n\t\t{Delivery Point},\n\t\t{Price Point},\n\t\t{Sales Unit},\n\t\t{Sales Quantity},\n\t\t{Average Sales Price},\n\t\t{Sales Revenue},\n\t\t{Production Cost},\n\t\tStumpage,\n\t\t{Unit Stumpage},\n\t\tCurrency,\n\t\tMonth,\n\t\t{Budget Sales Quantity},\n\t\t{Budget Sales Revenue},\n\t\t{Budget Production Cost},\n\t\t{Budget Unit Stumpage},\n\t\tConcatenatedMessage\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> sink1\nSelectOutputColumns sink(input(\n\t\tWork_Book as string,\n\t\tWork_Sheet as string,\n\t\tAsset_Id as string,\n\t\tFund_Id as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tWork_Book,\n\t\tWork_Sheet,\n\t\tAsset_Id = Asset_ID,\n\t\tFund_Id = Fund_ID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> AuditWorkbookWorkSheetList"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ExcelWorkbook_AllTabs_ds')]",
+				"[concat(variables('factoryId'), '/datasets/ParquetPersistentOps_ds')]",
+				"[concat(variables('factoryId'), '/datasets/testCSVoutput')]",
+				"[concat(variables('factoryId'), '/datasets/SQLauditopsworkbookworksheetlist_ds')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadXlsxTimberSales_Step2_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "ParquetPersistentOpsWithTabParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "source1"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "testCSVoutputFromParquet",
+								"type": "DatasetReference"
+							},
+							"name": "sink1"
+						}
+					],
+					"transformations": [],
+					"script": "parameters{\n\tWorkbookName as string,\n\tTabName as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as date,\n\t\tCustomer as string,\n\t\tDomestic_or_Export as string,\n\t\tSpecies as string,\n\t\tProduct_Type as string,\n\t\tDelivery_Point as string,\n\t\tPrice_Point as double,\n\t\tSales_Unit as string,\n\t\tSales_Quantity as double,\n\t\tAverage_Sales_Price as double,\n\t\tSales_Revenue as double,\n\t\tProduction_Cost as double,\n\t\tStumpage as double,\n\t\tUnit_Stumpage as double,\n\t\tCurrency as string,\n\t\tMonth as date,\n\t\tBudget_Sales_Quantity as double,\n\t\tBudget_Sales_Revenue as double,\n\t\tBudget_Production_Cost as double,\n\t\tBudget_Unit_Stumpage as double\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tformat: 'parquet',\n\tpartitionBy('hash', 1)) ~> source1\nsource1 sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tpartitionFileNames:['testoutputfromParquetTimberSales.csv'],\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tCustomer,\n\t\tDomestic_or_Export,\n\t\tSpecies,\n\t\tProduct_Type,\n\t\tDelivery_Point,\n\t\tPrice_Point,\n\t\tSales_Unit,\n\t\tSales_Quantity,\n\t\tAverage_Sales_Price,\n\t\tSales_Revenue,\n\t\tProduction_Cost,\n\t\tStumpage,\n\t\tUnit_Stumpage,\n\t\tCurrency,\n\t\tMonth,\n\t\tBudget_Sales_Quantity,\n\t\tBudget_Sales_Revenue,\n\t\tBudget_Production_Cost,\n\t\tBudget_Unit_Stumpage\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> sink1"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ParquetPersistentOpsWithTabParam_ds')]",
+				"[concat(variables('factoryId'), '/datasets/testCSVoutputFromParquet')]"
+			]
+		}
+	]
+}
