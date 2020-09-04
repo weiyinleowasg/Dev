@@ -76,53 +76,11 @@
 				}
 			},
 			{
-				"name": "ProcessWorkbookTabCertificates",
+				"name": "LoadAndUpdateCertificates",
 				"type": "ExecutePipeline",
 				"dependsOn": [
 					{
-						"activity": "DeleteCertificatesAuditTable",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"userProperties": [],
-				"typeProperties": {
-					"pipeline": {
-						"referenceName": "ProcessOpsWorkbookTabCertificates_pl",
-						"type": "PipelineReference"
-					},
-					"waitOnCompletion": true,
-					"parameters": {
-						"WorkbookName": {
-							"value": "@pipeline().parameters.WorkbookName",
-							"type": "Expression"
-						},
-						"CurrentQuarterDate": {
-							"value": "@pipeline().parameters.CurrentQuarterDate",
-							"type": "Expression"
-						},
-						"Certifications": {
-							"value": "@pipeline().parameters.Certifications",
-							"type": "Expression"
-						},
-						"CurrentRunDateTime": {
-							"value": "@pipeline().parameters.CurrentRunDateTime",
-							"type": "Expression"
-						},
-						"MasterUtcTag": {
-							"value": "@pipeline().parameters.MasterUtcTag",
-							"type": "Expression"
-						}
-					}
-				}
-			},
-			{
-				"name": "LoadCertificates",
-				"type": "ExecutePipeline",
-				"dependsOn": [
-					{
-						"activity": "ProcessWorkbookTabCertificates",
+						"activity": "ProcessWorkbookCertifications",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -164,7 +122,7 @@
 				"type": "ExecutePipeline",
 				"dependsOn": [
 					{
-						"activity": "DeleteTimberSalesAuditTable",
+						"activity": "StoredProcedureDeleteCertificationCurrentPeriod",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -308,6 +266,290 @@
 						}
 					}
 				}
+			},
+			{
+				"name": "StoredProcedureDeleteCertificationCurrentPeriod",
+				"type": "Wait",
+				"dependsOn": [
+					{
+						"activity": "DeleteTimberSalesAuditTable",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"waitTimeInSeconds": 1
+				}
+			},
+			{
+				"name": "ExtractCertifications",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "DeleteCertificatesAuditTable",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "ExcelSource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": true
+						}
+					},
+					"sink": {
+						"type": "ParquetSink",
+						"storeSettings": {
+							"type": "AzureBlobStorageWriteSettings"
+						}
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "Asset_ID",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Asset_ID",
+									"type": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "Fund_ID",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Fund_ID",
+									"type": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "Reporting_Period",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Reporting_Period",
+									"type": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "Certification_ID",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Certification_ID",
+									"type": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "Validation Flag",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Validation_Flag"
+								}
+							},
+							{
+								"source": {
+									"name": "Certification Type",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Certification_Type"
+								}
+							},
+							{
+								"source": {
+									"name": "Certification Number",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Certification_Number"
+								}
+							},
+							{
+								"source": {
+									"name": "Next Audit Date",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Next_Audit_Date"
+								}
+							},
+							{
+								"source": {
+									"name": "Certifying Body",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Certifying_Body"
+								}
+							},
+							{
+								"source": {
+									"name": "Certification Date",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Certification_Date"
+								}
+							},
+							{
+								"source": {
+									"name": "Certification End Date",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Certification_End_Date"
+								}
+							},
+							{
+								"source": {
+									"name": "Certified Entity",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Certified_Entity"
+								}
+							},
+							{
+								"source": {
+									"name": "Number of Open Minor CARS",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Number_of_Open_Minor_CARS"
+								}
+							},
+							{
+								"source": {
+									"name": "Number of Open Major CARS",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Number_of_Open_Major_CARS"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "ExcelWorkbook_AllTabs_ds",
+						"type": "DatasetReference",
+						"parameters": {
+							"WorkbookName": {
+								"value": "@pipeline().parameters.WorkbookName",
+								"type": "Expression"
+							},
+							"TabName": {
+								"value": "@pipeline().parameters.Certifications",
+								"type": "Expression"
+							},
+							"Range": {
+								"value": "@variables('CertificationsRange')",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "ParquetPersistentOpsWithTabParam_ds",
+						"type": "DatasetReference",
+						"parameters": {
+							"ParquetFile": {
+								"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.Certifications,'_',pipeline().parameters.CurrentQuarterDate,'_Extract')",
+								"type": "Expression"
+							}
+						}
+					}
+				]
+			},
+			{
+				"name": "ProcessWorkbookCertifications",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "ExtractCertifications",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "ProcessOpsWorkbookTabCertificates_pl",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"WorkbookName": {
+							"value": "@pipeline().parameters.WorkbookName",
+							"type": "Expression"
+						},
+						"CurrentQuarterDate": {
+							"value": "@pipeline().parameters.CurrentQuarterDate",
+							"type": "Expression"
+						},
+						"Certifications": {
+							"value": "@pipeline().parameters.Certifications",
+							"type": "Expression"
+						},
+						"CurrentRunDateTime": {
+							"value": "@pipeline().parameters.CurrentRunDateTime",
+							"type": "Expression"
+						},
+						"MasterUtcTag": {
+							"value": "@pipeline().parameters.MasterUtcTag",
+							"type": "Expression"
+						},
+						"MasterPipeline": {
+							"value": "@pipeline().parameters.MasterPipeline",
+							"type": "Expression"
+						}
+					}
+				}
 			}
 		],
 		"parameters": {
@@ -366,6 +608,43 @@
 			"MasterUtcTag": {
 				"type": "string",
 				"defaultValue": "2020-08-28T06:05:53.4181322Z"
+			},
+			"MasterPipeline": {
+				"type": "string",
+				"defaultValue": "ProcessOpsWorkbookMaster_pl"
+			}
+		},
+		"variables": {
+			"OtherSalesRange": {
+				"type": "String"
+			},
+			"MajorSevereIncidentsRange": {
+				"type": "String"
+			},
+			"RiskOpportunityRegisterRange": {
+				"type": "String"
+			},
+			"CertificationsRange": {
+				"type": "String",
+				"defaultValue": "A6:N99999"
+			},
+			"RelatedPartyTransactionsRange": {
+				"type": "String"
+			},
+			"TimberSalesRange": {
+				"type": "String"
+			},
+			"HarvestReconcilliationRange": {
+				"type": "String"
+			},
+			"OperationsRange": {
+				"type": "String"
+			},
+			"ContractsRange": {
+				"type": "String"
+			},
+			"StrategicProjectsRange": {
+				"type": "String"
 			}
 		},
 		"annotations": []
