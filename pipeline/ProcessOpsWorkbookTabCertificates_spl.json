@@ -4,41 +4,9 @@
 		"description": "Certificates tab",
 		"activities": [
 			{
-				"name": "CountErrorInErrorTable",
-				"type": "Wait",
+				"name": "GetTableErrorCount",
+				"type": "Lookup",
 				"dependsOn": [],
-				"userProperties": [],
-				"typeProperties": {
-					"waitTimeInSeconds": 1
-				}
-			},
-			{
-				"name": "DoThisAllornothingOrDoThisLoadRegardless",
-				"type": "Wait",
-				"dependsOn": [
-					{
-						"activity": "CountErrorInErrorTable",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"userProperties": [],
-				"typeProperties": {
-					"waitTimeInSeconds": 1
-				}
-			},
-			{
-				"name": "LoadValidatedDataset",
-				"type": "ExecuteDataFlow",
-				"dependsOn": [
-					{
-						"activity": "DeleteOperationTableByReportingDate",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
 				"policy": {
 					"timeout": "7.00:00:00",
 					"retry": 0,
@@ -48,143 +16,195 @@
 				},
 				"userProperties": [],
 				"typeProperties": {
-					"dataflow": {
-						"referenceName": "LoadXlsxCertificates_Step2_df",
-						"type": "DataFlowReference",
-						"parameters": {
-							"WorkbookName": {
-								"value": "'@{pipeline().parameters.WorkbookName}'",
-								"type": "Expression"
-							},
-							"TabName": {
-								"value": "'@{pipeline().parameters.Certifications}'",
-								"type": "Expression"
-							}
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "SELECT COUNT(*) AS ERROR_COUNT FROM (\n SELECT DISTINCT LIS.Work_Book, LIS.Work_Sheet FROM \n audit.OPS_Workbook_Worksheet_Asset_List LIS\n JOIN audit.OPS_Certification_Error ERR\n ON LIS.Work_Book = ERR.Source_File  \n AND LIS.Work_Sheet = ERR.Source_Sub_File\n WHERE LIS.Work_Book = '@{pipeline().parameters.WorkbookName}'\n AND LIS.Work_Sheet = '@{pipeline().parameters.Certifications}'\n)x",
+							"type": "Expression"
 						},
-						"datasetParameters": {
-							"SourceReadyLoad": {
-								"ParquetFile": {
-									"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.Certifications,'_',pipeline().parameters.CurrentQuarterDate,'_LoadReady')",
-									"type": "Expression"
-								}
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "SQLtableGeneric_ds",
+						"type": "DatasetReference"
+					}
+				}
+			},
+			{
+				"name": "CheckConditionIfErrorExist",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "GetTableErrorCount",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@activity('GetTableErrorCount').output.firstRow.ERROR_COUNT >= 0",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "DeleteOperationTableByReportingDate",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
 							},
-							"TargetRelational": {
-								"Schema": {
-									"value": "Relational",
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": {
+									"value": "[relational].[DeleteOperationTable]",
 									"type": "Expression"
 								},
-								"TableName": {
-									"value": "OPS_Certification",
-									"type": "Expression"
+								"storedProcedureParameters": {
+									"ReportingPeriod": {
+										"value": {
+											"value": "@pipeline().parameters.CurrentQuarterDate",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"TableName": {
+										"value": {
+											"value": "OPS_Certification",
+											"type": "Expression"
+										},
+										"type": "String"
+									}
 								}
-							}
-						}
-					},
-					"compute": {
-						"coreCount": 8,
-						"computeType": "General"
-					}
-				}
-			},
-			{
-				"name": "UpdateValidatedDataset",
-				"type": "ExecuteDataFlow",
-				"dependsOn": [
-					{
-						"activity": "LoadValidatedDataset",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"policy": {
-					"timeout": "7.00:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"dataflow": {
-						"referenceName": "LoadXlsxCertificates_Step3_df",
-						"type": "DataFlowReference",
-						"parameters": {
-							"WorkbookName": {
-								"value": "'@{pipeline().parameters.WorkbookName}'",
-								"type": "Expression"
 							},
-							"TabName": {
-								"value": "'@{pipeline().parameters.Certifications}'",
-								"type": "Expression"
+							"linkedServiceName": {
+								"referenceName": "SQLdbConnection",
+								"type": "LinkedServiceReference"
 							}
 						},
-						"datasetParameters": {
-							"SourceUpdate": {
-								"ParquetFile": {
-									"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.Certifications,'_',pipeline().parameters.CurrentQuarterDate,'_Update')",
-									"type": "Expression"
+						{
+							"name": "LoadValidatedDataset",
+							"type": "ExecuteDataFlow",
+							"dependsOn": [
+								{
+									"activity": "DeleteOperationTableByReportingDate",
+									"dependencyConditions": [
+										"Succeeded"
+									]
 								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
 							},
-							"TargetRelational": {
-								"Schema": {
-									"value": "Relational",
-									"type": "Expression"
+							"userProperties": [],
+							"typeProperties": {
+								"dataflow": {
+									"referenceName": "LoadXlsxCertificates_Step2_df",
+									"type": "DataFlowReference",
+									"parameters": {
+										"WorkbookName": {
+											"value": "'@{pipeline().parameters.WorkbookName}'",
+											"type": "Expression"
+										},
+										"TabName": {
+											"value": "'@{pipeline().parameters.Certifications}'",
+											"type": "Expression"
+										}
+									},
+									"datasetParameters": {
+										"SourceReadyLoad": {
+											"ParquetFile": {
+												"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.Certifications,'_',pipeline().parameters.CurrentQuarterDate,'_LoadReady')",
+												"type": "Expression"
+											}
+										},
+										"TargetRelational": {
+											"Schema": {
+												"value": "Relational",
+												"type": "Expression"
+											},
+											"TableName": {
+												"value": "OPS_Certification",
+												"type": "Expression"
+											}
+										}
+									}
 								},
-								"TableName": {
-									"value": "OPS_Certification",
-									"type": "Expression"
+								"compute": {
+									"coreCount": 8,
+									"computeType": "General"
+								}
+							}
+						},
+						{
+							"name": "UpdateValidatedDataset",
+							"type": "ExecuteDataFlow",
+							"dependsOn": [
+								{
+									"activity": "LoadValidatedDataset",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataflow": {
+									"referenceName": "LoadXlsxCertificates_Step3_df",
+									"type": "DataFlowReference",
+									"parameters": {
+										"WorkbookName": {
+											"value": "'@{pipeline().parameters.WorkbookName}'",
+											"type": "Expression"
+										},
+										"TabName": {
+											"value": "'@{pipeline().parameters.Certifications}'",
+											"type": "Expression"
+										}
+									},
+									"datasetParameters": {
+										"SourceUpdate": {
+											"ParquetFile": {
+												"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.Certifications,'_',pipeline().parameters.CurrentQuarterDate,'_Update')",
+												"type": "Expression"
+											}
+										},
+										"TargetRelational": {
+											"Schema": {
+												"value": "Relational",
+												"type": "Expression"
+											},
+											"TableName": {
+												"value": "OPS_Certification",
+												"type": "Expression"
+											}
+										}
+									}
+								},
+								"compute": {
+									"coreCount": 8,
+									"computeType": "General"
 								}
 							}
 						}
-					},
-					"compute": {
-						"coreCount": 8,
-						"computeType": "General"
-					}
-				}
-			},
-			{
-				"name": "DeleteOperationTableByReportingDate",
-				"type": "SqlServerStoredProcedure",
-				"dependsOn": [
-					{
-						"activity": "DoThisAllornothingOrDoThisLoadRegardless",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"policy": {
-					"timeout": "7.00:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"storedProcedureName": "[relational].[DeleteOperationTable]",
-					"storedProcedureParameters": {
-						"ReportingPeriod": {
-							"value": {
-								"value": "@pipeline().parameters.CurrentQuarterDate",
-								"type": "Expression"
-							},
-							"type": "String"
-						},
-						"TableName": {
-							"value": {
-								"value": "OPS_Certification",
-								"type": "Expression"
-							},
-							"type": "String"
-						}
-					}
-				},
-				"linkedServiceName": {
-					"referenceName": "SQLdbConnection",
-					"type": "LinkedServiceReference"
+					]
 				}
 			}
 		],
