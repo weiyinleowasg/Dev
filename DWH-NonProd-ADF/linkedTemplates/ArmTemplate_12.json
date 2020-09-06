@@ -13,6 +13,112 @@
 	},
 	"resources": [
 		{
+			"name": "[concat(parameters('factoryName'), '/ProcessOpsWorkbookSendMailOK_pl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "GetEmailDetails",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": {
+									"value": "SELECT CONCAT(CASE WHEN Error_Count = 0 THEN 'SUCCESSFUL LOAD : ' ELSE 'FAILED LOAD : ' END,Work_Sheet, ' - ', Work_Book) AS Message_Header,\nOps_Representative_Email, Ops_Representative_Last_Name, Ops_Representative_First_Name, Error_Table, Error_Count \nFROM (\nSELECT Work_Book, Work_Sheet, Ops_Representative_Email, Ops_Representative_Last_Name, Ops_Representative_First_Name,\nCASE WHEN Work_Sheet = 'Certifications' THEN 'audit.OPS_Certification_Error'\n     WHEN Work_Sheet = 'Timber Sales' THEN 'audit.OPS_Timber_Sales_Error'\nELSE NULL END AS Error_Table,\nCASE WHEN Work_Sheet = 'Certifications' THEN (SELECT COUNT(*) FROM audit.OPS_Certification_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}')\n     WHEN Work_Sheet = 'Timber Sales' THEN (SELECT COUNT(*) FROM audit.OPS_Timber_Sales_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}')\nELSE NULL END AS Error_Count\nFROM (\nSELECT Work_Book, Work_Sheet, wb.Asset_ID, wb.Fund_ID,\nra.Ops_Representative_First_Name, ra.Ops_Representative_Last_Name, ra.Ops_Representative_Email\nFROM [audit].[OPS_Workbook_Worksheet_Asset_List] wb\nJOIN [relational].[Asset] ra \nON wb.Asset_Id = ra.Asset_ID AND wb.Fund_Id = ra.Fund_ID AND wb.Work_Book = '@{pipeline().parameters.WorkbookName}') x\n)z;",
+									"type": "Expression"
+								},
+								"queryTimeout": "02:00:00",
+								"partitionOption": "None"
+							},
+							"dataset": {
+								"referenceName": "SQLauditopsworkbookworksheetlist_ds",
+								"type": "DatasetReference",
+								"parameters": {}
+							},
+							"firstRowOnly": false
+						}
+					},
+					{
+						"name": "ForEachWorkbookWorksheetEmail",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "GetEmailDetails",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('GetEmailDetails').output.value",
+								"type": "Expression"
+							},
+							"isSequential": true,
+							"activities": [
+								{
+									"name": "SendEmail",
+									"type": "WebActivity",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"url": "https://prod-19.australiaeast.logic.azure.com:443/workflows/7139728b716a4500b96a2fa094f691fa/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=I30JtkHJ6p4mNeMF6USxTdCCjTwTvY1dmmNC2Mvte7o",
+										"method": "POST",
+										"headers": {
+											"Content-Type": "application/json"
+										},
+										"body": {
+											"value": "{\"dataFactoryName\":\"DWH-Prod-ADF\",\"pipelineName\":\"ProcessOPSWorkbookMaster_pl\",\"messageHeader\":\"@{item().Message_Header}\",\"tableName\":\"@{item().Error_Table}\",\"errorCount\":\"@{item().Error_Count}\",\"emailAddress\":\"@{item().Ops_Representative_Email}\",\"lastName\":\"@{item().Ops_Representative_Last_Name}\",\"firstName\":\"@{item().Ops_Representative_First_Name}\"}",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					}
+				],
+				"parameters": {
+					"DataFactoryName": {
+						"type": "string",
+						"defaultValue": "myFactory"
+					},
+					"PipelineName": {
+						"type": "string",
+						"defaultValue": "myPipeline"
+					},
+					"WorkbookName": {
+						"type": "string",
+						"defaultValue": "Wenita Forestry Products Q4 FY20 V2.xlsx"
+					}
+				},
+				"variables": {
+					"var": {
+						"type": "Array"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": []
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/ProcessTigermothBlob_ExtractDbToBlobAll_pl')]",
 			"type": "Microsoft.DataFactory/factories/pipelines",
 			"apiVersion": "2018-06-01",
@@ -4103,84 +4209,6 @@
 						}
 					],
 					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tVersion_Name as string,\n\t\tDebit_Credit as string,\n\t\tBudget_Date as timestamp,\n\t\tBudget_Desc as string,\n\t\tBudget_value as decimal(18,2),\n\t\tBudget_Type as string,\n\t\tvalidation_error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> StagingDB\nStagingDB derive(Update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('-',$ProcessName,$FileName)) ~> AddAuditColumns\nAddAuditColumns select(mapColumn(\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tVersion_Name,\n\t\tDebit_Credit,\n\t\tBudget_Date,\n\t\tBudget_Desc,\n\t\tBudget_value,\n\t\tBudget_Type,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectCoulmnOutput\nSelectCoulmnOutput sink(input(\n\t\tBudget_ID as long,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tVersion_Name as string,\n\t\tDebit_Credit as string,\n\t\tBudget_Type as string,\n\t\tBudget_Date as timestamp,\n\t\tBudget_Desc as string,\n\t\tBudget_value as decimal(18,2),\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tVersion_Name,\n\t\tDebit_Credit,\n\t\tBudget_Type,\n\t\tBudget_Date,\n\t\tBudget_Desc,\n\t\tBudget_value,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t)) ~> InsertBudget"
-				}
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/LoadStagingDBtoRelationDB_coa_df')]",
-			"type": "Microsoft.DataFactory/factories/dataflows",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"type": "MappingDataFlow",
-				"typeProperties": {
-					"sources": [
-						{
-							"dataset": {
-								"referenceName": "SQLstagingcoa_ds",
-								"type": "DatasetReference"
-							},
-							"name": "StagingDB"
-						},
-						{
-							"dataset": {
-								"referenceName": "SQLrelationcoa_ds",
-								"type": "DatasetReference"
-							},
-							"name": "RelationDB"
-						}
-					],
-					"sinks": [
-						{
-							"dataset": {
-								"referenceName": "SQLrelationcoa_ds",
-								"type": "DatasetReference"
-							},
-							"name": "InsertUpdateRow"
-						}
-					],
-					"transformations": [
-						{
-							"name": "StatgingAddChecksum"
-						},
-						{
-							"name": "LookupRelationalStream"
-						},
-						{
-							"name": "RelationalAddChecksum"
-						},
-						{
-							"name": "ConditionalSplitNewOrExpire"
-						},
-						{
-							"name": "RelationRenameColumns"
-						},
-						{
-							"name": "SelectNewStagingRow"
-						},
-						{
-							"name": "AddAuditColumns"
-						},
-						{
-							"name": "AlterRowInsertUpdateExpire"
-						},
-						{
-							"name": "UpdateAddAuditAttributes"
-						},
-						{
-							"name": "AddExpiredAttributes"
-						},
-						{
-							"name": "UpdateSelectForInsert"
-						},
-						{
-							"name": "UnionForDB"
-						},
-						{
-							"name": "UpdateSelectForExpire"
-						}
-					],
-					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tGL_Code as string,\n\t\tGL_Desc as string,\n\t\tCategory as string,\n\t\tCash_Flow_Code as string,\n\t\tGL_Parent_Code as string,\n\t\tGL_Level_Code as integer,\n\t\tDebit_Credit as string,\n\t\tReporting_1 as string,\n\t\tReporting_2 as string,\n\t\tReporting_3 as string,\n\t\tReporting_4 as string,\n\t\tReporting_5 as string,\n\t\tReporting_6 as string,\n\t\tReporting_7 as string,\n\t\tReporting_8 as string,\n\t\tReporting_9 as string,\n\t\tReporting_10 as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> StagingDB\nsource(output(\n\t\tGL_Code as string,\n\t\tGL_Desc as string,\n\t\tCategory as string,\n\t\tCash_Flow_Code as string,\n\t\tGL_Parent_Code as string,\n\t\tGL_Level_Code as integer,\n\t\tDebit_Credit as string,\n\t\tReporting_1 as string,\n\t\tReporting_2 as string,\n\t\tReporting_3 as string,\n\t\tReporting_4 as string,\n\t\tReporting_5 as string,\n\t\tReporting_6 as string,\n\t\tReporting_7 as string,\n\t\tReporting_8 as string,\n\t\tReporting_9 as string,\n\t\tReporting_10 as string,\n\t\tstart_datetime as timestamp,\n\t\tend_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [GL_Code]\\n      ,[GL_Desc]\\n      ,[Category]\\n      ,[Cash_Flow_Code]\\n      ,[GL_Parent_Code]\\n      ,[GL_Level_Code]\\n      ,[Debit_Credit]\\n      ,[Reporting_1]\\n      ,[Reporting_2]\\n      ,[Reporting_3]\\n      ,[Reporting_4]\\n      ,[Reporting_5]\\n      ,[Reporting_6]\\n      ,[Reporting_7]\\n      ,[Reporting_8]\\n      ,[Reporting_9]\\n      ,[Reporting_10]\\n      ,[start_datetime]\\n      ,[end_datetime]\\n      ,[record_deleted_flag]\\n      ,[process_name]\\n  FROM [relational].[Chart_of_Account]\\n  WHERE [record_deleted_flag] = 0',\n\tformat: 'query') ~> RelationDB\nStagingDB derive(StagingChecksum = sha2(256, GL_Desc,Category,Cash_Flow_Code,GL_Parent_Code,GL_Level_Code,Debit_Credit,Reporting_1,Reporting_2,Reporting_3,Reporting_4,Reporting_5,Reporting_6,Reporting_7,Reporting_8,Reporting_9,Reporting_10)) ~> StatgingAddChecksum\nStatgingAddChecksum, RelationRenameColumns lookup(GL_Code == Relation_GL_Code,\n\tmultiple: true,\n\tbroadcast: 'auto')~> LookupRelationalStream\nRelationDB derive(RelationalChecksum = sha2(256, GL_Desc,Category,Cash_Flow_Code,GL_Parent_Code,GL_Level_Code,Debit_Credit,Reporting_1,Reporting_2,Reporting_3,Reporting_4,Reporting_5,Reporting_6,Reporting_7,Reporting_8,Reporting_9,Reporting_10)) ~> RelationalAddChecksum\nLookupRelationalStream split(isNull(Relation_RelationalChecksum),\n\tStagingChecksum != Relation_RelationalChecksum,\n\tdisjoint: false) ~> ConditionalSplitNewOrExpire@(StagingNewRow, StagingChangedRow, IgnoreNoChange)\nRelationalAddChecksum select(mapColumn(\n\t\tRelation_GL_Code = GL_Code,\n\t\tRelation_GL_Desc = GL_Desc,\n\t\tRelation_Category = Category,\n\t\tRelation_Cash_Flow_Code = Cash_Flow_Code,\n\t\tRelation_GL_Parent_Code = GL_Parent_Code,\n\t\tRelation_GL_Level_Code = GL_Level_Code,\n\t\tRelation_Debit_Credit = Debit_Credit,\n\t\tRelation_Reporting_1 = Reporting_1,\n\t\tRelation_Reporting_2 = Reporting_2,\n\t\tRelation_Reporting_3 = Reporting_3,\n\t\tRelation_Reporting_4 = Reporting_4,\n\t\tRelation_Reporting_5 = Reporting_5,\n\t\tRelation_Reporting_6 = Reporting_6,\n\t\tRelation_Reporting_7 = Reporting_7,\n\t\tRelation_Reporting_8 = Reporting_8,\n\t\tRelation_Reporting_9 = Reporting_9,\n\t\tRelation_Reporting_10 = Reporting_10,\n\t\tRelation_start_datetime = start_datetime,\n\t\tRelation_end_datetime = end_datetime,\n\t\tRelation_record_deleted_flag = record_deleted_flag,\n\t\tRelation_process_name = process_name,\n\t\tRelation_RelationalChecksum = RelationalChecksum\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> RelationRenameColumns\nConditionalSplitNewOrExpire@StagingNewRow select(mapColumn(\n\t\tGL_Code,\n\t\tGL_Desc,\n\t\tCategory,\n\t\tCash_Flow_Code,\n\t\tGL_Parent_Code,\n\t\tGL_Level_Code,\n\t\tDebit_Credit,\n\t\tReporting_1,\n\t\tReporting_2,\n\t\tReporting_3,\n\t\tReporting_4,\n\t\tReporting_5,\n\t\tReporting_6,\n\t\tReporting_7,\n\t\tReporting_8,\n\t\tReporting_9,\n\t\tReporting_10\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectNewStagingRow\nSelectNewStagingRow derive(start_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tend_datetime = toTimestamp('9999-12-31 00:00:00'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('-',$ProcessName,$FileName)) ~> AddAuditColumns\nUnionForDB alterRow(insertIf(record_deleted_flag==toInteger(0)),\n\tupdateIf(record_deleted_flag==toInteger(1))) ~> AlterRowInsertUpdateExpire\nConditionalSplitNewOrExpire@StagingChangedRow derive(start_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tend_datetime = toTimestamp('9999-12-31 00:00:00'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('-', $ProcessName, $FileName)) ~> UpdateAddAuditAttributes\nConditionalSplitNewOrExpire@StagingChangedRow derive(end_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\trecord_deleted_flag = toInteger(1)) ~> AddExpiredAttributes\nUpdateAddAuditAttributes select(mapColumn(\n\t\tGL_Code,\n\t\tGL_Desc,\n\t\tCategory,\n\t\tCash_Flow_Code,\n\t\tGL_Parent_Code,\n\t\tGL_Level_Code,\n\t\tDebit_Credit,\n\t\tReporting_1,\n\t\tReporting_2,\n\t\tReporting_3,\n\t\tReporting_4,\n\t\tReporting_5,\n\t\tReporting_6,\n\t\tReporting_7,\n\t\tReporting_8,\n\t\tReporting_9,\n\t\tReporting_10,\n\t\tstart_datetime,\n\t\tend_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> UpdateSelectForInsert\nAddAuditColumns, UpdateSelectForInsert, UpdateSelectForExpire union(byName: true)~> UnionForDB\nAddExpiredAttributes select(mapColumn(\n\t\tGL_Code = Relation_GL_Code,\n\t\tGL_Desc = Relation_GL_Desc,\n\t\tCategory = Relation_Category,\n\t\tCash_Flow_Code = Relation_Cash_Flow_Code,\n\t\tGL_Parent_Code = Relation_GL_Parent_Code,\n\t\tGL_Level_Code = Relation_GL_Level_Code,\n\t\tDebit_Credit = Relation_Debit_Credit,\n\t\tReporting_1 = Relation_Reporting_1,\n\t\tReporting_2 = Relation_Reporting_2,\n\t\tReporting_3 = Relation_Reporting_3,\n\t\tReporting_4 = Relation_Reporting_4,\n\t\tReporting_5 = Relation_Reporting_5,\n\t\tReporting_6 = Relation_Reporting_6,\n\t\tReporting_7 = Relation_Reporting_7,\n\t\tReporting_8 = Relation_Reporting_8,\n\t\tReporting_9 = Relation_Reporting_9,\n\t\tReporting_10 = Relation_Reporting_10,\n\t\tstart_datetime = Relation_start_datetime,\n\t\tprocess_name = Relation_process_name,\n\t\tend_datetime,\n\t\trecord_deleted_flag\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> UpdateSelectForExpire\nAlterRowInsertUpdateExpire sink(input(\n\t\tGL_Code as string,\n\t\tGL_Desc as string,\n\t\tCategory as string,\n\t\tCash_Flow_Code as string,\n\t\tGL_Parent_Code as string,\n\t\tGL_Level_Code as integer,\n\t\tstart_datetime as timestamp,\n\t\tend_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string,\n\t\tDebit_Credit as string,\n\t\tReporting_1 as string,\n\t\tReporting_2 as string,\n\t\tReporting_3 as string,\n\t\tReporting_4 as string,\n\t\tReporting_5 as string,\n\t\tReporting_6 as string,\n\t\tReporting_7 as string,\n\t\tReporting_8 as string,\n\t\tReporting_9 as string,\n\t\tReporting_10 as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:true,\n\tupsertable:false,\n\tkeys:['GL_Code','process_name'],\n\tformat: 'table',\n\tmapColumn(\n\t\tGL_Code,\n\t\tGL_Desc,\n\t\tCategory,\n\t\tCash_Flow_Code,\n\t\tGL_Parent_Code,\n\t\tGL_Level_Code,\n\t\tstart_datetime,\n\t\tend_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name,\n\t\tDebit_Credit,\n\t\tReporting_1,\n\t\tReporting_2,\n\t\tReporting_3,\n\t\tReporting_4,\n\t\tReporting_5,\n\t\tReporting_6,\n\t\tReporting_7,\n\t\tReporting_8,\n\t\tReporting_9,\n\t\tReporting_10\n\t)) ~> InsertUpdateRow"
 				}
 			},
 			"dependsOn": []
