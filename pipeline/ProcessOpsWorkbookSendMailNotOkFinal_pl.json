@@ -18,7 +18,7 @@
 					"source": {
 						"type": "AzureSqlSource",
 						"sqlReaderQuery": {
-							"value": "SELECT CONCAT(CASE WHEN Error_Count = 0 THEN '!!! ERROR SOME EXCEL SHEETS MAY NOT BE LOADED: SUCCESSFUL LOAD : ' ELSE '!!! ERROR SOME EXCEL SHEETS MAY NOT BE LOADED: FAILED LOAD : ' END,Work_Sheet, ' - ', Work_Book) AS Message_Header,\nOps_Representative_Email, Ops_Representative_Last_Name, Ops_Representative_First_Name, Error_Table, Error_Count \nFROM (\nSELECT Work_Book, Work_Sheet, Ops_Representative_Email, Ops_Representative_Last_Name, Ops_Representative_First_Name,\nCASE WHEN Work_Sheet = 'Certifications' THEN 'audit.OPS_Certification_Error'\n     WHEN Work_Sheet = 'Timber Sales' THEN 'audit.OPS_Timber_Sales_Error'\nELSE NULL END AS Error_Table,\nCASE WHEN Work_Sheet = 'Certifications' THEN (SELECT COUNT(*) FROM audit.OPS_Certification_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}')\n     WHEN Work_Sheet = 'Timber Sales' THEN (SELECT COUNT(*) FROM audit.OPS_Timber_Sales_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}')\nELSE NULL END AS Error_Count\nFROM (\nSELECT Work_Book, Work_Sheet, wb.Asset_ID, wb.Fund_ID,\nra.Ops_Representative_First_Name, ra.Ops_Representative_Last_Name, ra.Ops_Representative_Email\nFROM [audit].[OPS_Workbook_Worksheet_Asset_List] wb\nJOIN [relational].[Asset] ra \nON wb.Asset_Id = ra.Asset_ID AND wb.Fund_Id = ra.Fund_ID  AND ra.record_deleted_flag = 0 AND wb.Work_Book = '@{pipeline().parameters.WorkbookName}') x\n)z;",
+							"value": "SELECT '!!! PIPELINE ERROR : SOME OR ALL EXCEL SHEETS MAY NOT BE LOADED' AS Message_Header,\nOps_Representative_Email, Ops_Representative_Last_Name, Ops_Representative_First_Name, Error_Table, Error_Count \nFROM (\nSELECT Ops_Representative_Email, Ops_Representative_Last_Name, Ops_Representative_First_Name,\n'' AS Error_Table,\n''AS Error_Count\nFROM (\nSELECT ra.Ops_Representative_First_Name, ra.Ops_Representative_Last_Name, ra.Ops_Representative_Email\nFROM relational.Asset ra \nWHERE record_deleted_flag = 0 \nAND ra.Asset_ID = 'WFP' \nAND ra.Fund_ID = 'ANZFOF2') x\n)z;",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
@@ -90,6 +90,14 @@
 			"WorkbookName": {
 				"type": "string",
 				"defaultValue": "Wenita Forestry Products Q4 FY20 V2.xlsx"
+			},
+			"Asset_ID": {
+				"type": "string",
+				"defaultValue": "WFP"
+			},
+			"Fund_ID": {
+				"type": "string",
+				"defaultValue": "ANZFOF2"
 			}
 		},
 		"variables": {
