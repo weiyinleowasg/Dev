@@ -13,6 +13,120 @@
 	},
 	"resources": [
 		{
+			"name": "[concat(parameters('factoryName'), '/relationalCOA_Views')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "GL_Code",
+						"type": "nvarchar"
+					},
+					{
+						"name": "GL_Desc",
+						"type": "nvarchar"
+					},
+					{
+						"name": "View_Name",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Category",
+						"type": "nvarchar"
+					},
+					{
+						"name": "process_name",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Sub_Category",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Item",
+						"type": "nvarchar"
+					},
+					{
+						"name": "Category_Index",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "Sub_Category_Index",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "Item_Index",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "CF_Code",
+						"type": "nvarchar"
+					},
+					{
+						"name": "CF_Description",
+						"type": "nvarchar"
+					},
+					{
+						"name": "CPM_Code",
+						"type": "nvarchar"
+					},
+					{
+						"name": "CPM_Description",
+						"type": "nvarchar"
+					},
+					{
+						"name": "update_datetime",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					},
+					{
+						"name": "update_user",
+						"type": "nvarchar"
+					}
+				],
+				"typeProperties": {
+					"schema": "relational",
+					"table": "COA_Views"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/testCSVoutput')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "BlobStore_nfdwhstaging",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"container": "adf2persistentarea"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": []
+			},
+			"dependsOn": []
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/testCSVoutputFromParquet')]",
 			"type": "Microsoft.DataFactory/factories/datasets",
 			"apiVersion": "2018-06-01",
@@ -3238,273 +3352,6 @@
 					},
 					"File_Pattern": {
 						"type": "string"
-					}
-				},
-				"annotations": []
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/PipelineSendMail_pl_old')]",
-			"type": "Microsoft.DataFactory/factories/pipelines",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"activities": [
-					{
-						"name": "SuccessOrFailMail",
-						"type": "WebActivity",
-						"dependsOn": [
-							{
-								"activity": "GetErrorDuringProcessFiles",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"url": "https://prod-24.australiaeast.logic.azure.com:443/workflows/e28a90add06c495bbc9362b5109fb4c0/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=j2wEDAKOpnQ83iKkUa84aeGE6Nfb5604lp-z1-W4ek0",
-							"method": "POST",
-							"headers": {
-								"Content-Type": "application/json"
-							},
-							"body": {
-								"dataFactoryName": "@pipeline().parameters.Parent_DataFactory",
-								"pipelineName": "@pipeline().parameters.Parent_Pipeline",
-								"messageHeader": "@pipeline().parameters.Success_Fail_Header",
-								"messageProcessed": "@activity('GetProcessedFiles').output.firstRow",
-								"messageNotProcessed": "@activity('GetNotProcessedFiles').output.firstRow",
-								"messageErrorDuringProcess": "@activity('GetErrorDuringProcessFiles').output.firstRow"
-							}
-						}
-					},
-					{
-						"name": "GetProcessedFiles",
-						"type": "Lookup",
-						"dependsOn": [],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"source": {
-								"type": "AzureSqlSource",
-								"sqlReaderQuery": {
-									"value": "SELECT \n       stuff( (SELECT ', '+original_blob_name \n               FROM log.source_register_table\n\t\t\t   where etl_is_processed = 'Y'\n\t\t\t   and etl_utc_tag = '@{pipeline().parameters.Etl_Utc_Tag}'\n\t\t\t   order by original_blob_name\n               FOR XML PATH(''), TYPE).value('.', 'varchar(max)'),1,1,'') as Processed_Files\n;",
-									"type": "Expression"
-								},
-								"partitionOption": "None"
-							},
-							"dataset": {
-								"referenceName": "SQLsourceRegisterTable_ds",
-								"type": "DatasetReference",
-								"parameters": {}
-							}
-						}
-					},
-					{
-						"name": "GetNotProcessedFiles",
-						"type": "Lookup",
-						"dependsOn": [
-							{
-								"activity": "GetProcessedFiles",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"source": {
-								"type": "AzureSqlSource",
-								"sqlReaderQuery": {
-									"value": "SELECT \n       stuff( (SELECT ', '+original_blob_name \n               FROM log.source_register_table\n\t\t\t   where etl_is_processed = 'N'\n\t\t\t   and original_blob_name like '@{pipeline().parameters.File_Pattern}'\n\t\t\t   order by original_blob_name\n               FOR XML PATH(''), TYPE).value('.', 'varchar(max)'),1,1,'') as Not_Processed_Files\n;",
-									"type": "Expression"
-								},
-								"partitionOption": "None"
-							},
-							"dataset": {
-								"referenceName": "SQLsourceRegisterTable_ds",
-								"type": "DatasetReference",
-								"parameters": {}
-							}
-						}
-					},
-					{
-						"name": "GetErrorDuringProcessFiles",
-						"type": "Lookup",
-						"dependsOn": [
-							{
-								"activity": "GetNotProcessedFiles",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"source": {
-								"type": "AzureSqlSource",
-								"sqlReaderQuery": {
-									"value": "SELECT \n       stuff( (SELECT ', '+original_blob_name \n               FROM log.source_register_table\n\t\t\t   where etl_is_processed = 'N'\n\t\t\t   and etl_run_status like 'FAIL%'\n\t\t\t   and etl_utc_tag = '@{pipeline().parameters.Etl_Utc_Tag}'\n\t\t\t   order by original_blob_name\n               FOR XML PATH(''), TYPE).value('.', 'varchar(max)'),1,1,'') as ErrorDuringProcess_Files\n;",
-									"type": "Expression"
-								},
-								"partitionOption": "None"
-							},
-							"dataset": {
-								"referenceName": "SQLsourceRegisterTable_ds",
-								"type": "DatasetReference",
-								"parameters": {}
-							}
-						}
-					}
-				],
-				"parameters": {
-					"Parent_DataFactory": {
-						"type": "string"
-					},
-					"Parent_Pipeline": {
-						"type": "string"
-					},
-					"Success_Fail_Header": {
-						"type": "string"
-					},
-					"Etl_Utc_Tag": {
-						"type": "string"
-					},
-					"File_Pattern": {
-						"type": "string"
-					}
-				},
-				"annotations": []
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/ProcessOpsWorkbookSendMailNotOK_pl')]",
-			"type": "Microsoft.DataFactory/factories/pipelines",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"activities": [
-					{
-						"name": "GetEmailDetails",
-						"type": "Lookup",
-						"dependsOn": [],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"source": {
-								"type": "AzureSqlSource",
-								"sqlReaderQuery": {
-									"value": "SELECT CONCAT(CASE WHEN Error_Count = 0 THEN '!!! ERROR SOME EXCEL SHEETS MAY NOT BE LOADED: SUCCESSFUL LOAD : ' ELSE '!!! ERROR SOME EXCEL SHEETS MAY NOT BE LOADED: FAILED LOAD : ' END,Work_Sheet, ' - ', Work_Book) AS Message_Header,\nOps_Representative_Email, Ops_Representative_Last_Name, Ops_Representative_First_Name, Error_Table, Error_Count \nFROM (\nSELECT Work_Book, Work_Sheet, Ops_Representative_Email, Ops_Representative_Last_Name, Ops_Representative_First_Name,\nCASE WHEN Work_Sheet = 'Certifications' THEN 'audit.OPS_Certification_Error'\n     WHEN Work_Sheet = 'Timber Sales' THEN 'audit.OPS_Timber_Sales_Error'\nELSE NULL END AS Error_Table,\nCASE WHEN Work_Sheet = 'Certifications' THEN (SELECT COUNT(*) FROM audit.OPS_Certification_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}')\n     WHEN Work_Sheet = 'Timber Sales' THEN (SELECT COUNT(*) FROM audit.OPS_Timber_Sales_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}')\nELSE NULL END AS Error_Count\nFROM (\nSELECT Work_Book, Work_Sheet, wb.Asset_ID, wb.Fund_ID,\nra.Ops_Representative_First_Name, ra.Ops_Representative_Last_Name, ra.Ops_Representative_Email\nFROM [audit].[OPS_Workbook_Worksheet_Asset_List] wb\nJOIN [relational].[Asset] ra \nON wb.Asset_Id = ra.Asset_ID AND wb.Fund_Id = ra.Fund_ID AND wb.Work_Book = '@{pipeline().parameters.WorkbookName}') x\n)z;",
-									"type": "Expression"
-								},
-								"queryTimeout": "02:00:00",
-								"partitionOption": "None"
-							},
-							"dataset": {
-								"referenceName": "SQLauditopsworkbookworksheetlist_ds",
-								"type": "DatasetReference",
-								"parameters": {}
-							},
-							"firstRowOnly": false
-						}
-					},
-					{
-						"name": "ForEachWorkbookWorksheetEmail",
-						"type": "ForEach",
-						"dependsOn": [
-							{
-								"activity": "GetEmailDetails",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"items": {
-								"value": "@activity('GetEmailDetails').output.value",
-								"type": "Expression"
-							},
-							"isSequential": true,
-							"activities": [
-								{
-									"name": "SendEmail",
-									"type": "WebActivity",
-									"dependsOn": [],
-									"policy": {
-										"timeout": "7.00:00:00",
-										"retry": 0,
-										"retryIntervalInSeconds": 30,
-										"secureOutput": false,
-										"secureInput": false
-									},
-									"userProperties": [],
-									"typeProperties": {
-										"url": "https://prod-19.australiaeast.logic.azure.com:443/workflows/7139728b716a4500b96a2fa094f691fa/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=I30JtkHJ6p4mNeMF6USxTdCCjTwTvY1dmmNC2Mvte7o",
-										"method": "POST",
-										"headers": {
-											"Content-Type": "application/json"
-										},
-										"body": {
-											"value": "{\"dataFactoryName\":\"DWH-Prod-ADF\",\"pipelineName\":\"ProcessOPSWorkbookMaster_pl\",\"messageHeader\":\"@{item().Message_Header}\",\"tableName\":\"@{item().Error_Table}\",\"errorCount\":\"@{item().Error_Count}\",\"emailAddress\":\"@{item().Ops_Representative_Email}\",\"lastName\":\"@{item().Ops_Representative_Last_Name}\",\"firstName\":\"@{item().Ops_Representative_First_Name}\"}",
-											"type": "Expression"
-										}
-									}
-								}
-							]
-						}
-					}
-				],
-				"parameters": {
-					"DataFactoryName": {
-						"type": "string",
-						"defaultValue": "myFactory"
-					},
-					"PipelineName": {
-						"type": "string",
-						"defaultValue": "myPipeline"
-					},
-					"WorkbookName": {
-						"type": "string",
-						"defaultValue": "Wenita Forestry Products Q4 FY20 V2.xlsx"
-					}
-				},
-				"variables": {
-					"var": {
-						"type": "Array"
 					}
 				},
 				"annotations": []
