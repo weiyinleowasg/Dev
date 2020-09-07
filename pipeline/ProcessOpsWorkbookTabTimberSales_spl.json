@@ -4,41 +4,9 @@
 		"description": "Certificates tab",
 		"activities": [
 			{
-				"name": "CountErrorInErrorTable",
-				"type": "Wait",
+				"name": "GetTableErrorCount",
+				"type": "Lookup",
 				"dependsOn": [],
-				"userProperties": [],
-				"typeProperties": {
-					"waitTimeInSeconds": 1
-				}
-			},
-			{
-				"name": "DoThisAllornothingOrDoThisLoadRegardless",
-				"type": "Wait",
-				"dependsOn": [
-					{
-						"activity": "CountErrorInErrorTable",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"userProperties": [],
-				"typeProperties": {
-					"waitTimeInSeconds": 1
-				}
-			},
-			{
-				"name": "LoadValidatedDataset",
-				"type": "ExecuteDataFlow",
-				"dependsOn": [
-					{
-						"activity": "DoThisAllornothingOrDoThisLoadRegardless",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
 				"policy": {
 					"timeout": "7.00:00:00",
 					"retry": 0,
@@ -48,32 +16,127 @@
 				},
 				"userProperties": [],
 				"typeProperties": {
-					"dataflow": {
-						"referenceName": "LoadXlsxTimberSales_Step2_df",
-						"type": "DataFlowReference",
-						"parameters": {
-							"WorkbookName": {
-								"value": "'@{pipeline().parameters.WorkbookName}'",
-								"type": "Expression"
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "SELECT COUNT(*) AS ERROR_COUNT FROM (\n SELECT DISTINCT LIS.Work_Book, LIS.Work_Sheet FROM \n audit.OPS_Workbook_Worksheet_Asset_List LIS\n JOIN audit.OPS_Timber_Sales_Error ERR\n ON LIS.Work_Book = ERR.Source_File  \n AND LIS.Work_Sheet = ERR.Source_Sub_File\n WHERE LIS.Work_Book = '@{pipeline().parameters.WorkbookName}'\n AND LIS.Work_Sheet = '@{pipeline().parameters.TimberSales}'\n)x",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "SQLtableGeneric_ds",
+						"type": "DatasetReference"
+					}
+				}
+			},
+			{
+				"name": "CheckConditionIfErrorExist",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "GetTableErrorCount",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greaterOrEquals(activity('GetTableErrorCount').output.firstRow.ERROR_COUNT, 0)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "DeleteOperationTableByReportingDate",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
 							},
-							"TabName": {
-								"value": "'@{pipeline().parameters.TimberSales}'",
-								"type": "Expression"
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": {
+									"value": "[relational].[DeleteOperationTable]",
+									"type": "Expression"
+								},
+								"storedProcedureParameters": {
+									"ReportingPeriod": {
+										"value": {
+											"value": "@pipeline().parameters.CurrentQuarterDate",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"TableName": {
+										"value": {
+											"value": "OPS_Timber_Sales",
+											"type": "Expression"
+										},
+										"type": "String"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "SQLdbConnection",
+								"type": "LinkedServiceReference"
 							}
 						},
-						"datasetParameters": {
-							"source1": {
-								"ParquetFile": {
-									"value": "@concat(pipeline().parameters.WorkbookName,'-',pipeline().parameters.TimberSales)",
-									"type": "Expression"
+						{
+							"name": "LoadValidatedDataset",
+							"type": "ExecuteDataFlow",
+							"dependsOn": [
+								{
+									"activity": "DeleteOperationTableByReportingDate",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataflow": {
+									"referenceName": "LoadXlsxTimberSales_Step2_df",
+									"type": "DataFlowReference",
+									"parameters": {
+										"WorkbookName": {
+											"value": "'@{pipeline().parameters.WorkbookName}'",
+											"type": "Expression"
+										},
+										"TabName": {
+											"value": "'@{pipeline().parameters.TimberSales}'",
+											"type": "Expression"
+										}
+									},
+									"datasetParameters": {
+										"SourceReadyLoad": {
+											"ParquetFile": {
+												"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.TimberSales,'_',pipeline().parameters.CurrentQuarterDate,'_LoadReady')",
+												"type": "Expression"
+											}
+										}
+									}
+								},
+								"compute": {
+									"coreCount": 8,
+									"computeType": "General"
 								}
 							}
 						}
-					},
-					"compute": {
-						"coreCount": 8,
-						"computeType": "General"
-					}
+					]
 				}
 			}
 		],
@@ -84,7 +147,7 @@
 			},
 			"CurrentQuarterDate": {
 				"type": "string",
-				"defaultValue": "30/09/2020"
+				"defaultValue": "2020-06-30"
 			},
 			"TimberSales": {
 				"type": "string",

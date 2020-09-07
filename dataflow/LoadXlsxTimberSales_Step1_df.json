@@ -6,10 +6,31 @@
 			"sources": [
 				{
 					"dataset": {
-						"referenceName": "ExcelWorkbook_AllTabs_ds",
+						"referenceName": "ParquetPersistentOpsWithTabParam_ds",
 						"type": "DatasetReference"
 					},
 					"name": "SourceDataTab"
+				},
+				{
+					"dataset": {
+						"referenceName": "SQLtableGeneric_ds",
+						"type": "DatasetReference"
+					},
+					"name": "RelationalSpeciesType"
+				},
+				{
+					"dataset": {
+						"referenceName": "SQLtableGeneric_ds",
+						"type": "DatasetReference"
+					},
+					"name": "RelationalSalesUnit"
+				},
+				{
+					"dataset": {
+						"referenceName": "SQLtableGeneric_ds",
+						"type": "DatasetReference"
+					},
+					"name": "RelationalDeliveryPoint"
 				}
 			],
 			"sinks": [
@@ -18,32 +39,33 @@
 						"referenceName": "ParquetPersistentOps_ds",
 						"type": "DatasetReference"
 					},
-					"name": "TargetPersistentParquet"
+					"name": "TargetPersistentParquetInsert"
 				},
 				{
 					"dataset": {
-						"referenceName": "testCSVoutput",
+						"referenceName": "SQLauditopserror_TimberSales_ds",
 						"type": "DatasetReference"
 					},
-					"name": "sink1"
+					"name": "ErrorTable"
 				},
 				{
 					"dataset": {
 						"referenceName": "SQLauditopsworkbookworksheetlist_ds",
 						"type": "DatasetReference"
 					},
-					"name": "AuditWorkbookWorkSheetList"
+					"name": "OpsWorkbookWorksheetList"
 				}
 			],
 			"transformations": [
 				{
-					"name": "ValidateMandatoryColumns"
+					"name": "ValidateMandatoryColumns",
+					"description": "ReportingDateCertificationIDValidateMsg is a test and should be considered as part of the conditional split Insert/Update activity"
 				},
 				{
 					"name": "SegregateValidInvalidRows"
 				},
 				{
-					"name": "SelectedColumnsOutput"
+					"name": "SelectedColumnsOutputInsert"
 				},
 				{
 					"name": "ConcatenateInvalidColumnsMessage"
@@ -52,28 +74,43 @@
 					"name": "SelectedOutputColumnsError"
 				},
 				{
-					"name": "GeneratedRowNumber"
+					"name": "GenerateRowNumber"
 				},
 				{
 					"name": "ExcludeFirstRow"
 				},
 				{
-					"name": "AddWorkBookWorkSheet"
+					"name": "AggregateSetUniqueWorksheetAsset"
 				},
 				{
-					"name": "SelectColumnsForAggregate"
+					"name": "SelectWorksheetAsset"
 				},
 				{
-					"name": "AggreateToGetUnique"
+					"name": "SelectUniqueWorksheetAsset"
 				},
 				{
-					"name": "SelectOutputColumns"
+					"name": "DateTypeTransform"
 				},
 				{
-					"name": "SortColumns"
+					"name": "SelectSpeciesTypeLkp"
+				},
+				{
+					"name": "LookupSpeciesType"
+				},
+				{
+					"name": "SelectSalesUnitLkp"
+				},
+				{
+					"name": "LookupSalesUnit"
+				},
+				{
+					"name": "SelectPricePointLkp"
+				},
+				{
+					"name": "LookupPricePointFromDeliveryPoint"
 				}
 			],
-			"script": "parameters{\n\tMasterUtcTag as string,\n\tCurrentRunDateTime as string,\n\tWorkbookName as string,\n\tTabName as string,\n\tCurrentQuarterDate as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as date,\n\t\t{Validation Flag} as double,\n\t\tCustomer as string,\n\t\t{Domestic or Export} as string,\n\t\tSpecies as string,\n\t\t{Product Type} as string,\n\t\t{Delivery Point} as string,\n\t\t{Price Point} as double,\n\t\t{Sales Unit} as string,\n\t\t{Sales Quantity} as double,\n\t\t{Average Sales Price} as double,\n\t\t{Sales Revenue} as double,\n\t\t{Production Cost} as double,\n\t\tStumpage as double,\n\t\t{Unit Stumpage} as double,\n\t\tCurrency as string,\n\t\tMonth as date,\n\t\t{Budget Sales Quantity} as double,\n\t\t{Budget Sales Revenue} as double,\n\t\t{Budget Production Cost} as double,\n\t\t{Budget Unit Stumpage} as double\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tskipLines: 1,\n\tpartitionBy('hash', 1)) ~> SourceDataTab\nExcludeFirstRow derive(CustomerValidateMsg = iif((length(trim(Customer)) > 0 || not(isNull(Customer))), \"\", \"Customer\"),\n\t\tDomesticExportValidateMsg = iif((length(trim({Domestic or Export})) > 0 || not(isNull({Domestic or Export}))), \"\", \"Domestic or Export\")) ~> ValidateMandatoryColumns\nValidateMandatoryColumns split(length(concatWS('',CustomerValidateMsg,DomesticExportValidateMsg)) == 0,\n\tdisjoint: false) ~> SegregateValidInvalidRows@(ValidRows, InvalidRows)\nSegregateValidInvalidRows@ValidRows select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tCustomer,\n\t\t{Domestic or Export},\n\t\tSpecies,\n\t\t{Product Type},\n\t\t{Delivery Point},\n\t\t{Price Point},\n\t\t{Sales Unit},\n\t\t{Sales Quantity},\n\t\t{Average Sales Price},\n\t\t{Sales Revenue},\n\t\t{Production Cost},\n\t\tStumpage,\n\t\t{Unit Stumpage},\n\t\tCurrency,\n\t\tMonth,\n\t\t{Budget Sales Quantity},\n\t\t{Budget Sales Revenue},\n\t\t{Budget Production Cost},\n\t\t{Budget Unit Stumpage}\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectedColumnsOutput\nSegregateValidInvalidRows@InvalidRows derive(ConcatenatedMessage = concatWS(\"/\", CustomerValidateMsg, DomesticExportValidateMsg)) ~> ConcatenateInvalidColumnsMessage\nConcatenateInvalidColumnsMessage select(mapColumn(\n\t\tRowNumber,\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\t{Validation Flag},\n\t\tCustomer,\n\t\t{Domestic or Export},\n\t\tSpecies,\n\t\t{Product Type},\n\t\t{Delivery Point},\n\t\t{Price Point},\n\t\t{Sales Unit},\n\t\t{Sales Quantity},\n\t\t{Average Sales Price},\n\t\t{Sales Revenue},\n\t\t{Production Cost},\n\t\tStumpage,\n\t\t{Unit Stumpage},\n\t\tCurrency,\n\t\tMonth,\n\t\t{Budget Sales Quantity},\n\t\t{Budget Sales Revenue},\n\t\t{Budget Production Cost},\n\t\t{Budget Unit Stumpage},\n\t\tConcatenatedMessage\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectedOutputColumnsError\nSourceDataTab keyGenerate(output(RowNumber as long),\n\tstartAt: 1L,\n\tpartitionBy('hash', 1)) ~> GeneratedRowNumber\nGeneratedRowNumber filter(RowNumber > 1) ~> ExcludeFirstRow\nExcludeFirstRow derive(Work_Book = $WorkbookName,\n\t\tWork_Sheet = $TabName) ~> AddWorkBookWorkSheet\nAddWorkBookWorkSheet select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tWork_Book,\n\t\tWork_Sheet\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectColumnsForAggregate\nSortColumns aggregate(groupBy(Asset_ID,\n\t\tFund_ID,\n\t\tWork_Book,\n\t\tWork_Sheet),\n\tAggCount = count()) ~> AggreateToGetUnique\nAggreateToGetUnique select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tWork_Book,\n\t\tWork_Sheet\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectOutputColumns\nSelectColumnsForAggregate sort(asc(Asset_ID, true),\n\tasc(Fund_ID, true),\n\tasc(Work_Book, true),\n\tasc(Work_Sheet, true)) ~> SortColumns\nSelectedColumnsOutput sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tformat: 'parquet',\n\tpartitionFileNames:[(concatWS(\"-\", $WorkbookName, $TabName))],\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tCustomer,\n\t\tDomestic_or_Export = {Domestic or Export},\n\t\tSpecies,\n\t\tProduct_Type = {Product Type},\n\t\tDelivery_Point = {Delivery Point},\n\t\tPrice_Point = {Price Point},\n\t\tSales_Unit = {Sales Unit},\n\t\tSales_Quantity = {Sales Quantity},\n\t\tAverage_Sales_Price = {Average Sales Price},\n\t\tSales_Revenue = {Sales Revenue},\n\t\tProduction_Cost = {Production Cost},\n\t\tStumpage,\n\t\tUnit_Stumpage = {Unit Stumpage},\n\t\tCurrency,\n\t\tMonth,\n\t\tBudget_Sales_Quantity = {Budget Sales Quantity},\n\t\tBudget_Sales_Revenue = {Budget Sales Revenue},\n\t\tBudget_Production_Cost = {Budget Production Cost},\n\t\tBudget_Unit_Stumpage = {Budget Unit Stumpage}\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetPersistentParquet\nSelectedOutputColumnsError sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tpartitionFileNames:['testTimberSalesError,csv'],\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\t{Validation Flag},\n\t\tCustomer,\n\t\t{Domestic or Export},\n\t\tSpecies,\n\t\t{Product Type},\n\t\t{Delivery Point},\n\t\t{Price Point},\n\t\t{Sales Unit},\n\t\t{Sales Quantity},\n\t\t{Average Sales Price},\n\t\t{Sales Revenue},\n\t\t{Production Cost},\n\t\tStumpage,\n\t\t{Unit Stumpage},\n\t\tCurrency,\n\t\tMonth,\n\t\t{Budget Sales Quantity},\n\t\t{Budget Sales Revenue},\n\t\t{Budget Production Cost},\n\t\t{Budget Unit Stumpage},\n\t\tConcatenatedMessage\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> sink1\nSelectOutputColumns sink(input(\n\t\tWork_Book as string,\n\t\tWork_Sheet as string,\n\t\tAsset_Id as string,\n\t\tFund_Id as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tWork_Book,\n\t\tWork_Sheet,\n\t\tAsset_Id = Asset_ID,\n\t\tFund_Id = Fund_ID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> AuditWorkbookWorkSheetList"
+			"script": "parameters{\n\tMasterUtcTag as string,\n\tCurrentRunDateTime as string,\n\tWorkbookName as string,\n\tTabName as string,\n\tCurrentQuarterDate as string,\n\tMasterPipeline as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as string,\n\t\tValidation_Flag as string,\n\t\tCustomer as string,\n\t\tDomestic_or_Export as string,\n\t\tSpecies as string,\n\t\tProduct_Type as string,\n\t\tDelivery_Point as string,\n\t\tPrice_Point as string,\n\t\tSales_Unit as string,\n\t\tSales_Quantity as string,\n\t\tAverage_Sales_Price as string,\n\t\tSales_Revenue as string,\n\t\tProduction_Cost as string,\n\t\tStumpage as string,\n\t\tUnit_Stumpage as string,\n\t\tCurrency as string,\n\t\tMonth as string,\n\t\tBudget_Sales_Quantity as string,\n\t\tBudget_Sales_Revenue as string,\n\t\tBudget_Production_Cost as string,\n\t\tBudget_Unit_Stumpage as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tformat: 'parquet',\n\tpartitionBy('hash', 1)) ~> SourceDataTab\nsource(output(\n\t\tSpecies_Code as string,\n\t\tSpecies as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [Species_Code]\\n      ,[Species]\\n  FROM [relational].[OPS_Species_Type]\\n  WHERE [Active_YN] = \\'Y\\'',\n\tformat: 'query',\n\tpartitionBy('hash', 1)) ~> RelationalSpeciesType\nsource(output(\n\t\tSales_Unit_Code as string,\n\t\tSales_Unit as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT Sales_Unit_Code\\n      ,Sales_Unit\\n  FROM relational.OPS_Sales_Unit\\n  WHERE Active_YN = \\'Y\\'',\n\tformat: 'query') ~> RelationalSalesUnit\nsource(output(\n\t\tPrice_Point_Code as string,\n\t\tPrice_Point as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT Price_Point_Code\\n      ,Price_Point\\n  FROM relational.OPS_Price_Point\\n  WHERE Active_YN = \\'Y\\'',\n\tformat: 'query') ~> RelationalDeliveryPoint\nLookupPricePointFromDeliveryPoint derive(SpeciesTypeValidateMsg = iif(isNull(Species_Code_Lkp), \"Species/\", \"\"),\n\t\tSalesUnitValidateMsg = iif(isNull(Sales_Unit_Code_Lkp), \"Sales Unit/\", \"\"),\n\t\tAssetReportingDateValidateMsg = iif(isNull(Asset_ID) || isNull(Fund_ID) || isNull(Reporting_Period), \"Invalid Asset or Reporting Period/\", \"\"),\n\t\tDeliveryPointValidateMsg = iif(isNull(Price_Point_Code_Lkp), \"Delivery Point/\", \"\")) ~> ValidateMandatoryColumns\nValidateMandatoryColumns split(length(concatWS('',SpeciesTypeValidateMsg,\r\nSalesUnitValidateMsg,\r\nDeliveryPointValidateMsg,\r\nAssetReportingDateValidateMsg)) == 0,\n\tdisjoint: false) ~> SegregateValidInvalidRows@(ValidRows, InvalidRows)\nSegregateValidInvalidRows@ValidRows select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tCustomer,\n\t\tDomestic_Export = Domestic_or_Export,\n\t\tProduct = Product_Type,\n\t\tDelivery_Point_Code = Delivery_Point,\n\t\tPrice_Point,\n\t\tSales_Quantity,\n\t\tAverage_Sales_Price,\n\t\tSales_Revenue,\n\t\tProduction_Cost,\n\t\tStumpage,\n\t\tUnit_Stumpage,\n\t\tCurrency_Code = Currency,\n\t\tSales_Month = Month,\n\t\tBudget_Sales_Quantity,\n\t\tBudget_Sales_Revenue,\n\t\tBudget_Production_Cost,\n\t\tBudget_Stumpage = Budget_Unit_Stumpage,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tProcess_Name,\n\t\tSales_Unit_Code = Sales_Unit_Code_Lkp,\n\t\tSpecies_Code = Species_Code_Lkp\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectedColumnsOutputInsert\nSegregateValidInvalidRows@InvalidRows derive(ConcatenatedMessage = concat(SpeciesTypeValidateMsg,\r\nSalesUnitValidateMsg,\r\nAssetReportingDateValidateMsg,\r\nDeliveryPointValidateMsg)) ~> ConcatenateInvalidColumnsMessage\nConcatenateInvalidColumnsMessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tValidation_Flag,\n\t\tCustomer,\n\t\tDomestic_Export = Domestic_or_Export,\n\t\tSpecies,\n\t\tProduct = Product_Type,\n\t\tDelivery_Point_Code = Delivery_Point,\n\t\tPrice_Point,\n\t\tSales_Unit,\n\t\tSales_Quantity,\n\t\tAverage_Sales_Price,\n\t\tSales_Revenue,\n\t\tProduction_Cost,\n\t\tStumpage,\n\t\tUnit_Stumpage,\n\t\tCurrency_Code = Currency,\n\t\tSales_Month = Month,\n\t\tBudget_Sales_Quantity,\n\t\tBudget_Sales_Revenue,\n\t\tBudget_Production_Cost,\n\t\tBudget_Stumpage = Budget_Unit_Stumpage,\n\t\tInsert_Datetime,\n\t\tSource_File = Work_Book,\n\t\tSource_Sub_File = Work_Sheet,\n\t\tProcess_Name,\n\t\tError_Desc = ConcatenatedMessage\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectedOutputColumnsError\nDateTypeTransform keyGenerate(output(RowNumber as long),\n\tstartAt: 1L,\n\tpartitionBy('hash', 1)) ~> GenerateRowNumber\nGenerateRowNumber filter(RowNumber > 1) ~> ExcludeFirstRow\nSelectWorksheetAsset aggregate(groupBy(Asset_ID,\n\t\tFund_ID,\n\t\tWork_Book,\n\t\tWork_Sheet),\n\tAggCount = count()) ~> AggregateSetUniqueWorksheetAsset\nExcludeFirstRow select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tWork_Book,\n\t\tWork_Sheet\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectWorksheetAsset\nAggregateSetUniqueWorksheetAsset select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tWork_Book,\n\t\tWork_Sheet\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectUniqueWorksheetAsset\nSourceDataTab derive(Insert_Datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tUpdate_Datetime = toTimestamp('9999-12-31 00:00:00'),\n\t\tWork_Book = $WorkbookName,\n\t\tWork_Sheet = $TabName,\n\t\tProcess_Name = concatWS('-',$MasterPipeline,$WorkbookName,$TabName),\n\t\tCurrentReportingPeriod = toDate($CurrentQuarterDate),\n\t\tReporting_Period = toDate(Reporting_Period),\n\t\tSales_Quantity = toDecimal(Sales_Quantity, 19, 4),\n\t\tSales_Revenue = toDecimal(Sales_Revenue, 19, 4),\n\t\tProduction_Cost = toDecimal(Production_Cost, 19, 4),\n\t\tStumpage = toDecimal(Stumpage, 19, 4),\n\t\tUnit_Stumpage = toDecimal(Unit_Stumpage, 19, 4),\n\t\tAverage_Sales_Price = toDecimal(Average_Sales_Price, 19, 4),\n\t\tBudget_Sales_Quantity = toDecimal(Budget_Sales_Quantity, 19, 4),\n\t\tBudget_Sales_Revenue = toDecimal(Budget_Sales_Revenue, 19, 4),\n\t\tBudget_Production_Cost = toDecimal(Budget_Production_Cost, 19, 4),\n\t\tBudget_Unit_Stumpage = toDecimal(Budget_Unit_Stumpage, 19, 4),\n\t\tPrice_Point = toDecimal(Price_Point, 19, 4),\n\t\tMonth = toDate(Month)) ~> DateTypeTransform\nRelationalSpeciesType select(mapColumn(\n\t\tSpecies_Code_Lkp = Species_Code,\n\t\tSpecies_Lkp = Species\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectSpeciesTypeLkp\nLookupSalesUnit, SelectSpeciesTypeLkp lookup(Species == Species_Lkp,\n\tmultiple: false,\n\tpickup: 'any',\n\tbroadcast: 'auto')~> LookupSpeciesType\nRelationalSalesUnit select(mapColumn(\n\t\tSales_Unit_Code_Lkp = Sales_Unit_Code,\n\t\tSales_Unit_Lkp = Sales_Unit\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectSalesUnitLkp\nExcludeFirstRow, SelectSalesUnitLkp lookup(Sales_Unit == Sales_Unit_Lkp,\n\tmultiple: false,\n\tpickup: 'any',\n\tbroadcast: 'auto')~> LookupSalesUnit\nRelationalDeliveryPoint select(mapColumn(\n\t\tPrice_Point_Code_Lkp = Price_Point_Code,\n\t\tPrice_Point_Lkp = Price_Point\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectPricePointLkp\nLookupSpeciesType, SelectPricePointLkp lookup(Delivery_Point == Price_Point_Code_Lkp,\n\tmultiple: false,\n\tpickup: 'any',\n\tbroadcast: 'auto')~> LookupPricePointFromDeliveryPoint\nSelectedColumnsOutputInsert sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tformat: 'parquet',\n\tpartitionFileNames:[(concatWS(\"_\", $WorkbookName, $TabName,$CurrentQuarterDate,'LoadReady'))],\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tCustomer,\n\t\tDomestic_Export,\n\t\tProduct,\n\t\tDelivery_Point_Code,\n\t\tPrice_Point,\n\t\tSales_Quantity,\n\t\tAverage_Sales_Price,\n\t\tSales_Revenue,\n\t\tProduction_Cost,\n\t\tStumpage,\n\t\tUnit_Stumpage,\n\t\tCurrency_Code,\n\t\tSales_Month,\n\t\tBudget_Sales_Quantity,\n\t\tBudget_Sales_Revenue,\n\t\tBudget_Production_Cost,\n\t\tBudget_Stumpage,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tProcess_Name,\n\t\tSales_Unit_Code,\n\t\tSpecies_Code\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetPersistentParquetInsert\nSelectedOutputColumnsError sink(input(\n\t\tError_ID as long,\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tTimber_Sale_ID as integer,\n\t\tReporting_Period as date,\n\t\tSpecies as string,\n\t\tCustomer as string,\n\t\tDomestic_Export as string,\n\t\tProduct_Type_Code as string,\n\t\tPrice_Point_Code as string,\n\t\tSales_Unit as string,\n\t\tSales_Quantity as decimal(19,4),\n\t\tSales_Revenue as decimal(19,4),\n\t\tProduction_Cost as decimal(19,4),\n\t\tStumpage as decimal(19,4),\n\t\tUnit_Stumpage as decimal(19,4),\n\t\tCurrency_Code as string,\n\t\tAverage_Sales_Price as decimal(19,4),\n\t\tBudget_Sales_Quantity as decimal(19,4),\n\t\tBudget_Sales_Revenue as decimal(19,4),\n\t\tBudget_Production_Cost as decimal(19,4),\n\t\tBudget_Stumpage as decimal(19,4),\n\t\tInsert_Datetime as timestamp,\n\t\tProcess_Name as string,\n\t\tProduct as string,\n\t\tDelivery_Point_Code as string,\n\t\tPrice_Point as decimal(19,4),\n\t\tSales_Month as date,\n\t\tSource_File as string,\n\t\tSource_Sub_File as string,\n\t\tError_Desc as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tSpecies,\n\t\tCustomer,\n\t\tDomestic_Export,\n\t\tSales_Unit,\n\t\tSales_Quantity,\n\t\tSales_Revenue,\n\t\tProduction_Cost,\n\t\tStumpage,\n\t\tUnit_Stumpage,\n\t\tCurrency_Code,\n\t\tAverage_Sales_Price,\n\t\tBudget_Sales_Quantity,\n\t\tBudget_Sales_Revenue,\n\t\tBudget_Production_Cost,\n\t\tBudget_Stumpage,\n\t\tInsert_Datetime,\n\t\tProcess_Name,\n\t\tProduct,\n\t\tDelivery_Point_Code,\n\t\tPrice_Point,\n\t\tSales_Month,\n\t\tSource_File,\n\t\tSource_Sub_File,\n\t\tError_Desc\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> ErrorTable\nSelectUniqueWorksheetAsset sink(input(\n\t\tWork_Book as string,\n\t\tWork_Sheet as string,\n\t\tAsset_Id as string,\n\t\tFund_Id as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tWork_Book,\n\t\tWork_Sheet,\n\t\tAsset_Id = Asset_ID,\n\t\tFund_Id = Fund_ID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> OpsWorkbookWorksheetList"
 		}
 	}
 }
