@@ -50,50 +50,11 @@
 					},
 					"ifTrueActivities": [
 						{
-							"name": "DeleteOperationTableByReportingDate",
-							"type": "SqlServerStoredProcedure",
-							"dependsOn": [],
-							"policy": {
-								"timeout": "7.00:00:00",
-								"retry": 0,
-								"retryIntervalInSeconds": 30,
-								"secureOutput": false,
-								"secureInput": false
-							},
-							"userProperties": [],
-							"typeProperties": {
-								"storedProcedureName": {
-									"value": "[relational].[DeleteOperationTable]",
-									"type": "Expression"
-								},
-								"storedProcedureParameters": {
-									"ReportingPeriod": {
-										"value": {
-											"value": "@pipeline().parameters.CurrentQuarterDate",
-											"type": "Expression"
-										},
-										"type": "String"
-									},
-									"TableName": {
-										"value": {
-											"value": "OPS_Timber_Sales",
-											"type": "Expression"
-										},
-										"type": "String"
-									}
-								}
-							},
-							"linkedServiceName": {
-								"referenceName": "SQLdbConnection",
-								"type": "LinkedServiceReference"
-							}
-						},
-						{
 							"name": "LoadValidatedDataset",
 							"type": "ExecuteDataFlow",
 							"dependsOn": [
 								{
-									"activity": "DeleteOperationTableByReportingDate",
+									"activity": "DeleteOperationTableByAssetFundReportingDate",
 									"dependencyConditions": [
 										"Succeeded"
 									]
@@ -110,6 +71,47 @@
 							"typeProperties": {
 								"dataflow": {
 									"referenceName": "LoadXlsxTimberSales_Step3_df",
+									"type": "DataFlowReference",
+									"parameters": {
+										"WorkbookName": {
+											"value": "'@{pipeline().parameters.WorkbookName}'",
+											"type": "Expression"
+										},
+										"TabName": {
+											"value": "'@{pipeline().parameters.TimberSales}'",
+											"type": "Expression"
+										}
+									},
+									"datasetParameters": {
+										"SourceReadyLoad": {
+											"ParquetFile": {
+												"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.TimberSales,'_',pipeline().parameters.CurrentQuarterDate,'_LoadReady')",
+												"type": "Expression"
+											}
+										}
+									}
+								},
+								"compute": {
+									"coreCount": 8,
+									"computeType": "General"
+								}
+							}
+						},
+						{
+							"name": "DeleteOperationTableByAssetFundReportingDate",
+							"type": "ExecuteDataFlow",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataflow": {
+									"referenceName": "LoadXlsxTimberSales_Step2_df",
 									"type": "DataFlowReference",
 									"parameters": {
 										"WorkbookName": {
