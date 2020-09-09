@@ -28,7 +28,7 @@
 				}
 			},
 			{
-				"name": "PipelineProcessDimFile",
+				"name": "PipelineProcessDimFilePlusPipelineToInsertUpdate",
 				"type": "Wait",
 				"dependsOn": [
 					{
@@ -124,27 +124,11 @@
 				}
 			},
 			{
-				"name": "PipelineInsertUpdateDimension",
-				"type": "Wait",
-				"dependsOn": [
-					{
-						"activity": "PipelineProcessDimFile",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"userProperties": [],
-				"typeProperties": {
-					"waitTimeInSeconds": 1
-				}
-			},
-			{
 				"name": "CopyFIleToArchive",
 				"type": "Wait",
 				"dependsOn": [
 					{
-						"activity": "PipelineInsertUpdateDimension",
+						"activity": "PipelineProcessDimFilePlusPipelineToInsertUpdate",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -161,6 +145,70 @@
 				"dependsOn": [
 					{
 						"activity": "CopyFileToDL",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"waitTimeInSeconds": 1
+				}
+			},
+			{
+				"name": "DeleteFileFromPersistentArea_copy1",
+				"type": "Wait",
+				"dependsOn": [
+					{
+						"activity": "PipelineProcessDimFilePlusPipelineToInsertUpdate",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"waitTimeInSeconds": 1
+				}
+			},
+			{
+				"name": "DeleteWorkbookFromLanding_copy1",
+				"type": "Wait",
+				"dependsOn": [
+					{
+						"activity": "DeleteFileFromPersistentArea_copy1",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"waitTimeInSeconds": 1
+				}
+			},
+			{
+				"name": "UpdateSourceRegisterTable_copy1",
+				"type": "Wait",
+				"dependsOn": [
+					{
+						"activity": "DeleteWorkbookFromLanding_copy1",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"waitTimeInSeconds": 1
+				}
+			},
+			{
+				"name": "SendCompletionEmail_copy1",
+				"type": "Wait",
+				"dependsOn": [
+					{
+						"activity": "UpdateSourceRegisterTable_copy1",
 						"dependencyConditions": [
 							"Succeeded"
 						]
