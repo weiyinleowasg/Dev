@@ -8971,7 +8971,7 @@
 						"type": "SqlServerStoredProcedure",
 						"dependsOn": [
 							{
-								"activity": "DeleteAllRelatedAdf2PersistentArea",
+								"activity": "UpdateSourceRegisterTable",
 								"dependencyConditions": [
 									"Completed"
 								]
@@ -9156,7 +9156,7 @@
 						"type": "SqlServerStoredProcedure",
 						"dependsOn": [
 							{
-								"activity": "DeleteAllRelatedAdf2PersistentArea_Failed",
+								"activity": "UpdateSourceRegisterTableFailed",
 								"dependencyConditions": [
 									"Completed"
 								]
@@ -9346,6 +9346,150 @@
 								}
 							}
 						}
+					},
+					{
+						"name": "UpdateSourceRegisterTable",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "DeleteAllRelatedAdf2PersistentArea",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "ProcessOpsWorkbookUpdateSourceRegister_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"WorkbookName": {
+									"value": "@pipeline().parameters.WorkbookName",
+									"type": "Expression"
+								},
+								"MasterPipelineName": {
+									"value": "@pipeline().Pipeline",
+									"type": "Expression"
+								},
+								"CurrentQuarterDate": {
+									"value": "@pipeline().parameters.CurrentQuarterDate",
+									"type": "Expression"
+								},
+								"MasterUtcTag": {
+									"value": "@variables('MasterUtcTag')",
+									"type": "Expression"
+								}
+							}
+						}
+					},
+					{
+						"name": "UpdateSourceRegisterTableFailed",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "DeleteAllRelatedAdf2PersistentArea_Failed",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[log].[SourceRegisterTableInsert]",
+							"storedProcedureParameters": {
+								"ArchiveContainer": {
+									"value": {
+										"value": "sourcearchive",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"Comment": {
+									"value": {
+										"value": "Pipeline failed",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"DatalakeContainer": {
+									"value": {
+										"value": "nonfinancial",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"EtlUtcTag": {
+									"value": {
+										"value": "@variables('MasterUtcTag')",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"FileName": {
+									"value": {
+										"value": "@pipeline().parameters.WorkbookName",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"InputDate": {
+									"value": {
+										"value": "@pipeline().parameters.CurrentQuarterDate",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"InputMethod": {
+									"value": {
+										"value": "manual",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"ProcessName": {
+									"value": {
+										"value": "@pipeline().Pipeline",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"RunStatus": {
+									"value": {
+										"value": "ABORT",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"SourceContainer": {
+									"value": {
+										"value": "sourcelandingraw",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"TargetContainer": {
+									"value": {
+										"value": "adf2persistentarea",
+										"type": "Expression"
+									},
+									"type": "String"
+								}
+							}
+						},
+						"linkedServiceName": {
+							"referenceName": "SQLdbConnection",
+							"type": "LinkedServiceReference"
+						}
 					}
 				],
 				"parameters": {
@@ -9459,7 +9603,8 @@
 				"[concat(variables('factoryId'), '/linkedServices/SQLdbConnection')]",
 				"[concat(variables('factoryId'), '/pipelines/ProcessOpsWorkbookSendMailOK_pl')]",
 				"[concat(variables('factoryId'), '/pipelines/ProcessOpsWorkbookSendMailNotOK_pl')]",
-				"[concat(variables('factoryId'), '/pipelines/ProcessOpsWorkbookSendMailNotOkFinal_pl')]"
+				"[concat(variables('factoryId'), '/pipelines/ProcessOpsWorkbookSendMailNotOkFinal_pl')]",
+				"[concat(variables('factoryId'), '/pipelines/ProcessOpsWorkbookUpdateSourceRegister_pl')]"
 			]
 		},
 		{
@@ -10917,50 +11062,11 @@
 							},
 							"ifTrueActivities": [
 								{
-									"name": "DeleteOperationTableByReportingDate",
-									"type": "SqlServerStoredProcedure",
-									"dependsOn": [],
-									"policy": {
-										"timeout": "7.00:00:00",
-										"retry": 0,
-										"retryIntervalInSeconds": 30,
-										"secureOutput": false,
-										"secureInput": false
-									},
-									"userProperties": [],
-									"typeProperties": {
-										"storedProcedureName": {
-											"value": "[[relational].[DeleteOperationTable]",
-											"type": "Expression"
-										},
-										"storedProcedureParameters": {
-											"ReportingPeriod": {
-												"value": {
-													"value": "@pipeline().parameters.CurrentQuarterDate",
-													"type": "Expression"
-												},
-												"type": "String"
-											},
-											"TableName": {
-												"value": {
-													"value": "OPS_Certification",
-													"type": "Expression"
-												},
-												"type": "String"
-											}
-										}
-									},
-									"linkedServiceName": {
-										"referenceName": "SQLdbConnection",
-										"type": "LinkedServiceReference"
-									}
-								},
-								{
 									"name": "LoadValidatedDataset",
 									"type": "ExecuteDataFlow",
 									"dependsOn": [
 										{
-											"activity": "DeleteOperationTableByReportingDate",
+											"activity": "DeleteExistingRowsForCurrentPeriod",
 											"dependencyConditions": [
 												"Succeeded"
 											]
@@ -10976,7 +11082,7 @@
 									"userProperties": [],
 									"typeProperties": {
 										"dataflow": {
-											"referenceName": "LoadXlsxCertificates_Step2_df",
+											"referenceName": "LoadXlsxCertificates_Step3_df",
 											"type": "DataFlowReference",
 											"parameters": {
 												"WorkbookName": {
@@ -11026,7 +11132,7 @@
 									"userProperties": [],
 									"typeProperties": {
 										"dataflow": {
-											"referenceName": "LoadXlsxCertificates_Step3_df",
+											"referenceName": "LoadXlsxCertificates_Step4_df",
 											"type": "DataFlowReference",
 											"parameters": {
 												"WorkbookName": {
@@ -11046,6 +11152,49 @@
 													}
 												},
 												"TargetRelational": {}
+											}
+										},
+										"staging": {},
+										"compute": {
+											"coreCount": 8,
+											"computeType": "General"
+										}
+									}
+								},
+								{
+									"name": "DeleteExistingRowsForCurrentPeriod",
+									"type": "ExecuteDataFlow",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"dataflow": {
+											"referenceName": "LoadXlsxCertificates_Step2_df",
+											"type": "DataFlowReference",
+											"parameters": {
+												"WorkbookName": {
+													"value": "'@{pipeline().parameters.WorkbookName}'",
+													"type": "Expression"
+												},
+												"TabName": {
+													"value": "'@{pipeline().parameters.Certifications}'",
+													"type": "Expression"
+												}
+											},
+											"datasetParameters": {
+												"SourceReadyLoad": {
+													"ParquetFile": {
+														"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.Certifications,'_',pipeline().parameters.CurrentQuarterDate,'_LoadReady')",
+														"type": "Expression"
+													}
+												},
+												"TargetRelationalDelete": {}
 											}
 										},
 										"staging": {},
@@ -11085,9 +11234,9 @@
 			},
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/datasets/SQLtableGeneric_ds')]",
-				"[concat(variables('factoryId'), '/linkedServices/SQLdbConnection')]",
-				"[concat(variables('factoryId'), '/dataflows/LoadXlsxCertificates_Step2_df')]",
-				"[concat(variables('factoryId'), '/dataflows/LoadXlsxCertificates_Step3_df')]"
+				"[concat(variables('factoryId'), '/dataflows/LoadXlsxCertificates_Step3_df')]",
+				"[concat(variables('factoryId'), '/dataflows/LoadXlsxCertificates_Step4_df')]",
+				"[concat(variables('factoryId'), '/dataflows/LoadXlsxCertificates_Step2_df')]"
 			]
 		},
 		{
@@ -11254,9 +11403,16 @@
 							},
 							"ifTrueActivities": [
 								{
-									"name": "DeleteOperationTableByReportingDate",
-									"type": "SqlServerStoredProcedure",
-									"dependsOn": [],
+									"name": "LoadValidatedDataset",
+									"type": "ExecuteDataFlow",
+									"dependsOn": [
+										{
+											"activity": "DeleteOperationTableByAssetFundReportingDate",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
 									"policy": {
 										"timeout": "7.00:00:00",
 										"retry": 0,
@@ -11266,43 +11422,40 @@
 									},
 									"userProperties": [],
 									"typeProperties": {
-										"storedProcedureName": {
-											"value": "[[relational].[DeleteOperationTable]",
-											"type": "Expression"
-										},
-										"storedProcedureParameters": {
-											"ReportingPeriod": {
-												"value": {
-													"value": "@pipeline().parameters.CurrentQuarterDate",
+										"dataflow": {
+											"referenceName": "LoadXlsxTimberSales_Step3_df",
+											"type": "DataFlowReference",
+											"parameters": {
+												"WorkbookName": {
+													"value": "'@{pipeline().parameters.WorkbookName}'",
 													"type": "Expression"
 												},
-												"type": "String"
+												"TabName": {
+													"value": "'@{pipeline().parameters.TimberSales}'",
+													"type": "Expression"
+												}
 											},
-											"TableName": {
-												"value": {
-													"value": "OPS_Timber_Sales",
-													"type": "Expression"
+											"datasetParameters": {
+												"SourceReadyLoad": {
+													"ParquetFile": {
+														"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.TimberSales,'_',pipeline().parameters.CurrentQuarterDate,'_LoadReady')",
+														"type": "Expression"
+													}
 												},
-												"type": "String"
+												"TargetRelational": {}
 											}
+										},
+										"staging": {},
+										"compute": {
+											"coreCount": 8,
+											"computeType": "General"
 										}
-									},
-									"linkedServiceName": {
-										"referenceName": "SQLdbConnection",
-										"type": "LinkedServiceReference"
 									}
 								},
 								{
-									"name": "LoadValidatedDataset",
+									"name": "DeleteOperationTableByAssetFundReportingDate",
 									"type": "ExecuteDataFlow",
-									"dependsOn": [
-										{
-											"activity": "DeleteOperationTableByReportingDate",
-											"dependencyConditions": [
-												"Succeeded"
-											]
-										}
-									],
+									"dependsOn": [],
 									"policy": {
 										"timeout": "7.00:00:00",
 										"retry": 0,
@@ -11372,8 +11525,172 @@
 			},
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/datasets/SQLtableGeneric_ds')]",
-				"[concat(variables('factoryId'), '/linkedServices/SQLdbConnection')]",
+				"[concat(variables('factoryId'), '/dataflows/LoadXlsxTimberSales_Step3_df')]",
 				"[concat(variables('factoryId'), '/dataflows/LoadXlsxTimberSales_Step2_df')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ProcessOpsWorkbookUpdateSourceRegister_pl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "CollateOpsError",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": {
+									"value": "SELECT ERROR_COUNT,\n  CASE WHEN ERROR_COUNT = 0 THEN 'SUCCESS'\n  ELSE 'FAIL'\n  END RUN_STATUS,\n  CASE WHEN ERROR_COUNT = 0 THEN NULL\n  ELSE 'Not all Excel sheets have been loaded with no error'\n  END COMMENT_MSG\n  FROM (\n       SELECT SUM(ERROR_COUNT) ERROR_COUNT FROM (\n             SELECT COUNT(*) ERROR_COUNT FROM audit.OPS_Certification_Error WHERE Source_FIle = '@{pipeline().parameters.WorkbookName}'\n             UNION ALL\n             SELECT COUNT(*) ERROR_COUNT FROM audit.OPS_Timber_Sales_Error WHERE Source_FIle = '@{pipeline().parameters.WorkbookName}'\n\t\t\t UNION ALL\n             SELECT COUNT(*) ERROR_COUNT FROM audit.OPS_Contract_Error WHERE Source_FIle = '@{pipeline().parameters.WorkbookName}'\n             UNION ALL\n             SELECT COUNT(*) ERROR_COUNT FROM audit.OPS_Harvest_Reconciliation_Error WHERE Source_FIle = '@{pipeline().parameters.WorkbookName}'\n\t\t\t UNION ALL\n             SELECT COUNT(*) ERROR_COUNT FROM audit.OPS_Incident_Error WHERE Source_FIle = '@{pipeline().parameters.WorkbookName}'\n             UNION ALL\n             SELECT COUNT(*) ERROR_COUNT FROM audit.OPS_Operation_Error WHERE Source_FIle = '@{pipeline().parameters.WorkbookName}'\n\t\t\t UNION ALL\n             SELECT COUNT(*) ERROR_COUNT FROM audit.OPS_Related_Party_Transaction_Error WHERE Source_FIle = '@{pipeline().parameters.WorkbookName}'\n             UNION ALL\n             SELECT COUNT(*) ERROR_COUNT FROM audit.OPS_Risk_Opportunity_Register_Error WHERE Source_FIle = '@{pipeline().parameters.WorkbookName}'\n\t\t\t UNION ALL\n             SELECT COUNT(*) ERROR_COUNT FROM audit.OPS_Sales_Other_Error WHERE Source_FIle = '@{pipeline().parameters.WorkbookName}'\n             UNION ALL\n             SELECT COUNT(*) ERROR_COUNT FROM audit.OPS_Strategic_Project_Error WHERE Source_FIle = '@{pipeline().parameters.WorkbookName}'\n)x\n)z",
+									"type": "Expression"
+								},
+								"queryTimeout": "02:00:00",
+								"partitionOption": "None"
+							},
+							"dataset": {
+								"referenceName": "SQLtableGeneric_ds",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						}
+					},
+					{
+						"name": "InsertSourceRegisterTable",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "CollateOpsError",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[log].[SourceRegisterTableInsert]",
+							"storedProcedureParameters": {
+								"ArchiveContainer": {
+									"value": {
+										"value": "sourcearchive",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"Comment": {
+									"value": {
+										"value": "@activity('CollateOpsError').output.firstRow.COMMENT_MSG",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"DatalakeContainer": {
+									"value": {
+										"value": "nonfinancial",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"EtlUtcTag": {
+									"value": {
+										"value": "@pipeline().parameters.MasterUtcTag",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"FileName": {
+									"value": {
+										"value": "@pipeline().parameters.WorkbookName",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"InputDate": {
+									"value": {
+										"value": "@pipeline().parameters.CurrentQuarterDate",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"InputMethod": {
+									"value": {
+										"value": "manual",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"ProcessName": {
+									"value": {
+										"value": "@pipeline().parameters.MasterPipelineName",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"RunStatus": {
+									"value": {
+										"value": "@activity('CollateOpsError').output.firstRow.RUN_STATUS",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"SourceContainer": {
+									"value": {
+										"value": "sourcelandingraw",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"TargetContainer": {
+									"value": {
+										"value": "adf2persistentarea",
+										"type": "Expression"
+									},
+									"type": "String"
+								}
+							}
+						},
+						"linkedServiceName": {
+							"referenceName": "SQLdbConnection",
+							"type": "LinkedServiceReference"
+						}
+					}
+				],
+				"parameters": {
+					"WorkbookName": {
+						"type": "string",
+						"defaultValue": "Wenita Forestry Products Q4 FY20 V2.xlsx"
+					},
+					"MasterPipelineName": {
+						"type": "string"
+					},
+					"CurrentQuarterDate": {
+						"type": "string"
+					},
+					"MasterUtcTag": {
+						"type": "string"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/SQLtableGeneric_ds')]",
+				"[concat(variables('factoryId'), '/linkedServices/SQLdbConnection')]"
 			]
 		},
 		{
@@ -44350,146 +44667,57 @@
 								"mappings": [
 									{
 										"source": {
-											"name": "Asset_ID",
+											"name": "asset_id",
 											"type": "String",
 											"physicalType": "String"
 										},
 										"sink": {
-											"name": "Asset_ID",
+											"name": "asset_id",
 											"type": "String"
 										}
 									},
 									{
 										"source": {
-											"name": "Fund_ID",
+											"name": "fund_id",
 											"type": "String",
 											"physicalType": "String"
 										},
 										"sink": {
-											"name": "Fund_ID",
+											"name": "fund_id",
 											"type": "String"
 										}
 									},
 									{
 										"source": {
-											"name": "Reporting_Period",
+											"name": "name",
 											"type": "String",
 											"physicalType": "String"
 										},
 										"sink": {
-											"name": "Reporting_Period",
+											"name": "name",
 											"type": "String"
 										}
 									},
 									{
 										"source": {
-											"name": "Certification_ID",
-											"type": "String",
+											"name": "date",
+											"type": "DateTime",
 											"physicalType": "String"
 										},
 										"sink": {
-											"name": "Certification_ID",
+											"name": "date",
 											"type": "String"
 										}
 									},
 									{
 										"source": {
-											"name": "Validation Flag",
-											"type": "String",
+											"name": "type",
+											"type": "Decimal",
 											"physicalType": "String"
 										},
 										"sink": {
-											"name": "Validation_Flag"
-										}
-									},
-									{
-										"source": {
-											"name": "Certification Type",
-											"type": "String",
-											"physicalType": "String"
-										},
-										"sink": {
-											"name": "Certification_Type"
-										}
-									},
-									{
-										"source": {
-											"name": "Certification Number",
-											"type": "String",
-											"physicalType": "String"
-										},
-										"sink": {
-											"name": "Certification_Number"
-										}
-									},
-									{
-										"source": {
-											"name": "Next Audit Date",
-											"type": "String",
-											"physicalType": "String"
-										},
-										"sink": {
-											"name": "Next_Audit_Date"
-										}
-									},
-									{
-										"source": {
-											"name": "Certifying Body",
-											"type": "String",
-											"physicalType": "String"
-										},
-										"sink": {
-											"name": "Certifying_Body"
-										}
-									},
-									{
-										"source": {
-											"name": "Certification Date",
-											"type": "String",
-											"physicalType": "String"
-										},
-										"sink": {
-											"name": "Certification_Date"
-										}
-									},
-									{
-										"source": {
-											"name": "Certification End Date",
-											"type": "String",
-											"physicalType": "String"
-										},
-										"sink": {
-											"name": "Certification_End_Date"
-										}
-									},
-									{
-										"source": {
-											"name": "Certified Entity",
-											"type": "String",
-											"physicalType": "String"
-										},
-										"sink": {
-											"name": "Certified_Entity"
-										}
-									},
-									{
-										"source": {
-											"name": "Number of Open Minor CARS",
-											"type": "String",
-											"physicalType": "String"
-										},
-										"sink": {
-											"name": "Number_of_Open_Minor_CARS"
-										}
-									},
-									{
-										"source": {
-											"name": "Number of Open Major CARS",
-											"type": "String",
-											"physicalType": "String"
-										},
-										"sink": {
-											"name": "Number_of_Open_Major CARS"
+											"name": "type",
+											"type": "String"
 										}
 									}
 								],
@@ -49291,16 +49519,37 @@
 				"annotations": [],
 				"type": "Excel",
 				"typeProperties": {
-					"sheetName": "Certifications",
+					"sheetName": "Sheet1",
 					"location": {
 						"type": "AzureBlobStorageLocation",
-						"fileName": "Wenita Forestry Products Q4 FY20 V2.xlsx",
+						"fileName": "test.xlsx",
 						"container": "sourcelandingraw"
 					},
-					"range": "A6:N99999",
+					"range": "a1:e999",
 					"firstRowAsHeader": true
 				},
-				"schema": []
+				"schema": [
+					{
+						"name": "asset_id",
+						"type": "String"
+					},
+					{
+						"name": "fund_id",
+						"type": "String"
+					},
+					{
+						"name": "name",
+						"type": "String"
+					},
+					{
+						"name": "date",
+						"type": "String"
+					},
+					{
+						"name": "type",
+						"type": "String"
+					}
+				]
 			},
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/linkedServices/BlobStore_nfdwhstaging')]"
@@ -49594,66 +49843,30 @@
 				"typeProperties": {
 					"location": {
 						"type": "AzureBlobStorageLocation",
-						"fileName": "Wenita Forestry Products Q4 FY20 V2.xlsx_Certifications_2020-06-30_Extract",
+						"fileName": "testParquet",
 						"container": "adf2persistentarea"
 					},
 					"compressionCodec": "snappy"
 				},
 				"schema": [
 					{
-						"name": "Asset_ID",
+						"name": "asset_id",
 						"type": "UTF8"
 					},
 					{
-						"name": "Fund_ID",
+						"name": "fund_id",
 						"type": "UTF8"
 					},
 					{
-						"name": "Reporting_Period",
+						"name": "name",
 						"type": "UTF8"
 					},
 					{
-						"name": "Certification_ID",
+						"name": "date",
 						"type": "UTF8"
 					},
 					{
-						"name": "Validation_Flag",
-						"type": "UTF8"
-					},
-					{
-						"name": "Certification_Type",
-						"type": "UTF8"
-					},
-					{
-						"name": "Certification_Number",
-						"type": "UTF8"
-					},
-					{
-						"name": "Next_Audit_Date",
-						"type": "UTF8"
-					},
-					{
-						"name": "Certifying_Body",
-						"type": "UTF8"
-					},
-					{
-						"name": "Certification_Date",
-						"type": "UTF8"
-					},
-					{
-						"name": "Certification_End_Date",
-						"type": "UTF8"
-					},
-					{
-						"name": "Certified_Entity",
-						"type": "UTF8"
-					},
-					{
-						"name": "Number_of_Open_Minor_CARS",
-						"type": "UTF8"
-					},
-					{
-						"name": "Number_of_Open_Major_CARS",
+						"name": "type",
 						"type": "UTF8"
 					}
 				]
@@ -64599,6 +64812,50 @@
 								"referenceName": "SQLrelationopscertification_ds",
 								"type": "DatasetReference"
 							},
+							"name": "TargetRelationalDelete"
+						}
+					],
+					"transformations": [
+						{
+							"name": "SelectColumnsForDelete"
+						},
+						{
+							"name": "AggregateAssetFundReportingPeriod"
+						},
+						{
+							"name": "AlterRowDelete"
+						}
+					],
+					"script": "parameters{\n\tWorkbookName as string,\n\tTabName as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as date,\n\t\tCertification_ID as integer,\n\t\tCertification_Number as string,\n\t\tNext_Audit_Date as date,\n\t\tCertifying_Body as string,\n\t\tCertification_Date as date,\n\t\tCertification_End_Date as date,\n\t\tCertified_Entity as string,\n\t\tNumber_of_Open_Minor_CARS as integer,\n\t\tNumber_of_Open_Major_CARS as integer,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string,\n\t\tCertification_Type_Code as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tformat: 'parquet',\n\tpartitionBy('hash', 1)) ~> SourceReadyLoad\nSourceReadyLoad select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectColumnsForDelete\nSelectColumnsForDelete aggregate(groupBy(Asset_ID,\n\t\tFund_ID,\n\t\tReporting_Period),\n\tUniqueCount = count()) ~> AggregateAssetFundReportingPeriod\nAggregateAssetFundReportingPeriod alterRow(deleteIf(UniqueCount>0)) ~> AlterRowDelete\nAlterRowDelete sink(input(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tCertification_ID as integer,\n\t\tReporting_Period as date,\n\t\tCertification_Type_Code as string,\n\t\tCertification_Number as string,\n\t\tNext_Audit_Date as date,\n\t\tCertifying_Body as string,\n\t\tCertification_Date as date,\n\t\tCertification_End_Date as date,\n\t\tCertified_Entity as string,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string,\n\t\tMinor_CARS as integer,\n\t\tMajor_CARS as integer\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:true,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:false,\n\tkeys:['Asset_ID','Fund_ID','Reporting_Period'],\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetRelationalDelete"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ParquetPersistentOpsWithTabParam_ds')]",
+				"[concat(variables('factoryId'), '/datasets/SQLrelationopscertification_ds')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadXlsxCertificates_Step3_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "ParquetPersistentOpsWithTabParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "SourceReadyLoad"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLrelationopscertification_ds",
+								"type": "DatasetReference"
+							},
 							"name": "TargetRelational"
 						}
 					],
@@ -64616,7 +64873,7 @@
 			]
 		},
 		{
-			"name": "[concat(parameters('factoryName'), '/LoadXlsxCertificates_Step3_df')]",
+			"name": "[concat(parameters('factoryName'), '/LoadXlsxCertificates_Step4_df')]",
 			"type": "Microsoft.DataFactory/factories/dataflows",
 			"apiVersion": "2018-06-01",
 			"properties": {
@@ -64783,6 +65040,50 @@
 		},
 		{
 			"name": "[concat(parameters('factoryName'), '/LoadXlsxTimberSales_Step2_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "ParquetPersistentOpsWithTabParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "SourceReadyLoad"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLrelationopstimbersales_ds",
+								"type": "DatasetReference"
+							},
+							"name": "TargetRelational"
+						}
+					],
+					"transformations": [
+						{
+							"name": "SelectKeyColumnsForDelete"
+						},
+						{
+							"name": "AggregateAssetFundReportingPeriod"
+						},
+						{
+							"name": "AlterRowDelete"
+						}
+					],
+					"script": "parameters{\n\tWorkbookName as string,\n\tTabName as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as date,\n\t\tCustomer as string,\n\t\tDomestic_Export as string,\n\t\tProduct as string,\n\t\tDelivery_Point_Code as string,\n\t\tPrice_Point as decimal(19,4),\n\t\tSales_Quantity as decimal(19,4),\n\t\tAverage_Sales_Price as decimal(19,4),\n\t\tSales_Revenue as decimal(19,4),\n\t\tProduction_Cost as decimal(19,4),\n\t\tStumpage as decimal(19,4),\n\t\tUnit_Stumpage as decimal(19,4),\n\t\tCurrency_Code as string,\n\t\tSales_Month as date,\n\t\tBudget_Sales_Quantity as decimal(19,4),\n\t\tBudget_Sales_Revenue as decimal(19,4),\n\t\tBudget_Production_Cost as decimal(19,4),\n\t\tBudget_Stumpage as decimal(19,4),\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string,\n\t\tSales_Unit_Code as string,\n\t\tSpecies_Code as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tformat: 'parquet',\n\tpartitionBy('hash', 1)) ~> SourceReadyLoad\nSourceReadyLoad select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectKeyColumnsForDelete\nSelectKeyColumnsForDelete aggregate(groupBy(Asset_ID,\n\t\tFund_ID,\n\t\tReporting_Period),\n\tUniqueCount = count()) ~> AggregateAssetFundReportingPeriod\nAggregateAssetFundReportingPeriod alterRow(deleteIf(UniqueCount>0)) ~> AlterRowDelete\nAlterRowDelete sink(input(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tTimber_Sale_ID as integer,\n\t\tReporting_Period as date,\n\t\tSpecies_Code as string,\n\t\tCustomer as string,\n\t\tDomestic_Export as string,\n\t\tProduct_Type_Code as string,\n\t\tPrice_Point_Code as string,\n\t\tSales_Unit_Code as string,\n\t\tSales_Quantity as decimal(19,4),\n\t\tSales_Revenue as decimal(19,4),\n\t\tProduction_Cost as decimal(19,4),\n\t\tStumpage as decimal(19,4),\n\t\tUnit_Stumpage as decimal(19,4),\n\t\tCurrency_Code as string,\n\t\tAverage_Sales_Price as decimal(19,4),\n\t\tBudget_Sales_Quantity as decimal(19,4),\n\t\tBudget_Sales_Revenue as decimal(19,4),\n\t\tBudget_Production_Cost as decimal(19,4),\n\t\tBudget_Stumpage as decimal(19,4),\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string,\n\t\tProduct as string,\n\t\tDelivery_Point_Code as string,\n\t\tPrice_Point as decimal(19,4),\n\t\tSales_Month as date\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:true,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:false,\n\tkeys:['Asset_ID','Fund_ID','Reporting_Period'],\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetRelational"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ParquetPersistentOpsWithTabParam_ds')]",
+				"[concat(variables('factoryId'), '/datasets/SQLrelationopstimbersales_ds')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadXlsxTimberSales_Step3_df')]",
 			"type": "Microsoft.DataFactory/factories/dataflows",
 			"apiVersion": "2018-06-01",
 			"properties": {

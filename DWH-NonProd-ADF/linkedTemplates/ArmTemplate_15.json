@@ -13,6 +13,112 @@
 	},
 	"resources": [
 		{
+			"name": "[concat(parameters('factoryName'), '/LoadTxtToDBstaging_adjustment_dfx')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "DelimitedText_sourcelandingscrubbed_adjustment_dsx",
+								"type": "DatasetReference"
+							},
+							"name": "LoadFromScrubbedToStagingDB"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLrelationasset_ds",
+								"type": "DatasetReference"
+							},
+							"name": "GetAssetMaster"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLrelationcoa_ds",
+								"type": "DatasetReference"
+							},
+							"name": "GetGLCodes"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLstagingadjustment_ds",
+								"type": "DatasetReference"
+							},
+							"name": "StagingDB"
+						}
+					],
+					"transformations": [
+						{
+							"name": "SelectSourceColumns"
+						},
+						{
+							"name": "SetDerivations"
+						},
+						{
+							"name": "SelectForTarget"
+						},
+						{
+							"name": "LookupFundAndAsset"
+						},
+						{
+							"name": "SelectFundColumns"
+						},
+						{
+							"name": "LookupGLcode"
+						},
+						{
+							"name": "SelectCOAcolumns"
+						},
+						{
+							"name": "TransactionTypeGL"
+						},
+						{
+							"name": "SelectGLData"
+						},
+						{
+							"name": "SelectCasfFlowData"
+						},
+						{
+							"name": "ConditionalSplitValidGL"
+						},
+						{
+							"name": "TransactionValidFundAsset"
+						},
+						{
+							"name": "SelectInvalidFundAssetData"
+						},
+						{
+							"name": "DerivedColumnValidationErrorFund"
+						},
+						{
+							"name": "DerivedColumnValidationErrorGL"
+						},
+						{
+							"name": "SelectInvalidGLdata"
+						},
+						{
+							"name": "SelectValidGLdata"
+						},
+						{
+							"name": "UnionAll"
+						},
+						{
+							"name": "TrimSingleQuoteFromGLcode"
+						},
+						{
+							"name": "ConvertAmountToValidFormat"
+						}
+					],
+					"script": "source(output(\n\t\tDate as string,\n\t\tTransaction_Code as string,\n\t\tCashflow_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tTrx_Type as string,\n\t\tGL_Code as string,\n\t\tGL_Description as string,\n\t\tAmount as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> LoadFromScrubbedToStagingDB\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [Asset_ID]\\n      ,[Fund_ID]\\n  FROM [relational].[Asset]\\n  WHERE [record_deleted_flag] = 0',\n\tformat: 'query') ~> GetAssetMaster\nsource(output(\n\t\tGL_Code as string,\n\t\tCategory as string,\n\t\tCash_Flow_Code as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [GL_Code]\\n      ,[Category]\\n      ,[Cash_Flow_Code]\\n  FROM [relational].[Chart_of_Account]\\n  WHERE [record_deleted_flag] = 0',\n\tformat: 'query') ~> GetGLCodes\nConvertAmountToValidFormat select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectSourceColumns\nUnionAll derive(Debit_Credit = case(greaterOrEqual(toDecimal(Amount),0),'DR','CR'),\n\t\tTrx_Amount = abs(toDecimal(Amount,18,2)),\n\t\tDate = toTimestamp(Date,'dd/MM/yyyy')) ~> SetDerivations\nSetDerivations select(mapColumn(\n\t\tTrx_Date = Date,\n\t\tTrx_Code = Transaction_Code,\n\t\tCash_Flow_Code = Cashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tTrx_Desc = GL_Description,\n\t\tvalidation_error = Validation_Error,\n\t\tDebit_Credit,\n\t\tTrx_Amount\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectForTarget\nSelectSourceColumns, SelectFundColumns lookup(Asset_ID == Relation_Asset_ID\n\t&& Fund_ID == Relation_Fund_ID,\n\tmultiple: true,\n\tbroadcast: 'auto')~> LookupFundAndAsset\nGetAssetMaster select(mapColumn(\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_Fund_ID = Fund_ID\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectFundColumns\nSelectGLData, SelectCOAcolumns lookup(GL_Code == Relation_GL_Code,\n\tmultiple: true,\n\tbroadcast: 'auto')~> LookupGLcode\nGetGLCodes select(mapColumn(\n\t\tRelation_GL_Code = GL_Code,\n\t\tRelation_Category = Category,\n\t\tRelation_Cash_Flow_Code = Cash_Flow_Code\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectCOAcolumns\nTransactionValidFundAsset@ValidFundAsset split(not(isNull(GL_Code)),\n\tdisjoint: false) ~> TransactionTypeGL@(TransactionTypeGL, TransactionTypeCF)\nTrimSingleQuoteFromGLcode select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount,\n\t\tRelation_Asset_ID,\n\t\tRelation_Fund_ID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectGLData\nTransactionTypeGL@TransactionTypeCF select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectCasfFlowData\nLookupGLcode split(GL_Code == Relation_GL_Code,\n\tdisjoint: false) ~> ConditionalSplitValidGL@(ValidGL, NotValidGL)\nLookupFundAndAsset split(not(isNull(Relation_Fund_ID)),\n\tdisjoint: false) ~> TransactionValidFundAsset@(ValidFundAsset, InvalidFundAsset)\nDerivedColumnValidationErrorFund select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidFundAssetData\nTransactionValidFundAsset@InvalidFundAsset derive(Validation_Error = toString('Invalid Fund or Asset')) ~> DerivedColumnValidationErrorFund\nConditionalSplitValidGL@NotValidGL derive(Validation_Error = toString('Invalid GL Code')) ~> DerivedColumnValidationErrorGL\nDerivedColumnValidationErrorGL select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidGLdata\nConditionalSplitValidGL@ValidGL select(mapColumn(\n\t\tDate,\n\t\tTransaction_Code,\n\t\tCashflow_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tGL_Code,\n\t\tGL_Description,\n\t\tAmount\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectValidGLdata\nSelectValidGLdata, SelectInvalidGLdata, SelectCasfFlowData, SelectInvalidFundAssetData union(byName: true)~> UnionAll\nTransactionTypeGL@TransactionTypeGL derive(GL_Code = trim(GL_Code,'\\'')) ~> TrimSingleQuoteFromGLcode\nLoadFromScrubbedToStagingDB derive(Amount = toDecimal(Amount,18,2,'###,###.##')) ~> ConvertAmountToValidFormat\nSelectForTarget sink(input(\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Type as string,\n\t\tTrx_Amount as decimal(18,2),\n\t\tvalidation_error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tTrx_Code,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tTrx_Date,\n\t\tTrx_Desc,\n\t\tTrx_Type,\n\t\tTrx_Amount,\n\t\tvalidation_error\n\t)) ~> StagingDB"
+				}
+			},
+			"dependsOn": []
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/LoadTxtToDBstaging_adjustment_n_actual_df')]",
 			"type": "Microsoft.DataFactory/factories/dataflows",
 			"apiVersion": "2018-06-01",
@@ -1469,53 +1575,6 @@
 						}
 					],
 					"script": "source(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tOperation_Id as string,\n\t\tReporting_Period as string,\n\t\tOperation_Type_Code as string,\n\t\tArea_Treated as string,\n\t\tTreatment_Cost as string,\n\t\tUnit_Cost as string,\n\t\tLast_Age_Class_Date as string,\n\t\tSpecies_Survived as string,\n\t\tLast_Age_Class_Survival_Rate as string,\n\t\tBudget_Area_Treated as string,\n\t\tBudget_Treatment_Cost as string,\n\t\tBudget_Unit_Cost as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> LoadFromScrubbedToStagingDB\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT [Asset_ID],[Fund_ID]\\nFROM [relational].[Asset]\\nWHERE record_deleted_flag = 0',\n\tformat: 'query') ~> RelationalAsset\nsource(output(\n\t\tOperation_Type_Code as string,\n\t\tOperation_Type as string,\n\t\tActive_YN as string,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> RelationalOperationType\nValidatedDerivedData@ValidDerivedData, SelectRelationalAsset lookup(Asset_ID == Relation_Asset_ID\n\t&& Fund_ID == Relation_Fund_ID,\n\tmultiple: true,\n\tbroadcast: 'auto')~> LookupRelationAsset\nIsValidOperationType@ValidOperationType select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tOperation_Id,\n\t\tReporting_Period,\n\t\tOperation_Type_Code,\n\t\tArea_Treated,\n\t\tTreatment_Cost,\n\t\tUnit_Cost,\n\t\tLast_Age_Class_Date,\n\t\tSpecies_Survived,\n\t\tLast_Age_Class_Survival_Rate,\n\t\tBudget_Area_Treated,\n\t\tBudget_Treatment_Cost,\n\t\tBudget_Unit_Cost\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectValidRecord\nDerivedFields split(not(isNull(Derived_Operation_Id)) && not(isNull(Derived_Reporting_Period)) && \r\niif(not(isNull(Area_Treated)),not(isNull(Derived_Area_Treated)),true()) && \r\niif(not(isNull(Treatment_Cost)),not(isNull(Derived_Treatment_Cost)),true()) && \r\niif(not(isNull(Last_Age_Class_Survival_Rate)),not(isNull(Derived_Last_Age_Class_Survival_Rate)),true()) && \r\niif(not(isNull(Budget_Area_Treated)),not(isNull(Derived_Budget_Area_Treated)),true()) && \r\niif(not(isNull(Budget_Treatment_Cost)),not(isNull(Derived_Budget_Treatment_Cost)),true()),\n\tdisjoint: false) ~> ValidatedDerivedData@(ValidDerivedData, InvalidDerivedData)\nLoadFromScrubbedToStagingDB derive(Derived_Reporting_Period = toDate(Reporting_Period,\"dd/MM/yyyy\"),\n\t\tDerived_Last_Age_Class_Date = toDate(Last_Age_Class_Date,\"dd/MM/yyyy\"),\n\t\tDerived_Operation_Id = toInteger(Operation_Id),\n\t\tDerived_Area_Treated = toDecimal(Area_Treated, 19, 4, \"###,###.####\"),\n\t\tDerived_Treatment_Cost = toDecimal(Treatment_Cost, 19, 4, \"###,###.####\"),\n\t\tDerived_Unit_Cost = toDecimal(Unit_Cost, 19, 4, \"###,###.####\"),\n\t\tDerived_Last_Age_Class_Survival_Rate = toDecimal(Last_Age_Class_Survival_Rate, 5, 2, \"###.##\"),\n\t\tDerived_Budget_Area_Treated = toDecimal(Budget_Area_Treated, 19, 4, \"###,###.####\"),\n\t\tDerived_Budget_Treatment_Cost = toDecimal(Budget_Treatment_Cost, 19, 4, \"###,###.####\"),\n\t\tDerived_Budget_Unit_Cost = toDecimal(Budget_Unit_Cost, 19, 4, \"###,###.####\")) ~> DerivedFields\nInvalidDerivedDataErrormessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tOperation_Id,\n\t\tReporting_Period,\n\t\tOperation_Type_Code,\n\t\tArea_Treated,\n\t\tTreatment_Cost,\n\t\tUnit_Cost,\n\t\tLast_Age_Class_Date,\n\t\tSpecies_Survived,\n\t\tLast_Age_Class_Survival_Rate,\n\t\tBudget_Area_Treated,\n\t\tBudget_Treatment_Cost,\n\t\tBudget_Unit_Cost,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidDerivedData\nValidatedDerivedData@InvalidDerivedData derive(Validation_Error = toString(\"Invalid Reporting Period / Operation ID / Area Treated / Treatment Cost / Unit Cost / Last Age Class Date / Last Age Class Survival Rate / Budget Area Treated / Budget Treatment Cost / Budget Unit Cost\")) ~> InvalidDerivedDataErrormessage\nRelationalAsset select(mapColumn(\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_Fund_ID = Fund_ID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRelationalAsset\nLookupRelationAsset split(not(isNull(Relation_Asset_ID)),\n\tdisjoint: false) ~> ValidatedAsset@(ValidFundAndAsset, InvalidFundOrAsset)\nValidatedAsset@InvalidFundOrAsset derive(Validation_Error = toString(\"Invalid Fund Or Asset\")) ~> InvalidFundOrAsseterrormessage\nInvalidFundOrAsseterrormessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tOperation_Id,\n\t\tReporting_Period,\n\t\tOperation_Type_Code,\n\t\tArea_Treated,\n\t\tTreatment_Cost,\n\t\tUnit_Cost,\n\t\tLast_Age_Class_Date,\n\t\tSpecies_Survived,\n\t\tLast_Age_Class_Survival_Rate,\n\t\tBudget_Area_Treated,\n\t\tBudget_Treatment_Cost,\n\t\tBudget_Unit_Cost,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidFundOrAsset\nSelectValidRecord, SelectInvalidDerivedData, SelectInvalidFundOrAsset, SelectInvalidOperationType union(byName: true)~> UnionAll\nValidatedAsset@ValidFundAndAsset, SelectRelationalOperationType lookup(Operation_Type_Code == Relation_Operation_Type_Code,\n\tmultiple: true,\n\tbroadcast: 'auto')~> LookupRelationalOperationType\nRelationalOperationType select(mapColumn(\n\t\tRelation_Operation_Type_Code = Operation_Type_Code\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRelationalOperationType\nLookupRelationalOperationType split(not(isNull(Relation_Operation_Type_Code)),\n\tdisjoint: false) ~> IsValidOperationType@(ValidOperationType, InvalidOpeartionType)\nIsValidOperationType@InvalidOpeartionType derive(Validation_Error = toString(\"Invalid Operation Type Code\")) ~> InvalidOperationTypeErrormessage\nInvalidOperationTypeErrormessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tOperation_Id,\n\t\tReporting_Period,\n\t\tOperation_Type_Code,\n\t\tArea_Treated,\n\t\tTreatment_Cost,\n\t\tUnit_Cost,\n\t\tLast_Age_Class_Date,\n\t\tSpecies_Survived,\n\t\tLast_Age_Class_Survival_Rate,\n\t\tBudget_Area_Treated,\n\t\tBudget_Treatment_Cost,\n\t\tBudget_Unit_Cost,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidOperationType\nUnionAll sink(input(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tOperation_Id as string,\n\t\tReporting_Period as string,\n\t\tOperation_Type_Code as string,\n\t\tArea_Treated as string,\n\t\tTreatment_Cost as string,\n\t\tUnit_Cost as string,\n\t\tLast_Age_Class_Date as string,\n\t\tSpecies_Survived as string,\n\t\tLast_Age_Class_Survival_Rate as string,\n\t\tBudget_Area_Treated as string,\n\t\tBudget_Treatment_Cost as string,\n\t\tBudget_Unit_Cost as string,\n\t\tValidation_Error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tOperation_Id,\n\t\tReporting_Period,\n\t\tOperation_Type_Code,\n\t\tArea_Treated,\n\t\tTreatment_Cost,\n\t\tUnit_Cost,\n\t\tLast_Age_Class_Date,\n\t\tSpecies_Survived,\n\t\tLast_Age_Class_Survival_Rate,\n\t\tBudget_Area_Treated,\n\t\tBudget_Treatment_Cost,\n\t\tBudget_Unit_Cost,\n\t\tValidation_Error\n\t)) ~> StagingDB"
-				}
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/LoadTxtToDBstaging_opspricepoint_df')]",
-			"type": "Microsoft.DataFactory/factories/dataflows",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"type": "MappingDataFlow",
-				"typeProperties": {
-					"sources": [
-						{
-							"dataset": {
-								"referenceName": "DelimitedText_sourcelandingscrubbed_opspricepoint_ds",
-								"type": "DatasetReference"
-							},
-							"name": "LoadFromScrubbedToStagingDB"
-						}
-					],
-					"sinks": [
-						{
-							"dataset": {
-								"referenceName": "SQLstagingopspricepoint_ds",
-								"type": "DatasetReference"
-							},
-							"name": "StagingDB"
-						}
-					],
-					"transformations": [
-						{
-							"name": "SelectValidRecord"
-						},
-						{
-							"name": "ValidatedPricePointCode"
-						},
-						{
-							"name": "SelectInvalidPricePointCode"
-						},
-						{
-							"name": "InvalidPricePointCodeerrormessage"
-						},
-						{
-							"name": "UnionAll"
-						}
-					],
-					"script": "source(output(\n\t\tPrice_Point_Code as string,\n\t\tPrice_Point as string,\n\t\tActive_YN as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> LoadFromScrubbedToStagingDB\nValidatedPricePointCode@ValidPricePointCode select(mapColumn(\n\t\tPrice_Point_Code,\n\t\tPrice_Point,\n\t\tActive_YN\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectValidRecord\nLoadFromScrubbedToStagingDB split(not(isNull(Price_Point_Code)) && trim(Price_Point_Code) != '',\n\tdisjoint: false) ~> ValidatedPricePointCode@(ValidPricePointCode, InvalidPricePointCode)\nInvalidPricePointCodeerrormessage select(mapColumn(\n\t\tPrice_Point_Code,\n\t\tPrice_Point,\n\t\tActive_YN,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidPricePointCode\nValidatedPricePointCode@InvalidPricePointCode derive(Validation_Error = toString(\"Invalid Price Pint Code\")) ~> InvalidPricePointCodeerrormessage\nSelectValidRecord, SelectInvalidPricePointCode union(byName: true)~> UnionAll\nUnionAll sink(input(\n\t\tPrice_Point_Code as string,\n\t\tPrice_Point as string,\n\t\tActive_YN as string,\n\t\tValidation_Error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tPrice_Point_Code,\n\t\tPrice_Point,\n\t\tActive_YN,\n\t\tValidation_Error\n\t)) ~> StagingDB"
 				}
 			},
 			"dependsOn": []
