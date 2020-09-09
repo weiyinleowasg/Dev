@@ -3,27 +3,11 @@
 	"properties": {
 		"activities": [
 			{
-				"name": "CopyWorksheetToCsv",
-				"type": "Wait",
-				"dependsOn": [
-					{
-						"activity": "SendEmailFileReceivedConfirmation",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"userProperties": [],
-				"typeProperties": {
-					"waitTimeInSeconds": 1
-				}
-			},
-			{
 				"name": "PipelineProcessDimFilePlusPipelineToInsertUpdate",
 				"type": "Wait",
 				"dependsOn": [
 					{
-						"activity": "TruncateErrorTable",
+						"activity": "TruncateAuditTable",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -88,22 +72,6 @@
 				"dependsOn": [
 					{
 						"activity": "DeleteFileFromPersistentArea",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"userProperties": [],
-				"typeProperties": {
-					"waitTimeInSeconds": 1
-				}
-			},
-			{
-				"name": "TruncateErrorTable",
-				"type": "Wait",
-				"dependsOn": [
-					{
-						"activity": "CopyWorksheetToCsv",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -257,7 +225,14 @@
 			{
 				"name": "CopyWorksheetToCsvFile",
 				"type": "Copy",
-				"dependsOn": [],
+				"dependsOn": [
+					{
+						"activity": "SendEmailFileReceivedConfirmation",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
 				"policy": {
 					"timeout": "7.00:00:00",
 					"retry": 0,
@@ -350,6 +325,39 @@
 						}
 					}
 				]
+			},
+			{
+				"name": "TruncateAuditTable",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "CopyWorksheetToCsvFile",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[audit].[TruncateAuditTable]",
+					"storedProcedureParameters": {
+						"TableName": {
+							"value": "Dim_UOM_Error",
+							"type": "String"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
+				}
 			}
 		],
 		"parameters": {
