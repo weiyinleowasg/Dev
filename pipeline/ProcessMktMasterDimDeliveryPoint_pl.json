@@ -7,9 +7,9 @@
 				"type": "Wait",
 				"dependsOn": [
 					{
-						"activity": "DeleteWorkbookFromLanding",
+						"activity": "DeleteFromSourceLandingRaw",
 						"dependencyConditions": [
-							"Succeeded"
+							"Completed"
 						]
 					}
 				],
@@ -26,22 +26,6 @@
 						"activity": "UpdateSourceRegisterTable",
 						"dependencyConditions": [
 							"Succeeded"
-						]
-					}
-				],
-				"userProperties": [],
-				"typeProperties": {
-					"waitTimeInSeconds": 1
-				}
-			},
-			{
-				"name": "DeleteWorkbookFromLanding",
-				"type": "Wait",
-				"dependsOn": [
-					{
-						"activity": "DeleteFromSourceLandingRaw",
-						"dependencyConditions": [
-							"Completed"
 						]
 					}
 				],
@@ -664,6 +648,105 @@
 						"type": "AzureBlobStorageReadSettings",
 						"recursive": true
 					}
+				}
+			},
+			{
+				"name": "UpdateSourceRegisterFailed",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[log].[SourceRegisterTableInsert]",
+					"storedProcedureParameters": {
+						"ArchiveContainer": {
+							"value": {
+								"value": "sourcearchive",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"Comment": {
+							"value": {
+								"value": "Pipeline Failed",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"DatalakeContainer": {
+							"value": {
+								"value": "nonfinancial",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"EtlUtcTag": {
+							"value": {
+								"value": "@variables('MasterUtcTag')",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"FileName": {
+							"value": {
+								"value": "@pipeline().parameters.WorkbookName",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"InputDate": {
+							"value": {
+								"value": "@variables('GenerateBatchDate')",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"InputMethod": {
+							"value": {
+								"value": "manual",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"ProcessName": {
+							"value": {
+								"value": "@pipeline().Pipeline",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"RunStatus": {
+							"value": {
+								"value": "ABORT",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"SourceContainer": {
+							"value": {
+								"value": "sourcelandingraw",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"TargetContainer": {
+							"value": {
+								"value": "sourcelandingscrubbed",
+								"type": "Expression"
+							},
+							"type": "String"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
 				}
 			}
 		],
