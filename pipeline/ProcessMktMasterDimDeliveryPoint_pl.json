@@ -3,22 +3,6 @@
 	"properties": {
 		"activities": [
 			{
-				"name": "SendCompletionEmail",
-				"type": "Wait",
-				"dependsOn": [
-					{
-						"activity": "UpdateSourceRegisterTable",
-						"dependencyConditions": [
-							"Completed"
-						]
-					}
-				],
-				"userProperties": [],
-				"typeProperties": {
-					"waitTimeInSeconds": 1
-				}
-			},
-			{
 				"name": "SendCompletionEmailFailed",
 				"type": "Wait",
 				"dependsOn": [
@@ -761,6 +745,48 @@
 						},
 						"GenerateBatchDate": {
 							"value": "@variables('GenerateBatchDate')",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "SendFinalEmail",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "UpdateSourceRegisterTable",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "ProcessOpsMktSendMailOK_pl",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"DataFactoryName": {
+							"value": "@pipeline().DataFactory",
+							"type": "Expression"
+						},
+						"PipelineName": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"WorkbookName": {
+							"value": "@pipeline().parameters.WorkbookName",
+							"type": "Expression"
+						},
+						"ErrorTableName": {
+							"value": "[audit].[Dim_Delivery_Point_Error]",
+							"type": "Expression"
+						},
+						"emailAddress": {
+							"value": "@pipeline().parameters.emailAddress",
 							"type": "Expression"
 						}
 					}
