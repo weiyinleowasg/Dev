@@ -35,22 +35,6 @@
 				}
 			},
 			{
-				"name": "CopyFileToDL",
-				"type": "Wait",
-				"dependsOn": [
-					{
-						"activity": "CopyToSourceArchive",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"userProperties": [],
-				"typeProperties": {
-					"waitTimeInSeconds": 1
-				}
-			},
-			{
 				"name": "DeleteWorkbookFromLanding",
 				"type": "Wait",
 				"dependsOn": [
@@ -71,9 +55,9 @@
 				"type": "Wait",
 				"dependsOn": [
 					{
-						"activity": "CopyFileToDL",
+						"activity": "CopyToDataLake",
 						"dependencyConditions": [
-							"Succeeded"
+							"Completed"
 						]
 					}
 				],
@@ -89,7 +73,7 @@
 					{
 						"activity": "CopyToSourceArchiveFailed",
 						"dependencyConditions": [
-							"Succeeded"
+							"Completed"
 						]
 					}
 				],
@@ -493,6 +477,73 @@
 						"parameters": {
 							"path": {
 								"value": "@concat(substring(variables('GenerateBatchDate'),0,4), '/', concat(if(equals(substring(variables('GenerateBatchDate'),5,2),'01'),'JAN',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'02'),'FEB',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'03'),'MAR',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'04'),'APR',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'05'),'MAY',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'06'),'JUN',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'07'),'JUL',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'08'),'AUG',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'09'),'SEP',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'10'),'OCT',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'11'),'NOV',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'12'),'DEC','')), '/', substring(variables('GenerateBatchDate'),8,2))",
+								"type": "Expression"
+							},
+							"file": {
+								"value": "@pipeline().parameters.WorkbookName",
+								"type": "Expression"
+							}
+						}
+					}
+				]
+			},
+			{
+				"name": "CopyToDataLake",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "CopyToSourceArchive",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "BinarySource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": true
+						},
+						"formatSettings": {
+							"type": "BinaryReadSettings"
+						}
+					},
+					"sink": {
+						"type": "BinarySink",
+						"storeSettings": {
+							"type": "AzureBlobStorageWriteSettings"
+						}
+					},
+					"enableStaging": false
+				},
+				"inputs": [
+					{
+						"referenceName": "BinaryFromSourceLandingRaw_ds",
+						"type": "DatasetReference",
+						"parameters": {
+							"file": {
+								"value": "@pipeline().parameters.WorkbookName",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "BinaryToDatalake_ds",
+						"type": "DatasetReference",
+						"parameters": {
+							"path": {
+								"value": "@concat('manual/',substring(variables('GenerateBatchDate'),0,4), '/', concat(if(equals(substring(variables('GenerateBatchDate'),5,2),'01'),'JAN',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'02'),'FEB',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'03'),'MAR',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'04'),'APR',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'05'),'MAY',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'06'),'JUN',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'07'),'JUL',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'08'),'AUG',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'09'),'SEP',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'10'),'OCT',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'11'),'NOV',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'12'),'DEC','')), '/', substring(variables('GenerateBatchDate'),8,2))",
 								"type": "Expression"
 							},
 							"file": {
