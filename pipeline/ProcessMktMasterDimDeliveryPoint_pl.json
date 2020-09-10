@@ -3,22 +3,6 @@
 	"properties": {
 		"activities": [
 			{
-				"name": "SendCompletionEmailFailed",
-				"type": "Wait",
-				"dependsOn": [
-					{
-						"activity": "UpdateSourceRegisterFailed",
-						"dependencyConditions": [
-							"Completed"
-						]
-					}
-				],
-				"userProperties": [],
-				"typeProperties": {
-					"waitTimeInSeconds": 1
-				}
-			},
-			{
 				"name": "MasterUtcTag",
 				"type": "SetVariable",
 				"dependsOn": [],
@@ -789,6 +773,37 @@
 							"value": "@pipeline().parameters.emailAddress",
 							"type": "Expression"
 						}
+					}
+				}
+			},
+			{
+				"name": "SendFinalEmailFailed",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "UpdateSourceRegisterFailed",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"url": {
+						"value": "https://prod-22.australiaeast.logic.azure.com:443/workflows/3b1500dc3148452bbe30bca4d4caece9/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=dfK9OZs5XMno2zPpeLj2Oz6qGMDDZv3xXA4ZgOeRD9M",
+						"type": "Expression"
+					},
+					"method": "POST",
+					"body": {
+						"value": "{\n \"dataFactoryName\":\"DataFactory Name: @{pipeline().DataFactory}\",\n \"pipelineName\":\"Pipeline Name: @{pipeline().Pipeline}\",\n \"messageHeader\":\"@{pipeline().parameters.WorkbookName} : Load Failed\",\n \"messageBody1\":\"Market Information\",\n \"messageBody2\":\"\",\n \"messageBody3\":\"We are not able to load your file. Something is wrong\",\n \"messageBody4\":\"\",\n \"messageBody5\":\"Fix data and submit your file again.\",\n \"emailAddress\":\"@{pipeline().parameters.emailAddress}\"\n}",
+						"type": "Expression"
 					}
 				}
 			}
