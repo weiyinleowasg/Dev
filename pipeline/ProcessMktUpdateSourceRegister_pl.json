@@ -1,0 +1,60 @@
+{
+	"name": "ProcessMktUpdateSourceRegister_pl",
+	"properties": {
+		"activities": [
+			{
+				"name": "GetResultFromErrorTable",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "SELECT ERROR_COUNT,\n  CASE WHEN ERROR_COUNT = 0 THEN 'SUCCESS'\n  ELSE 'FAIL'\n  END RUN_STATUS,\n  CASE WHEN ERROR_COUNT = 0 THEN NULL\n  ELSE 'Not all record loaded successfully'\n  END COMMENT_MSG\n  FROM (\n        SELECT COUNT(*) ERROR_COUNT FROM @{pipeline().parameters.ErrorTableName}\n)x",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "SQLtableGeneric_ds",
+						"type": "DatasetReference"
+					}
+				}
+			},
+			{
+				"name": "Wait1",
+				"type": "Wait",
+				"dependsOn": [
+					{
+						"activity": "GetResultFromErrorTable",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"waitTimeInSeconds": 1
+				}
+			}
+		],
+		"parameters": {
+			"WorkbookName": {
+				"type": "string"
+			},
+			"ErrorTableName": {
+				"type": "string"
+			}
+		},
+		"annotations": []
+	}
+}
