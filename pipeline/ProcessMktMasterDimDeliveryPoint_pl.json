@@ -51,7 +51,7 @@
 				"type": "Copy",
 				"dependsOn": [
 					{
-						"activity": "SendEmailFileReceivedConfirmation",
+						"activity": "MoveFIleFromFileshareToBlob",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -834,6 +834,101 @@
 					"method": "POST",
 					"body": {
 						"value": "{\n \"dataFactoryName\":\"DataFactory Name: @{pipeline().DataFactory}\",\n \"pipelineName\":\"Pipeline Name: @{pipeline().Pipeline}\",\n \"messageHeader\":\"@{pipeline().parameters.WorkbookName} : Load Failed\",\n \"messageBody1\":\"Market Information\",\n \"messageBody2\":\"\",\n \"messageBody3\":\"We are not able to load your file. Something is wrong during copy\",\n \"messageBody4\":\"\",\n \"messageBody5\":\"Fix data and submit your file again.\",\n \"emailAddress\":\"@{pipeline().parameters.emailAddress}\"\n}",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "MoveFIleFromFileshareToBlob",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "SendEmailFileReceivedConfirmation",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "BinarySource",
+						"storeSettings": {
+							"type": "FileServerReadSettings",
+							"recursive": false,
+							"deleteFilesAfterCompletion": true
+						},
+						"formatSettings": {
+							"type": "BinaryReadSettings"
+						}
+					},
+					"sink": {
+						"type": "BinarySink",
+						"storeSettings": {
+							"type": "AzureBlobStorageWriteSettings"
+						}
+					},
+					"enableStaging": false
+				},
+				"inputs": [
+					{
+						"referenceName": "BinaryDataSourceFileshareMktDataDir_MoveFile_ds",
+						"type": "DatasetReference",
+						"parameters": {
+							"filename": {
+								"value": "@pipeline().parameters.WorkbookName",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "BinaryDataDestinationBlob_MoveFile_ds",
+						"type": "DatasetReference",
+						"parameters": {
+							"filename": {
+								"value": "@pipeline().parameters.WorkbookName",
+								"type": "Expression"
+							}
+						}
+					}
+				]
+			},
+			{
+				"name": "SendFinalEmailMoveFileshareFailed",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "MoveFIleFromFileshareToBlob",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"url": {
+						"value": "https://prod-22.australiaeast.logic.azure.com:443/workflows/3b1500dc3148452bbe30bca4d4caece9/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=dfK9OZs5XMno2zPpeLj2Oz6qGMDDZv3xXA4ZgOeRD9M",
+						"type": "Expression"
+					},
+					"method": "POST",
+					"body": {
+						"value": "{\n \"dataFactoryName\":\"DataFactory Name: @{pipeline().DataFactory}\",\n \"pipelineName\":\"Pipeline Name: @{pipeline().Pipeline}\",\n \"messageHeader\":\"@{pipeline().parameters.WorkbookName} : Load Failed\",\n \"messageBody1\":\"Market Information\",\n \"messageBody2\":\"\",\n \"messageBody3\":\"We are not able to load your file. Something is wrong during move from Market Data fileshare\",\n \"messageBody4\":\"\",\n \"messageBody5\":\"Fix data and submit your file again.\",\n \"emailAddress\":\"@{pipeline().parameters.emailAddress}\"\n}",
 						"type": "Expression"
 					}
 				}
