@@ -1,0 +1,197 @@
+{
+	"name": "Pipeline1test2",
+	"properties": {
+		"activities": [
+			{
+				"name": "CopyWorksheetToCsvFile",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "MoveFIleFromFileshareToBlob",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "ExcelSource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": true
+						}
+					},
+					"sink": {
+						"type": "DelimitedTextSink",
+						"storeSettings": {
+							"type": "AzureBlobStorageWriteSettings"
+						},
+						"formatSettings": {
+							"type": "DelimitedTextWriteSettings",
+							"quoteAllText": true,
+							"fileExtension": ".txt"
+						}
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "Deliver Point Code",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Deliver Point Code",
+									"type": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "Delivery Point",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Delivery Point",
+									"type": "String"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "ExcelWorkbook_AllTabs_ds",
+						"type": "DatasetReference",
+						"parameters": {
+							"WorkbookName": {
+								"value": "@pipeline().parameters.WorkbookName",
+								"type": "Expression"
+							},
+							"TabName": {
+								"value": "@variables('WorksheetName')",
+								"type": "Expression"
+							},
+							"Range": {
+								"value": "@variables('WorksheetRange')",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "CSVgenericWithParameter_ds",
+						"type": "DatasetReference",
+						"parameters": {
+							"FileName": {
+								"value": "MKTINFO_DIM_DELIVERY_POINT_Extract.csv",
+								"type": "Expression"
+							}
+						}
+					}
+				]
+			},
+			{
+				"name": "MoveFIleFromFileshareToBlob",
+				"type": "Copy",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "BinarySource",
+						"storeSettings": {
+							"type": "FileServerReadSettings",
+							"recursive": false,
+							"deleteFilesAfterCompletion": false
+						},
+						"formatSettings": {
+							"type": "BinaryReadSettings"
+						}
+					},
+					"sink": {
+						"type": "BinarySink",
+						"storeSettings": {
+							"type": "AzureBlobStorageWriteSettings"
+						}
+					},
+					"enableStaging": false
+				},
+				"inputs": [
+					{
+						"referenceName": "BinaryDataSourceFileshareMktDataDir_MoveFile_ds",
+						"type": "DatasetReference",
+						"parameters": {
+							"filename": {
+								"value": "@pipeline().parameters.WorkbookName",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "BinaryDataDestinationBlob_MoveFile_ds",
+						"type": "DatasetReference",
+						"parameters": {
+							"filename": {
+								"value": "@pipeline().parameters.WorkbookName",
+								"type": "Expression"
+							}
+						}
+					}
+				]
+			}
+		],
+		"concurrency": 1,
+		"parameters": {
+			"emailAddress": {
+				"type": "string",
+				"defaultValue": "weiyin.leow@asggroup.com.au"
+			},
+			"WorkbookName": {
+				"type": "string",
+				"defaultValue": "Market Info Dimensions.xlsx"
+			}
+		},
+		"variables": {
+			"WorksheetName": {
+				"type": "String",
+				"defaultValue": "Delivery Point"
+			},
+			"WorksheetRange": {
+				"type": "String",
+				"defaultValue": "A8:B999"
+			},
+			"GenerateBatchDate": {
+				"type": "String"
+			},
+			"MasterUtcTag": {
+				"type": "String"
+			}
+		},
+		"annotations": []
+	}
+}
