@@ -16,37 +16,6 @@
 				}
 			},
 			{
-				"name": "SendEmailFileReceivedConfirmation",
-				"type": "WebActivity",
-				"dependsOn": [
-					{
-						"activity": "GenerateBatchDate",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"policy": {
-					"timeout": "7.00:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"url": {
-						"value": "https://prod-28.australiaeast.logic.azure.com:443/workflows/7b641cb373104bb8b8d39103114bf1f9/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=p1Utk_yoW5QpICQy6dxWug_g-0CoBVg1m4n0YcgrMCs",
-						"type": "Expression"
-					},
-					"method": "POST",
-					"body": {
-						"value": "{\n \"dataFactoryName\":\"DataFactory Name: @{pipeline().DataFactory}\",\n \"pipelineName\":\"Pipeline Name: @{pipeline().Pipeline}\",\n \"messageHeader\":\"@{pipeline().parameters.WorkbookName} : Confirmed For Processing\",\n \"messageBody1\":\"\",\n \"messageBody2\":\"\",\n \"messageBody3\":\"Thank You. We will inform you after the file has been processed.\",\n \"messageBody4\":\"\",\n \"messageBody5\":\"\",\n \"emailAddress\":\"@{pipeline().parameters.emailAddress}\"\n}",
-						"type": "Expression"
-					}
-				}
-			},
-			{
 				"name": "CopyWorksheetToCsvFile",
 				"type": "Copy",
 				"dependsOn": [
@@ -823,37 +792,6 @@
 				}
 			},
 			{
-				"name": "SendFinalEmailCopyFailed",
-				"type": "WebActivity",
-				"dependsOn": [
-					{
-						"activity": "CopyWorksheetToCsvFile",
-						"dependencyConditions": [
-							"Failed"
-						]
-					}
-				],
-				"policy": {
-					"timeout": "7.00:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"url": {
-						"value": "https://prod-28.australiaeast.logic.azure.com:443/workflows/7b641cb373104bb8b8d39103114bf1f9/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=p1Utk_yoW5QpICQy6dxWug_g-0CoBVg1m4n0YcgrMCs",
-						"type": "Expression"
-					},
-					"method": "POST",
-					"body": {
-						"value": "{\n \"dataFactoryName\":\"DataFactory Name: @{pipeline().DataFactory}\",\n \"pipelineName\":\"Pipeline Name: @{pipeline().Pipeline}\",\n \"messageHeader\":\"@{pipeline().parameters.WorkbookName} : Load Failed\",\n \"messageBody1\":\"Market Information\",\n \"messageBody2\":\"\",\n \"messageBody3\":\"We are not able to load your file. Something is wrong during copy\",\n \"messageBody4\":\"\",\n \"messageBody5\":\"Fix data and submit your file again.\",\n \"emailAddress\":\"@{pipeline().parameters.emailAddress}\"\n}",
-						"type": "Expression"
-					}
-				}
-			},
-			{
 				"name": "MoveFIleFromFileshareToBlob",
 				"type": "Copy",
 				"dependsOn": [
@@ -918,8 +856,47 @@
 				]
 			},
 			{
-				"name": "SendFinalEmailMoveFileshareFailed",
-				"type": "WebActivity",
+				"name": "SendEmailFileReceivedConfirmation",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "GenerateBatchDate",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "ProcessOpsMktSendMailFileReceived_pl",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"DataFactoryName": {
+							"value": "@pipeline().DataFactory",
+							"type": "Expression"
+						},
+						"PipelineName": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"WorkbookName": {
+							"value": "@pipeline().parameters.WorkbookName",
+							"type": "Expression"
+						},
+						"ErrorTableName": "None",
+						"emailAddress": {
+							"value": "@pipeline().parameters.emailAddress",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "SendMailMoveFileFailed",
+				"type": "ExecutePipeline",
 				"dependsOn": [
 					{
 						"activity": "MoveFIleFromFileshareToBlob",
@@ -928,23 +905,70 @@
 						]
 					}
 				],
-				"policy": {
-					"timeout": "7.00:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
-					"secureOutput": false,
-					"secureInput": false
-				},
 				"userProperties": [],
 				"typeProperties": {
-					"url": {
-						"value": "https://prod-28.australiaeast.logic.azure.com:443/workflows/7b641cb373104bb8b8d39103114bf1f9/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=p1Utk_yoW5QpICQy6dxWug_g-0CoBVg1m4n0YcgrMCs",
-						"type": "Expression"
+					"pipeline": {
+						"referenceName": "ProcessOpsMktSendMailCopyFailed_pl",
+						"type": "PipelineReference"
 					},
-					"method": "POST",
-					"body": {
-						"value": "{\n \"dataFactoryName\":\"DataFactory Name: @{pipeline().DataFactory}\",\n \"pipelineName\":\"Pipeline Name: @{pipeline().Pipeline}\",\n \"messageHeader\":\"@{pipeline().parameters.WorkbookName} : Load Failed\",\n \"messageBody1\":\"Market Information\",\n \"messageBody2\":\"\",\n \"messageBody3\":\"We are not able to load your file. Something is wrong during move from Market Data fileshare\",\n \"messageBody4\":\"\",\n \"messageBody5\":\"Fix data and submit your file again.\",\n \"emailAddress\":\"@{pipeline().parameters.emailAddress}\"\n}",
-						"type": "Expression"
+					"waitOnCompletion": true,
+					"parameters": {
+						"DataFactoryName": {
+							"value": "@pipeline().DataFactory",
+							"type": "Expression"
+						},
+						"PipelineName": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"WorkbookName": {
+							"value": "@pipeline().parameters.WorkbookName",
+							"type": "Expression"
+						},
+						"ErrorTableName": "None",
+						"emailAddress": {
+							"value": "@pipeline().parameters.emailAddress",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "SendMailCopyFileFailed",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "CopyWorksheetToCsvFile",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "ProcessOpsMktSendMailCopyFailed_pl",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"DataFactoryName": {
+							"value": "@pipeline().DataFactory",
+							"type": "Expression"
+						},
+						"PipelineName": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"WorkbookName": {
+							"value": "@pipeline().parameters.WorkbookName",
+							"type": "Expression"
+						},
+						"ErrorTableName": "None",
+						"emailAddress": {
+							"value": "@pipeline().parameters.emailAddress",
+							"type": "Expression"
+						}
 					}
 				}
 			}
