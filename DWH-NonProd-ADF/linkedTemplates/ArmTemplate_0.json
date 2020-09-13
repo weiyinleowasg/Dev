@@ -66,28 +66,171 @@
 		"NFDWHProdAKV_LS_properties_typeProperties_baseUrl": {
 			"type": "string",
 			"defaultValue": "https://NFDWHProdAKV.vault.azure.net/"
-		},
-		"App1SQLServer_LS_properties_typeProperties_connectionString_secretName": {
-			"type": "string",
-			"defaultValue": "TigermothConn"
-		},
-		"BlobStore_nfdwhdatalake_properties_typeProperties_connectionString_secretName": {
-			"type": "string",
-			"defaultValue": "NFDWHNonProdBlobdatalakeConn"
-		},
-		"BlobStore_nfdwhstaging_properties_typeProperties_connectionString_secretName": {
-			"type": "string",
-			"defaultValue": "NFDWHNonProdBlobstagingConn"
-		},
-		"SQLdbConnection_properties_typeProperties_connectionString_secretName": {
-			"type": "string",
-			"defaultValue": "NFDWHDEVSQLConn"
 		}
 	},
 	"variables": {
 		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
 	},
 	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/ProcessMktSendMailCopyFailed_pl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "SendMailCopyError",
+						"type": "WebActivity",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": {
+								"value": "https://prod-22.australiaeast.logic.azure.com:443/workflows/3b1500dc3148452bbe30bca4d4caece9/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=dfK9OZs5XMno2zPpeLj2Oz6qGMDDZv3xXA4ZgOeRD9M",
+								"type": "Expression"
+							},
+							"method": "POST",
+							"headers": {},
+							"body": {
+								"value": "{\n \"dataFactoryName\":\"DataFactory Name: @{pipeline().parameters.DataFactoryName}\",\n \"pipelineName\":\"Pipeline Name: @{pipeline().parameters.PipelineName}\",\n \"messageHeader\":\"@{pipeline().parameters.WorkbookName} : Move/Copy Failed\",\n \"messageBody1\":\"Market Information\",\n \"messageBody2\":\"\",\n \"messageBody3\":\"We are not able to load your file. Something is wrong during move from Market Data fileshare or Copy to Scrubbed Container\",\n \"messageBody4\":\"\",\n \"messageBody5\":\"Fix data and submit your file again.\",\n \"emailAddress\":\"@{pipeline().parameters.emailAddress}\"\n}",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"parameters": {
+					"DataFactoryName": {
+						"type": "string"
+					},
+					"PipelineName": {
+						"type": "string"
+					},
+					"WorkbookName": {
+						"type": "string"
+					},
+					"ErrorTableName": {
+						"type": "string"
+					},
+					"emailAddress": {
+						"type": "string"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ProcessMktSendMailFileReceived_pl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "SendMailFileReceivedConfirmation",
+						"type": "WebActivity",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": {
+								"value": "https://prod-22.australiaeast.logic.azure.com:443/workflows/3b1500dc3148452bbe30bca4d4caece9/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=dfK9OZs5XMno2zPpeLj2Oz6qGMDDZv3xXA4ZgOeRD9M",
+								"type": "Expression"
+							},
+							"method": "POST",
+							"headers": {},
+							"body": {
+								"value": "{\n \"dataFactoryName\":\"DataFactory Name: @{pipeline().parameters.DataFactoryName}\",\n \"pipelineName\":\"Pipeline Name: @{pipeline().parameters.PipelineName}\",\n \"messageHeader\":\"@{pipeline().parameters.WorkbookName} : Confirmed For Processing\",\n \"messageBody1\":\"\",\n \"messageBody2\":\"\",\n \"messageBody3\":\"Thank You. We will inform you after the file has been processed.\",\n \"messageBody4\":\"\",\n \"messageBody5\":\"\",\n \"emailAddress\":\"@{pipeline().parameters.emailAddress}\"\n}",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"parameters": {
+					"DataFactoryName": {
+						"type": "string"
+					},
+					"PipelineName": {
+						"type": "string"
+					},
+					"WorkbookName": {
+						"type": "string"
+					},
+					"ErrorTableName": {
+						"type": "string"
+					},
+					"emailAddress": {
+						"type": "string"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ProcessMktSendMailFinalFailedMsg_pl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "SendMailFinalFailedMsg",
+						"type": "WebActivity",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": {
+								"value": "https://prod-22.australiaeast.logic.azure.com:443/workflows/3b1500dc3148452bbe30bca4d4caece9/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=dfK9OZs5XMno2zPpeLj2Oz6qGMDDZv3xXA4ZgOeRD9M",
+								"type": "Expression"
+							},
+							"method": "POST",
+							"headers": {},
+							"body": {
+								"value": "{\n \"dataFactoryName\":\"DataFactory Name: @{pipeline().parameters.DataFactoryName}\",\n \"pipelineName\":\"Pipeline Name: @{pipeline().parameters.PipelineName}\",\n \"messageHeader\":\"@{pipeline().parameters.WorkbookName} : Load Failed\",\n \"messageBody1\":\"Market Information\",\n \"messageBody2\":\"\",\n \"messageBody3\":\"We are not able to load your file. Something is wrong\",\n \"messageBody4\":\"\",\n \"messageBody5\":\"Fix data and submit your file again.\",\n \"emailAddress\":\"@{pipeline().parameters.emailAddress}\"\n}",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"parameters": {
+					"DataFactoryName": {
+						"type": "string"
+					},
+					"PipelineName": {
+						"type": "string"
+					},
+					"WorkbookName": {
+						"type": "string"
+					},
+					"ErrorTableName": {
+						"type": "string"
+					},
+					"emailAddress": {
+						"type": "string"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": []
+		},
 		{
 			"name": "[concat(parameters('factoryName'), '/ProcessTigermothSendmail_Completion_pl')]",
 			"type": "Microsoft.DataFactory/factories/pipelines",
@@ -270,6 +413,27 @@
 			"dependsOn": []
 		},
 		{
+			"name": "[concat(parameters('factoryName'), '/Binary1FileShareTest')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "FileStore_nfdwhsourcelandingraw",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "Binary",
+				"typeProperties": {
+					"location": {
+						"type": "FileServerLocation"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/FileStore_nfdwhsourcelandingraw')]"
+			]
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/BinaryDataSourceFileshareDirectory_MoveFile_ds')]",
 			"type": "Microsoft.DataFactory/factories/datasets",
 			"apiVersion": "2018-06-01",
@@ -311,6 +475,34 @@
 			},
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/linkedServices/FileStore_nfdwhetlerror')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/BinaryDataSourceFileshareMktDataDir_MoveFile_ds')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "It describes the folder in the data source store.",
+				"linkedServiceName": {
+					"referenceName": "FileStore_nfdwhsourcelandingraw",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"filename": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "Binary",
+				"typeProperties": {
+					"location": {
+						"type": "FileServerLocation",
+						"folderPath": "Market Data"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/FileStore_nfdwhsourcelandingraw')]"
 			]
 		},
 		{
@@ -471,137 +663,6 @@
 			},
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/linkedServices/FileStore_nfdwhsourcelanding')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/SourceDataset_i34')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "FileStore_nfdwhsourcelanding",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "DelimitedText",
-				"typeProperties": {
-					"location": {
-						"type": "AzureFileStorageLocation",
-						"fileName": "SPECIES_LIST.csv"
-					},
-					"columnDelimiter": ",",
-					"escapeChar": "\\",
-					"firstRowAsHeader": true,
-					"quoteChar": "\""
-				},
-				"schema": [
-					{
-						"name": "Species_Code"
-					},
-					{
-						"name": "Species"
-					},
-					{
-						"name": "Species_Group"
-					},
-					{
-						"name": "Active_YN"
-					},
-					{
-						"name": "Updated Date"
-					}
-				]
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/linkedServices/FileStore_nfdwhsourcelanding')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/App1SQLServer_LS')]",
-			"type": "Microsoft.DataFactory/factories/linkedServices",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"annotations": [],
-				"type": "SqlServer",
-				"typeProperties": {
-					"connectionString": {
-						"type": "AzureKeyVaultSecret",
-						"store": {
-							"referenceName": "NFDWHProdAKV_LS",
-							"type": "LinkedServiceReference"
-						},
-						"secretName": "[parameters('App1SQLServer_LS_properties_typeProperties_connectionString_secretName')]"
-					}
-				}
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/linkedServices/NFDWHProdAKV_LS')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/BlobStore_nfdwhdatalake')]",
-			"type": "Microsoft.DataFactory/factories/linkedServices",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"annotations": [],
-				"type": "AzureBlobStorage",
-				"typeProperties": {
-					"connectionString": {
-						"type": "AzureKeyVaultSecret",
-						"store": {
-							"referenceName": "NFDWHAKV_LS",
-							"type": "LinkedServiceReference"
-						},
-						"secretName": "[parameters('BlobStore_nfdwhdatalake_properties_typeProperties_connectionString_secretName')]"
-					}
-				}
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/linkedServices/NFDWHAKV_LS')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/BlobStore_nfdwhstaging')]",
-			"type": "Microsoft.DataFactory/factories/linkedServices",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"annotations": [],
-				"type": "AzureBlobStorage",
-				"typeProperties": {
-					"connectionString": {
-						"type": "AzureKeyVaultSecret",
-						"store": {
-							"referenceName": "NFDWHAKV_LS",
-							"type": "LinkedServiceReference"
-						},
-						"secretName": "[parameters('BlobStore_nfdwhstaging_properties_typeProperties_connectionString_secretName')]"
-					}
-				}
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/linkedServices/NFDWHAKV_LS')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/SQLdbConnection')]",
-			"type": "Microsoft.DataFactory/factories/linkedServices",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"annotations": [],
-				"type": "AzureSqlDatabase",
-				"typeProperties": {
-					"connectionString": {
-						"type": "AzureKeyVaultSecret",
-						"store": {
-							"referenceName": "NFDWHAKV_LS",
-							"type": "LinkedServiceReference"
-						},
-						"secretName": "[parameters('SQLdbConnection_properties_typeProperties_connectionString_secretName')]"
-					}
-				}
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/linkedServices/NFDWHAKV_LS')]"
 			]
 		}
 	]
