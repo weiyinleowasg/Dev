@@ -1316,6 +1316,85 @@
 			"dependsOn": []
 		},
 		{
+			"name": "[concat(parameters('factoryName'), '/LoadMktDimDataSource_InsertUpdate_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "CSVgenericWithParameter_ds",
+								"type": "DatasetReference"
+							},
+							"name": "ReadSource"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLtableGeneric_ds",
+								"type": "DatasetReference"
+							},
+							"name": "DatamartDimDataSourceLkp"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLtableGenericWithParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "TargetDim"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLtableGenericWithParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "ErrorTable"
+						}
+					],
+					"transformations": [
+						{
+							"name": "SelectDimDataSourceLkp"
+						},
+						{
+							"name": "DataTransformation"
+						},
+						{
+							"name": "CheckDimensionRecordExist"
+						},
+						{
+							"name": "AddAdditionalAudit"
+						},
+						{
+							"name": "AlterRowInsertUpdate"
+						},
+						{
+							"name": "CheckInputRecord"
+						},
+						{
+							"name": "AddErrorDetail"
+						},
+						{
+							"name": "RemoveBlankRow"
+						},
+						{
+							"name": "GetNewOrModified"
+						},
+						{
+							"name": "RemoveDuplicate"
+						},
+						{
+							"name": "ReplaceNullToUndefined"
+						}
+					],
+					"script": "parameters{\n\tGeneratedBatchDate as string,\n\tWorkbookName as string,\n\tWorksheetName as string,\n\tMasterPipelineName as string\n}\nsource(output(\n\t\t{Source Metric} as string,\n\t\t{Source Name} as string,\n\t\t{Source Type} as string,\n\t\tSource_Link as string,\n\t\tSource_Data_Type as string,\n\t\tData_Process_Type as string,\n\t\tSource_Status as string,\n\t\tFrequency as string,\n\t\tConfidence_Level as string,\n\t\t{Person Responsible} as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> ReadSource\nsource(output(\n\t\tMetric_Short_Name as string,\n\t\tSource_Name as string,\n\t\tSource_Type as string,\n\t\tSource_Link as string,\n\t\tSource_Data_Type as string,\n\t\tData_Process_Type as string,\n\t\tSource_Status as string,\n\t\tFrequency as string,\n\t\tConfidence_Level as string,\n\t\tPerson_Responsible as string,\n\t\tInsert_DateTime as timestamp\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT\\n       [Metric_Short_Name]\\n      ,[Source_Name]\\n      ,[Source_Type]\\n      ,[Source_Link]\\n      ,[Source_Data_Type]\\n      ,[Data_Process_Type]\\n      ,[Source_Status]\\n      ,[Frequency]\\n      ,[Confidence_Level]\\n      ,[Person_Responsible]\\n      ,[Insert_DateTime]\\n  FROM [datamart].[Dim_Data_Source]',\n\tformat: 'query') ~> DatamartDimDataSourceLkp\nDatamartDimDataSourceLkp select(mapColumn(\n\t\tMetric_Short_Name_Lkp = Metric_Short_Name,\n\t\tSource_Name_Lkp = Source_Name,\n\t\tSource_Type_Lkp = Source_Type,\n\t\tSource_Link_Lkp = Source_Link,\n\t\tSource_Data_Type_Lkp = Source_Data_Type,\n\t\tData_Process_Type_Lkp = Data_Process_Type,\n\t\tSource_Status_Lkp = Source_Status,\n\t\tFrequency_Lkp = Frequency,\n\t\tConfidence_Level_Lkp = Confidence_Level,\n\t\tPerson_Responsible_Lkp = Person_Responsible,\n\t\tInsert_DateTime_Lkp = Insert_DateTime\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectDimDataSourceLkp\nReadSource derive(Source_File = concat($WorkbookName,'-', $WorksheetName),\n\t\tBatch_ID = replace(replace(replace($GeneratedBatchDate, \"-\", \"\"),\":\",\"\"),\" \",\"\"),\n\t\tProcess_Name = $MasterPipelineName) ~> DataTransformation\nRemoveDuplicate, SelectDimDataSourceLkp lookup({Source Metric} == Metric_Short_Name_Lkp,\n\tmultiple: false,\n\tpickup: 'any',\n\tbroadcast: 'auto')~> CheckDimensionRecordExist\nGetNewOrModified derive(InsertUpdateFlag = iif(isNull(Metric_Short_Name_Lkp), \"I\", \"U\"),\n\t\tInsert_DateTime = iif(isNull(Metric_Short_Name_Lkp), fromUTC(currentUTC(), 'Australia/Sydney'), Insert_DateTime_Lkp),\n\t\tUpdate_DateTime = iif(isNull(Metric_Short_Name_Lkp), toTimestamp(\"\"), fromUTC(currentUTC(), 'Australia/Sydney'))) ~> AddAdditionalAudit\nAddAdditionalAudit alterRow(insertIf(equals(InsertUpdateFlag,\"I\")),\n\tupdateIf(equals(InsertUpdateFlag,\"U\"))) ~> AlterRowInsertUpdate\nDataTransformation split(not(isNull({Source Metric})),\n\tdisjoint: false) ~> CheckInputRecord@(Valid, Invalid)\nRemoveBlankRow derive(Error_Desc = toString(\"Source Metric cannot be empty\"),\n\t\tInsert_Datetime = fromUTC(currentUTC(), 'Australia/Sydney')) ~> AddErrorDetail\nCheckInputRecord@Invalid filter(not(isNull({Source Metric})) || not(isNull({Source Name})) || not(isNull({Source Type})) || not(isNull(Source_Link)) || \r\nnot(isNull(Source_Data_Type)) || not(isNull(Data_Process_Type)) || not(isNull(Source_Status)) || not(isNull(Frequency)) || \r\nnot(isNull(Confidence_Level)) || not(isNull({Person Responsible}))) ~> RemoveBlankRow\nCheckDimensionRecordExist filter(isNull(Metric_Short_Name_Lkp) || \r\nnotEquals({Source Name}, Source_Name_Lkp) || \r\nnotEquals({Source Type}, Source_Type_Lkp) || \r\nnotEquals(Source_Link, Source_Link_Lkp) || \r\nnotEquals(Source_Data_Type, Source_Data_Type_Lkp) || \r\nnotEquals(Data_Process_Type, Data_Process_Type_Lkp) || \r\nnotEquals(Source_Status, Source_Status_Lkp) || \r\nnotEquals(Frequency, Frequency_Lkp) || \r\nnotEquals(Confidence_Level, Confidence_Level_Lkp) || \r\nnotEquals({Person Responsible}, Person_Responsible_Lkp)) ~> GetNewOrModified\nReplaceNullToUndefined aggregate(groupBy({Source Metric},\n\t\t{Source Name},\n\t\t{Source Type},\n\t\tSource_Link,\n\t\tSource_Data_Type,\n\t\tData_Process_Type,\n\t\tSource_Status,\n\t\tFrequency,\n\t\tConfidence_Level,\n\t\t{Person Responsible},\n\t\tSource_File,\n\t\tBatch_ID,\n\t\tProcess_Name),\n\tDuplicateCount = count()) ~> RemoveDuplicate\nCheckInputRecord@Valid derive({Source Name} = iifNull({Source Name}, \"Undefined\"),\n\t\t{Source Type} = iifNull({Source Type}, \"Undefined\"),\n\t\tSource_Link = iifNull(Source_Link, \"Undefined\"),\n\t\tSource_Data_Type = iifNull(Source_Data_Type, \"Undefined\"),\n\t\tData_Process_Type = iifNull(Data_Process_Type, \"Undefined\"),\n\t\tSource_Status = iifNull(Source_Status, \"Undefined\"),\n\t\tFrequency = iifNull(Frequency, \"Undefined\"),\n\t\tConfidence_Level = iifNull(Confidence_Level, \"Undefined\"),\n\t\t{Person Responsible} = iifNull({Person Responsible}, \"Undefined\")) ~> ReplaceNullToUndefined\nAlterRowInsertUpdate sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:true,\n\tupsertable:false,\n\tkeys:['Metric_Short_Name'],\n\tformat: 'table',\n\tmapColumn(\n\t\tMetric_Short_Name = {Source Metric},\n\t\tSource_Name = {Source Name},\n\t\tSource_Type = {Source Type},\n\t\tSource_Link,\n\t\tSource_Data_Type,\n\t\tData_Process_Type,\n\t\tSource_Status,\n\t\tFrequency,\n\t\tConfidence_Level,\n\t\tPerson_Responsible = {Person Responsible},\n\t\tSource_File,\n\t\tBatch_ID,\n\t\tProcess_Name,\n\t\tInsert_DateTime,\n\t\tUpdate_DateTime\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetDim\nAddErrorDetail sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tMetric_Short_Name = {Source Metric},\n\t\tSource_Name = {Source Name},\n\t\tSource_Type = {Source Type},\n\t\tSource_Link,\n\t\tSource_Data_Type,\n\t\tData_Process_Type,\n\t\tSource_Status,\n\t\tFrequency,\n\t\tConfidence_Level,\n\t\tPerson_Responsible = {Person Responsible},\n\t\tSource_File,\n\t\tProcess_Name,\n\t\tError_Desc,\n\t\tInsert_Datetime\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> ErrorTable"
+				}
+			},
+			"dependsOn": []
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/LoadMktDimDeliveryPoint_InsertUpdate_df')]",
 			"type": "Microsoft.DataFactory/factories/dataflows",
 			"apiVersion": "2018-06-01",
@@ -1468,7 +1547,112 @@
 							"name": "ReplaceNullToUndefined"
 						}
 					],
-					"script": "parameters{\n\tGeneratedBatchDate as string,\n\tWorkbookName as string,\n\tWorksheetName as string,\n\tMasterPipelineName as string\n}\nsource(output(\n\t\tIndicator_Code as string,\n\t\tIndicator_Desc as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> ReadSource\nsource(output(\n\t\tIndicator_Code as string,\n\t\tIndicator_Desc as string,\n\t\tInsert_DateTime as timestamp\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT \\n       [Indicator_Code]\\n      ,[Indicator_Desc]\\n      ,[Insert_DateTime]\\n  FROM [datamart].[Dim_Indicator]',\n\tformat: 'query') ~> DatamartDimIndicatorLkp\nDatamartDimIndicatorLkp select(mapColumn(\n\t\tIndicator_Code_Lkp = Indicator_Code,\n\t\tIndicator_Desc_Lkp = Indicator_Desc,\n\t\tInsert_DateTime_Lkp = Insert_DateTime\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectDimIndicatorLkp\nReadSource derive(Source_File = concat($WorkbookName,'-', $WorksheetName),\n\t\tBatch_ID = replace(replace(replace($GeneratedBatchDate, \"-\", \"\"),\":\",\"\"),\" \",\"\"),\n\t\tProcess_Name = $MasterPipelineName) ~> DataTransformation\nRemoveDuplicate, SelectDimIndicatorLkp lookup(Indicator_Code == Indicator_Code_Lkp,\n\tmultiple: false,\n\tpickup: 'any',\n\tbroadcast: 'auto')~> CheckDimensionRecordExist\nGetNewOrModified derive(InsertUpdateFlag = iif(isNull(Indicator_Code_Lkp), \"I\", \"U\"),\n\t\tInsert_DateTime = iif(isNull(Indicator_Code_Lkp), fromUTC(currentUTC(), 'Australia/Sydney'), Insert_DateTime_Lkp),\n\t\tUpdate_DateTime = iif(isNull(Indicator_Code_Lkp), toTimestamp(\"\"), fromUTC(currentUTC(), 'Australia/Sydney'))) ~> AddAdditionalAudit\nAddAdditionalAudit alterRow(insertIf(equals(InsertUpdateFlag,\"I\")),\n\tupdateIf(equals(InsertUpdateFlag,\"U\"))) ~> AlterRowInsertUpdate\nDataTransformation split(not(isNull(Indicator_Code)),\n\tdisjoint: false) ~> CheckInputRecord@(Valid, Invalid)\nRemoveBlankRow derive(Error_Desc = toString(\"Indicator Code cannot be empty\"),\n\t\tInsert_Datetime = fromUTC(currentUTC(), 'Australia/Sydney')) ~> AddErrorDetail\nCheckInputRecord@Invalid filter(not(isNull(Indicator_Code)) || not(isNull(Indicator_Desc))) ~> RemoveBlankRow\nCheckDimensionRecordExist filter(isNull(Indicator_Code_Lkp) || notEquals(Indicator_Desc, Indicator_Desc_Lkp)) ~> GetNewOrModified\nReplaceNullToUndefined aggregate(groupBy(Indicator_Code,\n\t\tIndicator_Desc,\n\t\tSource_File,\n\t\tBatch_ID,\n\t\tProcess_Name),\n\tDuplicateCount = count()) ~> RemoveDuplicate\nCheckInputRecord@Valid derive({Delivery Point} = iifNull(Indicator_Desc, \"Undefined\")) ~> ReplaceNullToUndefined\nAlterRowInsertUpdate sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:true,\n\tupsertable:false,\n\tkeys:['Indicator_Code'],\n\tformat: 'table',\n\tmapColumn(\n\t\tIndicator_Code,\n\t\tIndicator_Desc,\n\t\tSource_File,\n\t\tBatch_ID,\n\t\tProcess_Name,\n\t\tInsert_DateTime,\n\t\tUpdate_DateTime\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetDim\nAddErrorDetail sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tIndicator_Code,\n\t\tIndicator_Desc,\n\t\tSource_File,\n\t\tProcess_Name,\n\t\tError_Desc,\n\t\tInsert_Datetime\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> ErrorTable"
+					"script": "parameters{\n\tGeneratedBatchDate as string,\n\tWorkbookName as string,\n\tWorksheetName as string,\n\tMasterPipelineName as string\n}\nsource(output(\n\t\t{Indicator Code} as string,\n\t\t{Indicator Desc} as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> ReadSource\nsource(output(\n\t\tIndicator_Code as string,\n\t\tIndicator_Desc as string,\n\t\tInsert_DateTime as timestamp\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT \\n       [Indicator_Code]\\n      ,[Indicator_Desc]\\n      ,[Insert_DateTime]\\n  FROM [datamart].[Dim_Indicator]\\nWHERE Indicator_Id != -1',\n\tformat: 'query') ~> DatamartDimIndicatorLkp\nDatamartDimIndicatorLkp select(mapColumn(\n\t\tIndicator_Code_Lkp = Indicator_Code,\n\t\tIndicator_Desc_Lkp = Indicator_Desc,\n\t\tInsert_DateTime_Lkp = Insert_DateTime\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectDimIndicatorLkp\nReadSource derive(Source_File = concat($WorkbookName,'-', $WorksheetName),\n\t\tBatch_ID = replace(replace(replace($GeneratedBatchDate, \"-\", \"\"),\":\",\"\"),\" \",\"\"),\n\t\tProcess_Name = $MasterPipelineName) ~> DataTransformation\nRemoveDuplicate, SelectDimIndicatorLkp lookup({Indicator Code} == Indicator_Code_Lkp,\n\tmultiple: false,\n\tpickup: 'any',\n\tbroadcast: 'auto')~> CheckDimensionRecordExist\nGetNewOrModified derive(InsertUpdateFlag = iif(isNull(Indicator_Code_Lkp), \"I\", \"U\"),\n\t\tInsert_DateTime = iif(isNull(Indicator_Code_Lkp), fromUTC(currentUTC(), 'Australia/Sydney'), Insert_DateTime_Lkp),\n\t\tUpdate_DateTime = iif(isNull(Indicator_Code_Lkp), toTimestamp(\"\"), fromUTC(currentUTC(), 'Australia/Sydney'))) ~> AddAdditionalAudit\nAddAdditionalAudit alterRow(insertIf(equals(InsertUpdateFlag,\"I\")),\n\tupdateIf(equals(InsertUpdateFlag,\"U\"))) ~> AlterRowInsertUpdate\nDataTransformation split(not(isNull({Indicator Code})),\n\tdisjoint: false) ~> CheckInputRecord@(Valid, Invalid)\nRemoveBlankRow derive(Error_Desc = toString(\"Indicator Code cannot be empty\"),\n\t\tInsert_Datetime = fromUTC(currentUTC(), 'Australia/Sydney')) ~> AddErrorDetail\nCheckInputRecord@Invalid filter(not(isNull({Indicator Code})) || not(isNull({Indicator Desc}))) ~> RemoveBlankRow\nCheckDimensionRecordExist filter(isNull(Indicator_Code_Lkp) || notEquals({Indicator Desc}, Indicator_Desc_Lkp)) ~> GetNewOrModified\nReplaceNullToUndefined aggregate(groupBy({Indicator Code},\n\t\t{Indicator Desc},\n\t\tSource_File,\n\t\tBatch_ID,\n\t\tProcess_Name),\n\tDuplicateCount = count()) ~> RemoveDuplicate\nCheckInputRecord@Valid derive({Indicator Desc} = iifNull({Indicator Desc}, \"Undefined\")) ~> ReplaceNullToUndefined\nAlterRowInsertUpdate sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:true,\n\tupsertable:false,\n\tkeys:['Indicator_Code'],\n\tformat: 'table',\n\tmapColumn(\n\t\tIndicator_Code = {Indicator Code},\n\t\tIndicator_Desc = {Indicator Desc},\n\t\tSource_File,\n\t\tBatch_ID,\n\t\tProcess_Name,\n\t\tInsert_DateTime,\n\t\tUpdate_DateTime\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetDim\nAddErrorDetail sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tIndicator_Code = {Indicator Code},\n\t\tIndicator_Desc = {Indicator Desc},\n\t\tSource_File,\n\t\tProcess_Name,\n\t\tError_Desc,\n\t\tInsert_Datetime\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> ErrorTable"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadMktDimProduct_InsertUpdate_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "CSVgenericWithParameter_ds",
+								"type": "DatasetReference"
+							},
+							"name": "ReadSource"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLtableGeneric_ds",
+								"type": "DatasetReference"
+							},
+							"name": "DatamartDimProductLkp"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLtableGeneric_ds",
+								"type": "DatasetReference"
+							},
+							"name": "DatamartSpeciesLkp"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLtableGeneric_ds",
+								"type": "DatasetReference"
+							},
+							"name": "RelationalChartOfAccountLkp"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLtableGenericWithParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "TargetDim"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLtableGenericWithParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "ErrorTable"
+						}
+					],
+					"transformations": [
+						{
+							"name": "SelectDimProductLkp"
+						},
+						{
+							"name": "DataTransformation"
+						},
+						{
+							"name": "CheckDimensionRecordExist"
+						},
+						{
+							"name": "AddAdditionalAudit"
+						},
+						{
+							"name": "AlterRowInsertUpdate"
+						},
+						{
+							"name": "CheckInputRecord"
+						},
+						{
+							"name": "AddErrorDetail"
+						},
+						{
+							"name": "RemoveBlankRow"
+						},
+						{
+							"name": "GetNewOrModified"
+						},
+						{
+							"name": "RemoveDuplicate"
+						},
+						{
+							"name": "ReplaceNullToUndefined"
+						},
+						{
+							"name": "SelectDimSpeciesLkp"
+						},
+						{
+							"name": "SelectRelationalCoaLkp"
+						},
+						{
+							"name": "LookupDimSpecies"
+						},
+						{
+							"name": "LookupChartOfAccount"
+						}
+					],
+					"script": "parameters{\n\tGeneratedBatchDate as string,\n\tWorkbookName as string,\n\tWorksheetName as string,\n\tMasterPipelineName as string\n}\nsource(output(\n\t\tProduct_Code as string,\n\t\tProduct_Type as string,\n\t\tProduct_Global_Grade as string,\n\t\tProduct_Desc as string,\n\t\tGL_Code as string,\n\t\tSpecies_Code as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> ReadSource\nsource(output(\n\t\tProduct_Code as string,\n\t\tProduct_Type as string,\n\t\tProduct_Global_Grade as string,\n\t\tProduct_Desc as string,\n\t\tGL_Code as string,\n\t\tSpecies_Code as string,\n\t\tInsert_DateTime as timestamp\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT \\n       [Product_Code]\\n      ,[Product_Type]\\n      ,[Product_Global_Grade]\\n      ,[Product_Desc]\\n      ,[GL_Code]\\n      ,[Species_Code]\\n      ,[Insert_DateTime]\\n  FROM [datamart].[Dim_Product]',\n\tformat: 'query') ~> DatamartDimProductLkp\nsource(output(\n\t\tSpecies_Code as string,\n\t\tSpecies as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT \\n       [Species_Code]\\n      ,[Species]\\n  FROM [datamart].[Dim_Species]',\n\tformat: 'query') ~> DatamartSpeciesLkp\nsource(output(\n\t\tGL_Code as string,\n\t\tGL_Desc as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT \\n       [GL_Code]\\n      ,[GL_Desc]\\n  FROM [relational].[Chart_of_Account] \\n  WHERE GL_Code != \\'\\' \\n  AND [record_deleted_flag] = 0\\n  AND [end_datetime] = \\'9999-12-31 00:00:00.000\\'',\n\tformat: 'query') ~> RelationalChartOfAccountLkp\nDatamartDimProductLkp select(mapColumn(\n\t\tProduct_Code_Lkp = Product_Code,\n\t\tProduct_Type_Lkp = Product_Type,\n\t\tProduct_Global_Grade_Lkp = Product_Global_Grade,\n\t\tProduct_Desc_Lkp = Product_Desc,\n\t\tGL_Code_Lkp = GL_Code,\n\t\tSpecies_Code_Lkp = Species_Code,\n\t\tInsert_DateTime_Lkp = Insert_DateTime\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectDimProductLkp\nReadSource derive(Source_File = concat($WorkbookName,'-', $WorksheetName),\n\t\tBatch_ID = replace(replace(replace($GeneratedBatchDate, \"-\", \"\"),\":\",\"\"),\" \",\"\"),\n\t\tProcess_Name = $MasterPipelineName) ~> DataTransformation\nRemoveDuplicate, SelectDimProductLkp lookup(Product_Code == Product_Code_Lkp,\n\tmultiple: false,\n\tpickup: 'any',\n\tbroadcast: 'auto')~> CheckDimensionRecordExist\nGetNewOrModified derive(InsertUpdateFlag = iif(isNull(Product_Code_Lkp), \"I\", \"U\"),\n\t\tInsert_DateTime = iif(isNull(Product_Code_Lkp), fromUTC(currentUTC(), 'Australia/Sydney'), Insert_DateTime_Lkp),\n\t\tUpdate_DateTime = iif(isNull(Product_Code_Lkp), toTimestamp(\"\"), fromUTC(currentUTC(), 'Australia/Sydney'))) ~> AddAdditionalAudit\nAddAdditionalAudit alterRow(insertIf(equals(InsertUpdateFlag,\"I\")),\n\tupdateIf(equals(InsertUpdateFlag,\"U\"))) ~> AlterRowInsertUpdate\nLookupChartOfAccount split(not(isNull(Product_Code)) && \r\n(isNull(Species_Code) || not(isNull(Species_Code_Lkp))) &&\r\n(isNull(GL_Code) || not(isNull(GL_Code_Lkp))),\n\tdisjoint: false) ~> CheckInputRecord@(Valid, Invalid)\nRemoveBlankRow derive(Error_Desc = toString(\"Product Code cannot be empty or Invalid GL Code or Invalid Species Code\"),\n\t\tInsert_Datetime = fromUTC(currentUTC(), 'Australia/Sydney')) ~> AddErrorDetail\nCheckInputRecord@Invalid filter(not(isNull(Product_Code)) || not(isNull(Product_Type)) || not(isNull(Product_Global_Grade)) || \r\nnot(isNull(Product_Desc)) || not(isNull(GL_Code)) || not(isNull(Species_Code))) ~> RemoveBlankRow\nCheckDimensionRecordExist filter(isNull(Product_Code_Lkp) || \r\nnotEquals(Product_Type, Product_Type_Lkp) || \r\nnotEquals(Product_Global_Grade, Product_Global_Grade_Lkp) || \r\nnotEquals(Product_Desc, Product_Desc_Lkp) || \r\nnotEquals(GL_Code, GL_Code_Lkp) || \r\nnotEquals(Species_Code, Species_Code_Lkp)) ~> GetNewOrModified\nReplaceNullToUndefined aggregate(groupBy(Product_Code,\n\t\tProduct_Type,\n\t\tProduct_Global_Grade,\n\t\tProduct_Desc,\n\t\tGL_Code,\n\t\tSpecies_Code,\n\t\tSource_File,\n\t\tBatch_ID,\n\t\tProcess_Name),\n\tDuplicateCount = count()) ~> RemoveDuplicate\nCheckInputRecord@Valid derive(Product_Type = iifNull(Product_Type, \"Undefined\"),\n\t\tProduct_Desc = iifNull(Product_Desc, \"Undefined\"),\n\t\tProduct_Global_Grade = iifNull(Product_Global_Grade, \"Undefined\"),\n\t\tGL_Code = iifNull(GL_Code, \"Undefined\"),\n\t\tSpecies_Code = iifNull(Species_Code, \"Undefined\")) ~> ReplaceNullToUndefined\nDatamartSpeciesLkp select(mapColumn(\n\t\tSpecies_Code_Lkp = Species_Code,\n\t\tSpecies_Lkp = Species\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectDimSpeciesLkp\nRelationalChartOfAccountLkp select(mapColumn(\n\t\tGL_Code_Lkp = GL_Code,\n\t\tGL_Desc_Lkp = GL_Desc\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRelationalCoaLkp\nDataTransformation, SelectDimSpeciesLkp lookup(Species_Code == Species_Code_Lkp,\n\tmultiple: false,\n\tpickup: 'any',\n\tbroadcast: 'auto')~> LookupDimSpecies\nLookupDimSpecies, SelectRelationalCoaLkp lookup(GL_Code == GL_Code_Lkp,\n\tmultiple: false,\n\tpickup: 'any',\n\tbroadcast: 'auto')~> LookupChartOfAccount\nAlterRowInsertUpdate sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:true,\n\tupsertable:false,\n\tkeys:['Species_Code'],\n\tformat: 'table',\n\tmapColumn(\n\t\tProduct_Code,\n\t\tProduct_Type,\n\t\tProduct_Global_Grade,\n\t\tProduct_Desc,\n\t\tGL_Code,\n\t\tSpecies_Code,\n\t\tSource_File,\n\t\tBatch_ID,\n\t\tProcess_Name,\n\t\tInsert_DateTime,\n\t\tUpdate_DateTime\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetDim\nAddErrorDetail sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tProduct_Code,\n\t\tProduct_Type,\n\t\tProduct_Global_Grade,\n\t\tProduct_Desc,\n\t\tGL_Code,\n\t\tSpecies_Code,\n\t\tSource_File,\n\t\tProcess_Name,\n\t\tError_Desc,\n\t\tInsert_Datetime\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> ErrorTable"
 				}
 			},
 			"dependsOn": []
@@ -1547,7 +1731,7 @@
 							"name": "ReplaceNullToUndefined"
 						}
 					],
-					"script": "parameters{\n\tGeneratedBatchDate as string,\n\tWorkbookName as string,\n\tWorksheetName as string,\n\tMasterPipelineName as string\n}\nsource(output(\n\t\tSpecies_Code as string,\n\t\tSpecies_Desc as string,\n\t\tGenus as string,\n\t\tSpecies_Group as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> ReadSource\nsource(output(\n\t\tSpecies_Code as string,\n\t\tSpecies as string,\n\t\tGenus as string,\n\t\tSpecies_Group as string,\n\t\tInsert_DateTime as timestamp\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT [Species_Code]\\n      ,[Species]\\n      ,[Genus]\\n      ,[Species_Group]\\n      ,[Insert_DateTime]\\n  FROM [datamart].[Dim_Species]',\n\tformat: 'query') ~> DatamartDimSpeciesLkp\nDatamartDimSpeciesLkp select(mapColumn(\n\t\tSpecies_Code_Lkp = Species_Code,\n\t\tSpecies_Lkp = Species,\n\t\tGenus_Lkp = Genus,\n\t\tSpecies_Group_Lkp = Species_Group,\n\t\tInsert_DateTime_Lkp = Insert_DateTime\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectDimSpeciesLkp\nReadSource derive(Source_File = concat($WorkbookName,'-', $WorksheetName),\n\t\tBatch_ID = replace(replace(replace($GeneratedBatchDate, \"-\", \"\"),\":\",\"\"),\" \",\"\"),\n\t\tProcess_Name = $MasterPipelineName) ~> DataTransformation\nRemoveDuplicate, SelectDimSpeciesLkp lookup(Species_Code == Species_Code_Lkp,\n\tmultiple: false,\n\tpickup: 'any',\n\tbroadcast: 'auto')~> CheckDimensionRecordExist\nGetNewOrModified derive(InsertUpdateFlag = iif(isNull(Species_Code_Lkp), \"I\", \"U\"),\n\t\tInsert_DateTime = iif(isNull(Species_Code_Lkp), fromUTC(currentUTC(), 'Australia/Sydney'), Insert_DateTime_Lkp),\n\t\tUpdate_DateTime = iif(isNull(Species_Code_Lkp), toTimestamp(\"\"), fromUTC(currentUTC(), 'Australia/Sydney'))) ~> AddAdditionalAudit\nAddAdditionalAudit alterRow(insertIf(equals(InsertUpdateFlag,\"I\")),\n\tupdateIf(equals(InsertUpdateFlag,\"U\"))) ~> AlterRowInsertUpdate\nDataTransformation split(not(isNull(Species_Code)),\n\tdisjoint: false) ~> CheckInputRecord@(Valid, Invalid)\nRemoveBlankRow derive(Error_Desc = toString(\"Species Code cannot be empty\"),\n\t\tInsert_Datetime = fromUTC(currentUTC(), 'Australia/Sydney')) ~> AddErrorDetail\nCheckInputRecord@Invalid filter(not(isNull(Species_Code)) || not(isNull(Species_Desc)) || not(isNull(Genus)) || not(isNull(Species_Group))) ~> RemoveBlankRow\nCheckDimensionRecordExist filter(isNull(Species_Code_Lkp) || notEquals(Species_Desc, Species_Lkp) || notEquals(Genus, Genus_Lkp) || notEquals(Species_Group, Species_Group_Lkp)) ~> GetNewOrModified\nReplaceNullToUndefined aggregate(groupBy(Species_Code,\n\t\tSpecies_Desc,\n\t\tGenus,\n\t\tSpecies_Group,\n\t\tSource_File,\n\t\tBatch_ID,\n\t\tProcess_Name),\n\tDuplicateCount = count()) ~> RemoveDuplicate\nCheckInputRecord@Valid derive(Species_Desc = iifNull(Species_Desc, \"Undefined\"),\n\t\tGenus = iifNull(Genus, \"Undefined\"),\n\t\tSpecies_Group = iifNull(Species_Group, \"Undefined\")) ~> ReplaceNullToUndefined\nAlterRowInsertUpdate sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:true,\n\tupsertable:false,\n\tkeys:['Species_Code'],\n\tformat: 'table',\n\tmapColumn(\n\t\tSpecies_Code,\n\t\tSpecies = Species_Desc,\n\t\tGenus,\n\t\tSpecies_Group,\n\t\tSource_File,\n\t\tBatch_ID,\n\t\tProcess_Name,\n\t\tInsert_DateTime,\n\t\tUpdate_DateTime\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetDim\nAddErrorDetail sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tSpecies_Code,\n\t\tSpecies = Species_Desc,\n\t\tGenus,\n\t\tSpecies_Group,\n\t\tSource_File,\n\t\tProcess_Name,\n\t\tError_Desc,\n\t\tInsert_Datetime\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> ErrorTable"
+					"script": "parameters{\n\tGeneratedBatchDate as string,\n\tWorkbookName as string,\n\tWorksheetName as string,\n\tMasterPipelineName as string\n}\nsource(output(\n\t\t{Species Code} as string,\n\t\t{Species Desc} as string,\n\t\tGenus as string,\n\t\t{Species Group} as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> ReadSource\nsource(output(\n\t\tSpecies_Code as string,\n\t\tSpecies as string,\n\t\tGenus as string,\n\t\tSpecies_Group as string,\n\t\tInsert_DateTime as timestamp\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT [Species_Code]\\n      ,[Species]\\n      ,[Genus]\\n      ,[Species_Group]\\n      ,[Insert_DateTime]\\n FROM [datamart].[Dim_Species]\\nWHERE Species_ID != -1',\n\tformat: 'query') ~> DatamartDimSpeciesLkp\nDatamartDimSpeciesLkp select(mapColumn(\n\t\tSpecies_Code_Lkp = Species_Code,\n\t\tSpecies_Lkp = Species,\n\t\tGenus_Lkp = Genus,\n\t\tSpecies_Group_Lkp = Species_Group,\n\t\tInsert_DateTime_Lkp = Insert_DateTime\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectDimSpeciesLkp\nReadSource derive(Source_File = concat($WorkbookName,'-', $WorksheetName),\n\t\tBatch_ID = replace(replace(replace($GeneratedBatchDate, \"-\", \"\"),\":\",\"\"),\" \",\"\"),\n\t\tProcess_Name = $MasterPipelineName) ~> DataTransformation\nRemoveDuplicate, SelectDimSpeciesLkp lookup({Species Code} == Species_Code_Lkp,\n\tmultiple: false,\n\tpickup: 'any',\n\tbroadcast: 'auto')~> CheckDimensionRecordExist\nGetNewOrModified derive(InsertUpdateFlag = iif(isNull(Species_Code_Lkp), \"I\", \"U\"),\n\t\tInsert_DateTime = iif(isNull(Species_Code_Lkp), fromUTC(currentUTC(), 'Australia/Sydney'), Insert_DateTime_Lkp),\n\t\tUpdate_DateTime = iif(isNull(Species_Code_Lkp), toTimestamp(\"\"), fromUTC(currentUTC(), 'Australia/Sydney'))) ~> AddAdditionalAudit\nAddAdditionalAudit alterRow(insertIf(equals(InsertUpdateFlag,\"I\")),\n\tupdateIf(equals(InsertUpdateFlag,\"U\"))) ~> AlterRowInsertUpdate\nDataTransformation split(not(isNull({Species Code})),\n\tdisjoint: false) ~> CheckInputRecord@(Valid, Invalid)\nRemoveBlankRow derive(Error_Desc = toString(\"Species Code cannot be empty\"),\n\t\tInsert_Datetime = fromUTC(currentUTC(), 'Australia/Sydney')) ~> AddErrorDetail\nCheckInputRecord@Invalid filter(not(isNull({Species Code})) || not(isNull({Species Desc})) || not(isNull(Genus)) || not(isNull({Species Group}))) ~> RemoveBlankRow\nCheckDimensionRecordExist filter(isNull(Species_Code_Lkp) || \r\nnotEquals({Species Desc}, Species_Lkp) || notEquals(Genus, Genus_Lkp) || notEquals({Species Group}, Species_Group_Lkp)) ~> GetNewOrModified\nReplaceNullToUndefined aggregate(groupBy({Species Code},\n\t\t{Species Desc},\n\t\tGenus,\n\t\t{Species Group},\n\t\tSource_File,\n\t\tBatch_ID,\n\t\tProcess_Name),\n\tDuplicateCount = count()) ~> RemoveDuplicate\nCheckInputRecord@Valid derive({Species Desc} = iifNull({Species Desc}, \"Undefined\"),\n\t\tGenus = iifNull(Genus, \"Undefined\"),\n\t\t{Species Group} = iifNull({Species Group}, \"Undefined\")) ~> ReplaceNullToUndefined\nAlterRowInsertUpdate sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:true,\n\tupsertable:false,\n\tkeys:['Species_Code'],\n\tformat: 'table',\n\tmapColumn(\n\t\tSpecies_Code = {Species Code},\n\t\tSpecies = {Species Desc},\n\t\tGenus,\n\t\tSpecies_Group = {Species Group},\n\t\tSource_File,\n\t\tBatch_ID,\n\t\tProcess_Name,\n\t\tInsert_DateTime,\n\t\tUpdate_DateTime\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetDim\nAddErrorDetail sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tSpecies_Code = {Species Code},\n\t\tSpecies = {Species Desc},\n\t\tGenus,\n\t\tSpecies_Group = {Species Group},\n\t\tSource_File,\n\t\tProcess_Name,\n\t\tError_Desc,\n\t\tInsert_Datetime\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> ErrorTable"
 				}
 			},
 			"dependsOn": []
@@ -1623,7 +1807,7 @@
 							"name": "RemoveDuplicate"
 						}
 					],
-					"script": "parameters{\n\tGeneratedBatchDate as string,\n\tWorkbookName as string,\n\tWorksheetName as string,\n\tMasterPipelineName as string\n}\nsource(output(\n\t\tType as string,\n\t\tBasis as string,\n\t\tPrice_Point as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> ReadSource\nsource(output(\n\t\tType as string,\n\t\tBasis as string,\n\t\tPrice_Point as string,\n\t\tInsert_DateTime as timestamp\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT\\n       [Type]\\n      ,[Basis]\\n      ,[Price_Point]\\n      ,[Insert_DateTime]\\n  FROM [datamart].[Dim_Type]',\n\tformat: 'query') ~> RelationalDimTypeLkp\nRelationalDimTypeLkp select(mapColumn(\n\t\tType_Lkp = Type,\n\t\tBasis_Lkp = Basis,\n\t\tPrice_Point_Lkp = Price_Point,\n\t\tInsert_DateTime_Lkp = Insert_DateTime\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectDimTypeLkp\nReadSource derive(Source_File = concat($WorkbookName,'-', $WorksheetName),\n\t\tBatch_ID = replace(replace(replace($GeneratedBatchDate, \"-\", \"\"),\":\",\"\"),\" \",\"\"),\n\t\tProcess_Name = $MasterPipelineName) ~> DataTransformation\nRemoveDuplicate, SelectDimTypeLkp lookup(Type == Type_Lkp\n\t&& Basis == Basis_Lkp\n\t&& Price_Point == Price_Point_Lkp,\n\tmultiple: false,\n\tpickup: 'any',\n\tbroadcast: 'auto')~> CheckDimensionRecordExist\nGetNewOrModified derive(InsertUpdateFlag = iif(isNull(Type_Lkp) && isNull(Basis_Lkp) && isNull(Price_Point_Lkp), \"I\", \"U\"),\n\t\tInsert_DateTime = iif(isNull(Type_Lkp) && isNull(Basis_Lkp) && isNull(Price_Point_Lkp), fromUTC(currentUTC(), 'Australia/Sydney'), Insert_DateTime_Lkp),\n\t\tUpdate_DateTime = iif(isNull(Type_Lkp) && isNull(Basis_Lkp) && isNull(Price_Point_Lkp), toTimestamp(\"\"), fromUTC(currentUTC(), 'Australia/Sydney'))) ~> AddAdditionalAudit\nAddAdditionalAudit alterRow(insertIf(equals(InsertUpdateFlag,\"I\")),\n\tupdateIf(equals(InsertUpdateFlag,\"U\"))) ~> AlterRowInsertUpdate\nDataTransformation split(not(isNull(Type)) && not(isNull(Basis)) && not(isNull(Price_Point)),\n\tdisjoint: false) ~> CheckInputRecord@(Valid, Invalid)\nRemoveBlankRow derive(Error_Desc = toString(\"Type/Basis/Price_Point cannot be empty\"),\n\t\tInsert_Datetime = fromUTC(currentUTC(), 'Australia/Sydney')) ~> AddErrorDetail\nCheckInputRecord@Invalid filter(not(isNull(Type)) || not(isNull(Basis)) || not(isNull(Price_Point))) ~> RemoveBlankRow\nCheckDimensionRecordExist filter(isNull(Type_Lkp) && isNull(Basis_Lkp) && isNull(Price_Point_Lkp)) ~> GetNewOrModified\nCheckInputRecord@Valid aggregate(groupBy(Type,\n\t\tBasis,\n\t\tPrice_Point,\n\t\tSource_File,\n\t\tBatch_ID,\n\t\tProcess_Name),\n\tDuplicateCount = count()) ~> RemoveDuplicate\nAlterRowInsertUpdate sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:true,\n\tupsertable:false,\n\tkeys:['Type','Basis','Price_Point'],\n\tformat: 'table',\n\tmapColumn(\n\t\tType,\n\t\tBasis,\n\t\tPrice_Point,\n\t\tSource_File,\n\t\tBatch_ID,\n\t\tProcess_Name,\n\t\tInsert_DateTime,\n\t\tUpdate_DateTime\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetDim\nAddErrorDetail sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tType,\n\t\tBasis,\n\t\tPrice_Point,\n\t\tSource_File,\n\t\tProcess_Name,\n\t\tError_Desc,\n\t\tInsert_Datetime\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> ErrorTable"
+					"script": "parameters{\n\tGeneratedBatchDate as string,\n\tWorkbookName as string,\n\tWorksheetName as string,\n\tMasterPipelineName as string\n}\nsource(output(\n\t\tType as string,\n\t\tBasis as string,\n\t\t{Price Point} as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> ReadSource\nsource(output(\n\t\tType as string,\n\t\tBasis as string,\n\t\tPrice_Point as string,\n\t\tInsert_DateTime as timestamp\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT\\n       [Type]\\n      ,[Basis]\\n      ,[Price_Point]\\n      ,[Insert_DateTime]\\nFROM [datamart].[Dim_Type]\\nWHERE Type_ID != -1',\n\tformat: 'query') ~> RelationalDimTypeLkp\nRelationalDimTypeLkp select(mapColumn(\n\t\tType_Lkp = Type,\n\t\tBasis_Lkp = Basis,\n\t\tPrice_Point_Lkp = Price_Point,\n\t\tInsert_DateTime_Lkp = Insert_DateTime\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectDimTypeLkp\nReadSource derive(Source_File = concat($WorkbookName,'-', $WorksheetName),\n\t\tBatch_ID = replace(replace(replace($GeneratedBatchDate, \"-\", \"\"),\":\",\"\"),\" \",\"\"),\n\t\tProcess_Name = $MasterPipelineName) ~> DataTransformation\nRemoveDuplicate, SelectDimTypeLkp lookup(Type == Type_Lkp\n\t&& Basis == Basis_Lkp\n\t&& {Price Point} == Price_Point_Lkp,\n\tmultiple: false,\n\tpickup: 'any',\n\tbroadcast: 'auto')~> CheckDimensionRecordExist\nGetNewOrModified derive(InsertUpdateFlag = iif(isNull(Type_Lkp) && isNull(Basis_Lkp) && isNull(Price_Point_Lkp), \"I\", \"U\"),\n\t\tInsert_DateTime = iif(isNull(Type_Lkp) && isNull(Basis_Lkp) && isNull(Price_Point_Lkp), fromUTC(currentUTC(), 'Australia/Sydney'), Insert_DateTime_Lkp),\n\t\tUpdate_DateTime = iif(isNull(Type_Lkp) && isNull(Basis_Lkp) && isNull(Price_Point_Lkp), toTimestamp(\"\"), fromUTC(currentUTC(), 'Australia/Sydney'))) ~> AddAdditionalAudit\nAddAdditionalAudit alterRow(insertIf(equals(InsertUpdateFlag,\"I\")),\n\tupdateIf(equals(InsertUpdateFlag,\"U\"))) ~> AlterRowInsertUpdate\nDataTransformation split(not(isNull(Type)) && not(isNull(Basis)) && not(isNull({Price Point})),\n\tdisjoint: false) ~> CheckInputRecord@(Valid, Invalid)\nRemoveBlankRow derive(Error_Desc = toString(\"Type/Basis/Price_Point cannot be empty\"),\n\t\tInsert_Datetime = fromUTC(currentUTC(), 'Australia/Sydney')) ~> AddErrorDetail\nCheckInputRecord@Invalid filter(not(isNull(Type)) || not(isNull(Basis)) || not(isNull({Price Point}))) ~> RemoveBlankRow\nCheckDimensionRecordExist filter(isNull(Type_Lkp) && isNull(Basis_Lkp) && isNull(Price_Point_Lkp)) ~> GetNewOrModified\nCheckInputRecord@Valid aggregate(groupBy(Type,\n\t\tBasis,\n\t\t{Price Point},\n\t\tSource_File,\n\t\tBatch_ID,\n\t\tProcess_Name),\n\tDuplicateCount = count()) ~> RemoveDuplicate\nAlterRowInsertUpdate sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:true,\n\tupsertable:false,\n\tkeys:['Type','Basis','Price_Point'],\n\tformat: 'table',\n\tmapColumn(\n\t\tType,\n\t\tBasis,\n\t\tPrice_Point = {Price Point},\n\t\tSource_File,\n\t\tBatch_ID,\n\t\tProcess_Name,\n\t\tInsert_DateTime,\n\t\tUpdate_DateTime\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetDim\nAddErrorDetail sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tType,\n\t\tBasis,\n\t\tPrice_Point = {Price Point},\n\t\tSource_File,\n\t\tProcess_Name,\n\t\tError_Desc,\n\t\tInsert_Datetime\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> ErrorTable"
 				}
 			},
 			"dependsOn": []
@@ -1702,7 +1886,7 @@
 							"name": "ReplaceNullToUndefined"
 						}
 					],
-					"script": "parameters{\n\tGeneratedBatchDate as string,\n\tWorkbookName as string,\n\tWorksheetName as string,\n\tMasterPipelineName as string\n}\nsource(output(\n\t\tUOM_Name as string,\n\t\tUOM_Desc as string,\n\t\tUOM_Type as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> ReadSource\nsource(output(\n\t\tUOM_Name as string,\n\t\tUOM_Desc as string,\n\t\tUOM_Type as string,\n\t\tUOM_Long_Desc as string,\n\t\tInsert_DateTime as timestamp\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT\\n       [UOM_Name]\\n      ,[UOM_Desc]\\n      ,[UOM_Type]\\n      ,[UOM_Long_Desc]\\n      ,[Insert_DateTime]\\n  FROM [datamart].[Dim_UOM]',\n\tformat: 'query') ~> RelationalDimUomLkp\nRelationalDimUomLkp select(mapColumn(\n\t\tUOM_Name_Lkp = UOM_Name,\n\t\tUOM_Desc_Lkp = UOM_Desc,\n\t\tUOM_Type_Lkp = UOM_Type,\n\t\tUOM_Long_Desc_Lkp = UOM_Long_Desc,\n\t\tInsert_DateTime_Lkp = Insert_DateTime\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectDimUomLkp\nReadSource derive(Source_File = concat($WorkbookName,'-', $WorksheetName),\n\t\tBatch_ID = replace(replace(replace($GeneratedBatchDate, \"-\", \"\"),\":\",\"\"),\" \",\"\"),\n\t\tProcess_Name = $MasterPipelineName) ~> DataTransformation\nRemoveDuplicate, SelectDimUomLkp lookup(UOM_Name == UOM_Name_Lkp,\n\tmultiple: false,\n\tpickup: 'any',\n\tbroadcast: 'auto')~> CheckDimensionRecordExist\nGetNewOrModified derive(InsertUpdateFlag = iif(isNull(UOM_Name_Lkp), \"I\", \"U\"),\n\t\tInsert_DateTime = iif(isNull(UOM_Name_Lkp), fromUTC(currentUTC(), 'Australia/Sydney'), Insert_DateTime_Lkp),\n\t\tUpdate_DateTime = iif(isNull(UOM_Name_Lkp), toTimestamp(\"\"), fromUTC(currentUTC(), 'Australia/Sydney'))) ~> AddAdditionalAudit\nAddAdditionalAudit alterRow(insertIf(equals(InsertUpdateFlag,\"I\")),\n\tupdateIf(equals(InsertUpdateFlag,\"U\"))) ~> AlterRowInsertUpdate\nDataTransformation split(not(isNull(UOM_Name)),\n\tdisjoint: false) ~> CheckInputRecord@(Valid, Invalid)\nRemoveBlankRow derive(Error_Desc = toString(\"UOM Name cannot be empty\"),\n\t\tInsert_Datetime = fromUTC(currentUTC(), 'Australia/Sydney')) ~> AddErrorDetail\nCheckInputRecord@Invalid filter(not(isNull(UOM_Name)) || not(isNull(UOM_Desc)) || not(isNull(UOM_Type))) ~> RemoveBlankRow\nCheckDimensionRecordExist filter(isNull(UOM_Name_Lkp) || notEquals(UOM_Desc, UOM_Desc_Lkp) || notEquals(UOM_Type, UOM_Type_Lkp)) ~> GetNewOrModified\nReplaceNullToUndefined aggregate(groupBy(UOM_Name,\n\t\tUOM_Desc,\n\t\tUOM_Type,\n\t\tSource_File,\n\t\tBatch_ID,\n\t\tProcess_Name),\n\tDuplicateCount = count()) ~> RemoveDuplicate\nCheckInputRecord@Valid derive(UOM_Desc = iifNull(UOM_Desc, \"Undefined\"),\n\t\tUOM_Type = iifNull(UOM_Type, \"Undefined\")) ~> ReplaceNullToUndefined\nAlterRowInsertUpdate sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:true,\n\tupsertable:false,\n\tkeys:['UOM_Name'],\n\tformat: 'table',\n\tmapColumn(\n\t\tUOM_Name,\n\t\tUOM_Desc,\n\t\tUOM_Type,\n\t\tSource_File,\n\t\tBatch_ID,\n\t\tProcess_Name,\n\t\tInsert_DateTime,\n\t\tUpdate_DateTime\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetDim\nAddErrorDetail sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tUOM_Name,\n\t\tUOM_Desc,\n\t\tUOM_Type,\n\t\tSource_File,\n\t\tProcess_Name,\n\t\tError_Desc,\n\t\tInsert_Datetime\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> ErrorTable"
+					"script": "parameters{\n\tGeneratedBatchDate as string,\n\tWorkbookName as string,\n\tWorksheetName as string,\n\tMasterPipelineName as string\n}\nsource(output(\n\t\t{UOM Name} as string,\n\t\t{UOM Desc} as string,\n\t\t{UOM Type} as string,\n\t\t{Long Description} as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> ReadSource\nsource(output(\n\t\tUOM_Name as string,\n\t\tUOM_Desc as string,\n\t\tUOM_Type as string,\n\t\tUOM_Long_Desc as string,\n\t\tInsert_DateTime as timestamp\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT\\n       [UOM_Name]\\n      ,[UOM_Desc]\\n      ,[UOM_Type]\\n      ,[UOM_Long_Desc]\\n      ,[Insert_DateTime]\\nFROM [datamart].[Dim_UOM]\\nWHERE UOM_ID != -1',\n\tformat: 'query') ~> RelationalDimUomLkp\nRelationalDimUomLkp select(mapColumn(\n\t\tUOM_Name_Lkp = UOM_Name,\n\t\tUOM_Desc_Lkp = UOM_Desc,\n\t\tUOM_Type_Lkp = UOM_Type,\n\t\tUOM_Long_Desc_Lkp = UOM_Long_Desc,\n\t\tInsert_DateTime_Lkp = Insert_DateTime\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectDimUomLkp\nReadSource derive(Source_File = concat($WorkbookName,'-', $WorksheetName),\n\t\tBatch_ID = replace(replace(replace($GeneratedBatchDate, \"-\", \"\"),\":\",\"\"),\" \",\"\"),\n\t\tProcess_Name = $MasterPipelineName) ~> DataTransformation\nRemoveDuplicate, SelectDimUomLkp lookup({UOM Name} == UOM_Name_Lkp,\n\tmultiple: false,\n\tpickup: 'any',\n\tbroadcast: 'auto')~> CheckDimensionRecordExist\nGetNewOrModified derive(InsertUpdateFlag = iif(isNull(UOM_Name_Lkp), \"I\", \"U\"),\n\t\tInsert_DateTime = iif(isNull(UOM_Name_Lkp), fromUTC(currentUTC(), 'Australia/Sydney'), Insert_DateTime_Lkp),\n\t\tUpdate_DateTime = iif(isNull(UOM_Name_Lkp), toTimestamp(\"\"), fromUTC(currentUTC(), 'Australia/Sydney'))) ~> AddAdditionalAudit\nAddAdditionalAudit alterRow(insertIf(equals(InsertUpdateFlag,\"I\")),\n\tupdateIf(equals(InsertUpdateFlag,\"U\"))) ~> AlterRowInsertUpdate\nDataTransformation split(not(isNull({UOM Name})),\n\tdisjoint: false) ~> CheckInputRecord@(Valid, Invalid)\nRemoveBlankRow derive(Error_Desc = toString(\"UOM Name cannot be empty\"),\n\t\tInsert_Datetime = fromUTC(currentUTC(), 'Australia/Sydney')) ~> AddErrorDetail\nCheckInputRecord@Invalid filter(not(isNull({UOM Name})) || not(isNull({UOM Desc})) || not(isNull({UOM Type})) || not(isNull({Long Description}))) ~> RemoveBlankRow\nCheckDimensionRecordExist filter(isNull(UOM_Name_Lkp) || \r\nnotEquals({UOM Desc}, UOM_Desc_Lkp) || notEquals({UOM Type}, UOM_Type_Lkp) || notEquals({Long Description}, UOM_Long_Desc_Lkp)) ~> GetNewOrModified\nReplaceNullToUndefined aggregate(groupBy({UOM Name},\n\t\t{UOM Desc},\n\t\t{UOM Type},\n\t\t{Long Description},\n\t\tSource_File,\n\t\tBatch_ID,\n\t\tProcess_Name),\n\tDuplicateCount = count()) ~> RemoveDuplicate\nCheckInputRecord@Valid derive({UOM Desc} = iifNull({UOM Desc}, \"Undefined\"),\n\t\t{UOM Type} = iifNull({UOM Type}, \"Undefined\"),\n\t\t{Long Description} = iifNull({Long Description}, \"Undefined\")) ~> ReplaceNullToUndefined\nAlterRowInsertUpdate sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:true,\n\tupsertable:false,\n\tkeys:['UOM_Name'],\n\tformat: 'table',\n\tmapColumn(\n\t\tUOM_Name = {UOM Name},\n\t\tUOM_Desc = {UOM Desc},\n\t\tUOM_Type = {UOM Type},\n\t\tUOM_Long_Desc = {Long Description},\n\t\tSource_File,\n\t\tBatch_ID,\n\t\tProcess_Name,\n\t\tInsert_DateTime,\n\t\tUpdate_DateTime\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetDim\nAddErrorDetail sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tUOM_Name = {UOM Name},\n\t\tUOM_Desc = {UOM Desc},\n\t\tUOM_Type = {UOM Type},\n\t\tLong_Description = {Long Description},\n\t\tSource_File,\n\t\tProcess_Name,\n\t\tError_Desc,\n\t\tInsert_Datetime\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> ErrorTable"
 				}
 			},
 			"dependsOn": []
@@ -2166,122 +2350,6 @@
 						}
 					],
 					"script": "source(output(\n\t\tFUND_ID as string,\n\t\tASSET_ID as string,\n\t\tVERSION_NAME as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT FUND_ID, ASSET_ID, VERSION_NAME FROM [staging].[COA_Budgets]',\n\tformat: 'query') ~> StagingDB\nStagingDB select(mapColumn(\n\t\tFUND_ID,\n\t\tASSET_ID,\n\t\tVERSION_NAME\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectOutput\nSelectOutput alterRow(deleteIf(true())) ~> AlterRowDelete\nAlterRowDelete sink(input(\n\t\tBudget_ID as long,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tVersion_Name as string,\n\t\tDebit_Credit as string,\n\t\tBudget_Type as string,\n\t\tBudget_Date as timestamp,\n\t\tBudget_Desc as string,\n\t\tBudget_value as decimal(18,2),\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:true,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:false,\n\tkeys:['Fund_ID','Asset_ID','Version_Name'],\n\tformat: 'table',\n\tmapColumn(\n\t\tFund_ID = FUND_ID,\n\t\tAsset_ID = ASSET_ID,\n\t\tVersion_Name = VERSION_NAME\n\t)) ~> DeleteRecords"
-				}
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/LoadStagingDBtoRelationDB_budget_dfx')]",
-			"type": "Microsoft.DataFactory/factories/dataflows",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"type": "MappingDataFlow",
-				"typeProperties": {
-					"sources": [
-						{
-							"dataset": {
-								"referenceName": "SQLstagingbudget_ds",
-								"type": "DatasetReference"
-							},
-							"name": "StagingDB"
-						},
-						{
-							"dataset": {
-								"referenceName": "SQLrelationbudget_ds",
-								"type": "DatasetReference"
-							},
-							"name": "RelationDB"
-						}
-					],
-					"sinks": [
-						{
-							"dataset": {
-								"referenceName": "DelimitedText_budget_loadready_ds",
-								"type": "DatasetReference"
-							},
-							"name": "InsertUpdateRecords"
-						}
-					],
-					"transformations": [
-						{
-							"name": "StatgingAddChecksum"
-						},
-						{
-							"name": "LookupRelationalStream"
-						},
-						{
-							"name": "RelationalAddChecksum"
-						},
-						{
-							"name": "ConditionalSplitNewOrExpire"
-						},
-						{
-							"name": "RelationRenameColumns"
-						},
-						{
-							"name": "SelectNewStagingRow"
-						},
-						{
-							"name": "AddAuditColumns"
-						},
-						{
-							"name": "UpdateAddAuditAttributes"
-						},
-						{
-							"name": "AddExpiredAttributes"
-						},
-						{
-							"name": "UpdateSelectForInsert"
-						},
-						{
-							"name": "UnionForDB"
-						},
-						{
-							"name": "UpdateSelectForExpire"
-						},
-						{
-							"name": "SelectOutput"
-						}
-					],
-					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tVersion_Name as string,\n\t\tDebit_Credit as string,\n\t\tBudget_Date as timestamp,\n\t\tBudget_Desc as string,\n\t\tBudget_value as decimal(18,2),\n\t\tBudget_Type as string,\n\t\tvalidation_error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> StagingDB\nsource(output(\n\t\tVersion_Name as string,\n\t\tBudget_ID as long,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tBudget_Type as string,\n\t\tBudget_Date as timestamp,\n\t\tBudget_Desc as string,\n\t\tBudget_value as decimal(18,2),\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [Version_Name]\\n      ,[Budget_ID]\\n      ,[Fund_ID]\\n      ,[Asset_ID]\\n      ,[GL_Code]\\n      ,[Cash_Flow_Code]\\n      ,[Debit_Credit]\\n      ,[Budget_Type]\\n      ,[Budget_Date]\\n      ,[Budget_Desc]\\n      ,[Budget_value]\\n      ,[Update_datetime]\\n      ,[record_deleted_flag]\\n      ,[process_name]\\n  FROM [relational].[COA_Budgets]\\n  WHERE [record_deleted_flag] = 0',\n\tformat: 'query') ~> RelationDB\nStagingDB derive(StagingChecksum = sha2(256, Fund_ID,Asset_ID,GL_Code,Cash_Flow_Code,Budget_Date,Budget_Type,Version_Name)) ~> StatgingAddChecksum\nStatgingAddChecksum, RelationRenameColumns lookup(StagingChecksum == Relation_RelationalChecksum,\n\tmultiple: true,\n\tbroadcast: 'auto')~> LookupRelationalStream\nRelationDB derive(RelationalChecksum = sha2(256, Fund_ID,Asset_ID,GL_Code,Cash_Flow_Code,Budget_Date,Budget_Type,Version_Name)) ~> RelationalAddChecksum\nLookupRelationalStream split(isNull(Relation_RelationalChecksum),\n\tDebit_Credit!=Relation_Debit_Credit || Budget_value!=Relation_Budget_value || Budget_Desc!=Relation_Budget_Desc,\n\tdisjoint: false) ~> ConditionalSplitNewOrExpire@(StagingNewRow, StagingChangedRow, IgnoreNoChange)\nRelationalAddChecksum select(mapColumn(\n\t\tRelation_Version_Name = Version_Name,\n\t\tRelation_Budget_ID = Budget_ID,\n\t\tRelation_Fund_ID = Fund_ID,\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_GL_Code = GL_Code,\n\t\tRelation_Cash_Flow_Code = Cash_Flow_Code,\n\t\tRelation_Debit_Credit = Debit_Credit,\n\t\tRelation_Budget_Type = Budget_Type,\n\t\tRelation_Budget_Date = Budget_Date,\n\t\tRelation_Budget_Desc = Budget_Desc,\n\t\tRelation_Budget_value = Budget_value,\n\t\tRelation_Update_datetime = Update_datetime,\n\t\tRelation_record_deleted_flag = record_deleted_flag,\n\t\tRelation_process_name = process_name,\n\t\tRelation_RelationalChecksum = RelationalChecksum\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> RelationRenameColumns\nConditionalSplitNewOrExpire@StagingNewRow select(mapColumn(\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tBudget_Date,\n\t\tBudget_Desc,\n\t\tBudget_value,\n\t\tBudget_Type,\n\t\tVersion_Name\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectNewStagingRow\nSelectNewStagingRow derive(Update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('-',$ProcessName,$FileName),\n\t\tinsert_update_flag = toString('I'),\n\t\tBudget_ID = toLong(null())) ~> AddAuditColumns\nConditionalSplitNewOrExpire@StagingChangedRow derive(Update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('-', $ProcessName, $FileName),\n\t\tinsert_update_flag = toString('I'),\n\t\tBudget_ID = toLong(null())) ~> UpdateAddAuditAttributes\nConditionalSplitNewOrExpire@StagingChangedRow derive(record_deleted_flag = toInteger(1),\n\t\tinsert_update_flag = toString('U')) ~> AddExpiredAttributes\nUpdateAddAuditAttributes select(mapColumn(\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tBudget_Date,\n\t\tBudget_Desc,\n\t\tBudget_value,\n\t\tBudget_Type,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name,\n\t\tinsert_update_flag,\n\t\tBudget_ID,\n\t\tVersion_Name\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> UpdateSelectForInsert\nAddAuditColumns, UpdateSelectForInsert, UpdateSelectForExpire union(byName: true)~> UnionForDB\nAddExpiredAttributes select(mapColumn(\n\t\tBudget_ID = Relation_Budget_ID,\n\t\tFund_ID = Relation_Fund_ID,\n\t\tAsset_ID = Relation_Asset_ID,\n\t\tGL_Code = Relation_GL_Code,\n\t\tCash_Flow_Code = Relation_Cash_Flow_Code,\n\t\tDebit_Credit = Relation_Debit_Credit,\n\t\tBudget_Type = Relation_Budget_Type,\n\t\tBudget_Date = Relation_Budget_Date,\n\t\tBudget_Desc = Relation_Budget_Desc,\n\t\tBudget_value = Relation_Budget_value,\n\t\tprocess_name = Relation_process_name,\n\t\tUpdate_datetime = Relation_Update_datetime,\n\t\trecord_deleted_flag,\n\t\tinsert_update_flag,\n\t\tVersion_Name = Relation_Version_Name\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> UpdateSelectForExpire\nUnionForDB select(mapColumn(\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tBudget_Date,\n\t\tBudget_Desc,\n\t\tBudget_value,\n\t\tBudget_Type,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name,\n\t\tinsert_update_flag,\n\t\tBudget_ID,\n\t\tVersion_Name\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectOutput\nSelectOutput sink(input(\n\t\tVersion_Name as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tBudget_Date as string,\n\t\tBudget_Desc as string,\n\t\tBudget_value as string,\n\t\tBudget_Type as string,\n\t\tUpdate_datetime as string,\n\t\trecord_deleted_flag as string,\n\t\tprocess_name as string,\n\t\tinsert_update_flag as string,\n\t\tBudget_ID as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tpartitionFileNames:['BudgetLoadReadyFile.txt'],\n\tmapColumn(\n\t\tVersion_Name,\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tDebit_Credit,\n\t\tBudget_Date,\n\t\tBudget_Desc,\n\t\tBudget_value,\n\t\tBudget_Type,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name,\n\t\tinsert_update_flag,\n\t\tBudget_ID\n\t),\n\tpartitionBy('hash', 1)) ~> InsertUpdateRecords"
-				}
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/LoadStagingDBtoRelationDB_budget_insert_df')]",
-			"type": "Microsoft.DataFactory/factories/dataflows",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"type": "MappingDataFlow",
-				"typeProperties": {
-					"sources": [
-						{
-							"dataset": {
-								"referenceName": "SQLstagingbudget_ds",
-								"type": "DatasetReference"
-							},
-							"name": "StagingDB"
-						}
-					],
-					"sinks": [
-						{
-							"dataset": {
-								"referenceName": "SQLrelationbudget_ds",
-								"type": "DatasetReference"
-							},
-							"name": "InsertBudget"
-						}
-					],
-					"transformations": [
-						{
-							"name": "AddAuditColumns"
-						},
-						{
-							"name": "SelectCoulmnOutput"
-						}
-					],
-					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tVersion_Name as string,\n\t\tDebit_Credit as string,\n\t\tBudget_Date as timestamp,\n\t\tBudget_Desc as string,\n\t\tBudget_value as decimal(18,2),\n\t\tBudget_Type as string,\n\t\tvalidation_error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> StagingDB\nStagingDB derive(Update_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('-',$ProcessName,$FileName)) ~> AddAuditColumns\nAddAuditColumns select(mapColumn(\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tVersion_Name,\n\t\tDebit_Credit,\n\t\tBudget_Date,\n\t\tBudget_Desc,\n\t\tBudget_value,\n\t\tBudget_Type,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectCoulmnOutput\nSelectCoulmnOutput sink(input(\n\t\tBudget_ID as long,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tVersion_Name as string,\n\t\tDebit_Credit as string,\n\t\tBudget_Type as string,\n\t\tBudget_Date as timestamp,\n\t\tBudget_Desc as string,\n\t\tBudget_value as decimal(18,2),\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tGL_Code,\n\t\tCash_Flow_Code,\n\t\tVersion_Name,\n\t\tDebit_Credit,\n\t\tBudget_Type,\n\t\tBudget_Date,\n\t\tBudget_Desc,\n\t\tBudget_value,\n\t\tUpdate_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t)) ~> InsertBudget"
 				}
 			},
 			"dependsOn": []

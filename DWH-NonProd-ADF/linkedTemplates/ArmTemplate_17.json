@@ -13,6 +13,182 @@
 	},
 	"resources": [
 		{
+			"name": "[concat(parameters('factoryName'), '/LoadTxtToDBstaging_opsriskopportunityreg_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "DelimitedText_sourcelandingscrubbed_opsriskopportunityreg_ds",
+								"type": "DatasetReference"
+							},
+							"name": "LoadFromScrubbedToStagingDB"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLrelationasset_ds5",
+								"type": "DatasetReference"
+							},
+							"name": "RelationalAsset"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLrelationopsriskopportunitytype_ds",
+								"type": "DatasetReference"
+							},
+							"name": "RelationalRiskOpportunityType"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLstagingopsriskopportunityreg_ds",
+								"type": "DatasetReference"
+							},
+							"name": "StagingDB"
+						}
+					],
+					"transformations": [
+						{
+							"name": "LookupRelationAsset"
+						},
+						{
+							"name": "SelectValidRecord"
+						},
+						{
+							"name": "ValidatedRiskOppIDandDate"
+						},
+						{
+							"name": "ConvertDateAndIncidentID"
+						},
+						{
+							"name": "SelectInvalidDateOrIRiskOppID"
+						},
+						{
+							"name": "InvalidDateOrRiskOppIDerrormessage"
+						},
+						{
+							"name": "SelectRelationalAsset"
+						},
+						{
+							"name": "ValidatedAsset"
+						},
+						{
+							"name": "InvalidFundOrAsseterrormessage"
+						},
+						{
+							"name": "SelectInvalidFundOrAsset"
+						},
+						{
+							"name": "UnionAll"
+						},
+						{
+							"name": "LookupRelationalRiskOppType"
+						},
+						{
+							"name": "SelectRelationalRiskOppType"
+						},
+						{
+							"name": "IsValidRiskOppType"
+						},
+						{
+							"name": "InvalidRiskOppTypeerrormessage"
+						},
+						{
+							"name": "SelectInvalidRiskOppType"
+						}
+					],
+					"script": "source(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tRisk_Opp_ID as string,\n\t\tReporting_Period as string,\n\t\tRisk_Ops_Sub_Class_Code as string,\n\t\tRisk_Ops_Descripton as string,\n\t\tActions_Controls as string,\n\t\tDate_Lodged as string,\n\t\tLikelihood as string,\n\t\tSeverity as string,\n\t\tInherent_Risk_Rating as string,\n\t\tEliminate_Mitigate as string,\n\t\tResidual_Likelihood as string,\n\t\tResidual_Severity as string,\n\t\tResidual_Risk_Rating as string,\n\t\tFuture_Controls as string,\n\t\tPerson_Responsible as string,\n\t\tDate_Closed as string,\n\t\tQuarterly_Incidents as string,\n\t\tRisk_Opps_Flag as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> LoadFromScrubbedToStagingDB\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT [Asset_ID],[Fund_ID]\\nFROM [relational].[Asset]\\nWHERE record_deleted_flag = 0',\n\tformat: 'query') ~> RelationalAsset\nsource(output(\n\t\tRisk_Ops_Sub_Class_Code as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [Risk_Ops_Sub_Class_Code]\\nFROM [relational].[OPS_Risk_Opportunity_Type]',\n\tformat: 'query') ~> RelationalRiskOpportunityType\nValidatedRiskOppIDandDate@ValidDateAndRiskOppID, SelectRelationalAsset lookup(Asset_ID == Relation_Asset_ID\n\t&& Fund_ID == Relation_Fund_ID,\n\tmultiple: true,\n\tbroadcast: 'auto')~> LookupRelationAsset\nIsValidRiskOppType@ValidRiskOppType select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tRisk_Opp_ID,\n\t\tReporting_Period,\n\t\tRisk_Ops_Sub_Class_Code,\n\t\tRisk_Ops_Descripton,\n\t\tActions_Controls,\n\t\tDate_Lodged,\n\t\tLikelihood,\n\t\tSeverity,\n\t\tInherent_Risk_Rating,\n\t\tEliminate_Mitigate,\n\t\tResidual_Likelihood,\n\t\tResidual_Severity,\n\t\tResidual_Risk_Rating,\n\t\tFuture_Controls,\n\t\tPerson_Responsible,\n\t\tDate_Closed,\n\t\tQuarterly_Incidents,\n\t\tRisk_Opps_Flag\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectValidRecord\nConvertDateAndIncidentID split(not(isNull(Derived_Risk_Opp_ID)) && not(isNull(Derived_Reporting_Period)) && iif(not(isNull(Date_Lodged)),not(isNull(Derived_Date_Lodged)),true()) && iif(not(isNull(Date_Closed)),not(isNull(Derived_Date_Closed)),true()),\n\tdisjoint: false) ~> ValidatedRiskOppIDandDate@(ValidDateAndRiskOppID, InvalidDateOrRiskOppID)\nLoadFromScrubbedToStagingDB derive(Derived_Reporting_Period = toDate(Reporting_Period,\"dd/MM/yyyy\"),\n\t\tDerived_Date_Lodged = toDate(Date_Lodged,\"dd/MM/yyyy\"),\n\t\tDerived_Date_Closed = toDate(Date_Closed,\"dd/MM/yyyy\"),\n\t\tDerived_Risk_Opp_ID = toInteger(Risk_Opp_ID)) ~> ConvertDateAndIncidentID\nInvalidDateOrRiskOppIDerrormessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tRisk_Opp_ID,\n\t\tReporting_Period,\n\t\tRisk_Ops_Sub_Class_Code,\n\t\tRisk_Ops_Descripton,\n\t\tActions_Controls,\n\t\tDate_Lodged,\n\t\tLikelihood,\n\t\tSeverity,\n\t\tInherent_Risk_Rating,\n\t\tEliminate_Mitigate,\n\t\tResidual_Likelihood,\n\t\tResidual_Severity,\n\t\tResidual_Risk_Rating,\n\t\tFuture_Controls,\n\t\tPerson_Responsible,\n\t\tDate_Closed,\n\t\tQuarterly_Incidents,\n\t\tRisk_Opps_Flag,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidDateOrIRiskOppID\nValidatedRiskOppIDandDate@InvalidDateOrRiskOppID derive(Validation_Error = toString(\"Invalid Reporting Period / Lodged Date / Closed Date / Risk Opp ID\")) ~> InvalidDateOrRiskOppIDerrormessage\nRelationalAsset select(mapColumn(\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_Fund_ID = Fund_ID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRelationalAsset\nLookupRelationAsset split(not(isNull(Relation_Asset_ID)),\n\tdisjoint: false) ~> ValidatedAsset@(ValidFundAndAsset, InvalidFundOrAsset)\nValidatedAsset@InvalidFundOrAsset derive(Validation_Error = toString(\"Invalid Fund Or Asset\")) ~> InvalidFundOrAsseterrormessage\nInvalidFundOrAsseterrormessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tRisk_Opp_ID,\n\t\tReporting_Period,\n\t\tRisk_Ops_Sub_Class_Code,\n\t\tRisk_Ops_Descripton,\n\t\tActions_Controls,\n\t\tDate_Lodged,\n\t\tLikelihood,\n\t\tSeverity,\n\t\tInherent_Risk_Rating,\n\t\tEliminate_Mitigate,\n\t\tResidual_Likelihood,\n\t\tResidual_Severity,\n\t\tResidual_Risk_Rating,\n\t\tFuture_Controls,\n\t\tPerson_Responsible,\n\t\tDate_Closed,\n\t\tQuarterly_Incidents,\n\t\tRisk_Opps_Flag,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidFundOrAsset\nSelectValidRecord, SelectInvalidDateOrIRiskOppID, SelectInvalidFundOrAsset, SelectInvalidRiskOppType union(byName: true)~> UnionAll\nValidatedAsset@ValidFundAndAsset, SelectRelationalRiskOppType lookup(Risk_Ops_Sub_Class_Code == Relation_Risk_Ops_Sub_Class_Code,\n\tmultiple: true,\n\tbroadcast: 'auto')~> LookupRelationalRiskOppType\nRelationalRiskOpportunityType select(mapColumn(\n\t\tRelation_Risk_Ops_Sub_Class_Code = Risk_Ops_Sub_Class_Code\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRelationalRiskOppType\nLookupRelationalRiskOppType split(not(isNull(Relation_Risk_Ops_Sub_Class_Code)),\n\tdisjoint: false) ~> IsValidRiskOppType@(ValidRiskOppType, InvalidRiskOppType)\nIsValidRiskOppType@InvalidRiskOppType derive(Validation_Error = toString(\"Invalid Risk Type Code\")) ~> InvalidRiskOppTypeerrormessage\nInvalidRiskOppTypeerrormessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tRisk_Opp_ID,\n\t\tReporting_Period,\n\t\tRisk_Ops_Sub_Class_Code,\n\t\tRisk_Ops_Descripton,\n\t\tActions_Controls,\n\t\tDate_Lodged,\n\t\tLikelihood,\n\t\tSeverity,\n\t\tInherent_Risk_Rating,\n\t\tEliminate_Mitigate,\n\t\tResidual_Likelihood,\n\t\tResidual_Severity,\n\t\tResidual_Risk_Rating,\n\t\tFuture_Controls,\n\t\tPerson_Responsible,\n\t\tDate_Closed,\n\t\tQuarterly_Incidents,\n\t\tRisk_Opps_Flag,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidRiskOppType\nUnionAll sink(input(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tRisk_Opp_ID as string,\n\t\tReporting_Period as string,\n\t\tRisk_Ops_Sub_Class_Code as string,\n\t\tRisk_Ops_Descripton as string,\n\t\tActions_Controls as string,\n\t\tDate_Lodged as string,\n\t\tLikelihood as string,\n\t\tSeverity as string,\n\t\tInherent_Risk_Rating as string,\n\t\tEliminate_Mitigate as string,\n\t\tResidual_Likelihood as string,\n\t\tResidual_Severity as string,\n\t\tResidual_Risk_Rating as string,\n\t\tFuture_Controls as string,\n\t\tPerson_Responsible as string,\n\t\tDate_Closed as string,\n\t\tQuarterly_Incidents as string,\n\t\tRisk_Opps_Flag as string,\n\t\tValidation_Error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tRisk_Opp_ID,\n\t\tReporting_Period,\n\t\tRisk_Ops_Sub_Class_Code,\n\t\tRisk_Ops_Descripton,\n\t\tActions_Controls,\n\t\tDate_Lodged,\n\t\tLikelihood,\n\t\tSeverity,\n\t\tInherent_Risk_Rating,\n\t\tEliminate_Mitigate,\n\t\tResidual_Likelihood,\n\t\tResidual_Severity,\n\t\tResidual_Risk_Rating,\n\t\tFuture_Controls,\n\t\tPerson_Responsible,\n\t\tDate_Closed,\n\t\tQuarterly_Incidents,\n\t\tRisk_Opps_Flag,\n\t\tValidation_Error\n\t)) ~> StagingDB"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadTxtToDBstaging_opssalesother_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "DelimitedText_sourcelandingscrubbed_opssalesother_ds",
+								"type": "DatasetReference"
+							},
+							"name": "LoadFromScrubbedToStagingDB"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLrelationasset_ds7",
+								"type": "DatasetReference"
+							},
+							"name": "RelationalAsset"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLrelationopssalestype1",
+								"type": "DatasetReference"
+							},
+							"name": "RelationalSalesType"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLstagingopssalesother",
+								"type": "DatasetReference"
+							},
+							"name": "StagingDB"
+						}
+					],
+					"transformations": [
+						{
+							"name": "LookupRelationAsset"
+						},
+						{
+							"name": "SelectValidRecord"
+						},
+						{
+							"name": "ValidatedDateandIDandNumbers"
+						},
+						{
+							"name": "ConvertDateAndIDandNumbers"
+						},
+						{
+							"name": "SelectInvalidDateOrIdOrNumbers"
+						},
+						{
+							"name": "InvalidDateOrIdOrNumbersErrormessage"
+						},
+						{
+							"name": "SelectRelationalAsset"
+						},
+						{
+							"name": "ValidatedAsset"
+						},
+						{
+							"name": "InvalidFundOrAsseterrormessage"
+						},
+						{
+							"name": "SelectInvalidFundOrAsset"
+						},
+						{
+							"name": "UnionAll"
+						},
+						{
+							"name": "SelectRelationalIncidentType"
+						}
+					],
+					"script": "source(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tOther_Sale_Id as string,\n\t\tReporting_Period as string,\n\t\tSale_Type_Code as string,\n\t\tSales_UOM as string,\n\t\tSales_Point as string,\n\t\tTotal_Units_Sold as string,\n\t\tSales_revenue as string,\n\t\tSales_Cost as string,\n\t\tSales_Net_Revenue as string,\n\t\tSales_Net_Revenue_Per_Unit as string,\n\t\tCurrency_Code as string,\n\t\tBudget_Sales_Quantity as string,\n\t\tBudget_Sales_Revenue as string,\n\t\tBudget_Sales_Cost as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false) ~> LoadFromScrubbedToStagingDB\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT [Asset_ID],[Fund_ID]\\nFROM [relational].[Asset]\\nWHERE record_deleted_flag = 0',\n\tformat: 'query') ~> RelationalAsset\nsource(output(\n\t\tSale_Type_Code as string,\n\t\tSale_Type as string,\n\t\tActive_YN as string,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tformat: 'table') ~> RelationalSalesType\nValidatedDateandIDandNumbers@ValidDateAndIdAdnNumbers, SelectRelationalAsset lookup(Asset_ID == Relation_Asset_ID\n\t&& Fund_ID == Relation_Fund_ID,\n\tmultiple: true,\n\tbroadcast: 'auto')~> LookupRelationAsset\nValidatedAsset@ValidFundAndAsset select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tOther_Sale_Id,\n\t\tReporting_Period,\n\t\tSale_Type_Code,\n\t\tSales_UOM,\n\t\tSales_Point,\n\t\tTotal_Units_Sold,\n\t\tSales_revenue,\n\t\tSales_Cost,\n\t\tSales_Net_Revenue,\n\t\tSales_Net_Revenue_Per_Unit,\n\t\tCurrency_Code,\n\t\tBudget_Sales_Quantity,\n\t\tBudget_Sales_Revenue,\n\t\tBudget_Sales_Cost\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectValidRecord\nConvertDateAndIDandNumbers split(not(isNull(Derived_Other_Sales_Id)) && not(isNull(Derived_Reporting_Period)) && \r\niif(not(isNull(Total_Units_Sold)),not(isNull(Derived_Total_Units_Sold)),true()) &&\r\niif(not(isNull(Sales_revenue)),not(isNull(Derived_Sales_revenue)),true()) &&\r\niif(not(isNull(Sales_Cost)),not(isNull(Derived_Sales_Cost)),true()) &&\r\niif(not(isNull(Sales_Net_Revenue)),not(isNull(Derived_Sales_Net_Revenue)),true()) &&\r\niif(not(isNull(Sales_Net_Revenue_Per_Unit)),not(isNull(Derived_Sales_Net_Revenue_Per_Unit)),true()) &&\r\niif(not(isNull(Budget_Sales_Quantity)),not(isNull(Derived_Budget_Sales_Quantity)),true()) &&\r\niif(not(isNull(Budget_Sales_Revenue)),not(isNull(Derived_Budget_Sales_Revenue)),true()) &&\r\niif(not(isNull(Budget_Sales_Cost)),not(isNull(Derived_Budget_Sales_Cost)),true()),\n\tdisjoint: false) ~> ValidatedDateandIDandNumbers@(ValidDateAndIdAdnNumbers, InvalidDateOrIdOrNumbers)\nLoadFromScrubbedToStagingDB derive(Derived_Reporting_Period = toDate(Reporting_Period,\"dd/MM/yyyy\"),\n\t\tDerived_Other_Sales_Id = toInteger(Other_Sale_Id),\n\t\tDerived_Total_Units_Sold = toDecimal(Total_Units_Sold, 19, 4, \"###,###.####\"),\n\t\tDerived_Sales_revenue = toDecimal(Sales_revenue, 19, 4, \"###,###.####\"),\n\t\tDerived_Sales_Cost = toDecimal(Sales_Cost, 19, 4, \"###,###.####\"),\n\t\tDerived_Sales_Net_Revenue = toDecimal(Sales_Net_Revenue, 19, 4, \"###,###.####\"),\n\t\tDerived_Sales_Net_Revenue_Per_Unit = toDecimal(Sales_Net_Revenue_Per_Unit, 19, 4, \"###,###.####\"),\n\t\tDerived_Budget_Sales_Quantity = toDecimal(Budget_Sales_Quantity, 19, 4, \"###,###.####\"),\n\t\tDerived_Budget_Sales_Revenue = toDecimal(Budget_Sales_Revenue, 19, 4, \"###,###.####\"),\n\t\tDerived_Budget_Sales_Cost = toDecimal(Budget_Sales_Cost, 19, 4, \"###,###.####\")) ~> ConvertDateAndIDandNumbers\nInvalidDateOrIdOrNumbersErrormessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tOther_Sale_Id,\n\t\tReporting_Period,\n\t\tSale_Type_Code,\n\t\tSales_UOM,\n\t\tSales_Point,\n\t\tTotal_Units_Sold,\n\t\tSales_revenue,\n\t\tSales_Cost,\n\t\tSales_Net_Revenue,\n\t\tSales_Net_Revenue_Per_Unit,\n\t\tCurrency_Code,\n\t\tBudget_Sales_Quantity,\n\t\tBudget_Sales_Revenue,\n\t\tBudget_Sales_Cost,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidDateOrIdOrNumbers\nValidatedDateandIDandNumbers@InvalidDateOrIdOrNumbers derive(Validation_Error = toString(\"Invalid Reporting Period / Sales Other Id / Total Unit Sold / Sales Revenue / Sales Costs / Sales Net Revenie / Sales Net Revenue Per Unit/ Budget Sales Quantity / Budget Sales Revenue / Budget Sales Cost\")) ~> InvalidDateOrIdOrNumbersErrormessage\nRelationalAsset select(mapColumn(\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_Fund_ID = Fund_ID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRelationalAsset\nLookupRelationAsset split(not(isNull(Relation_Asset_ID)),\n\tdisjoint: false) ~> ValidatedAsset@(ValidFundAndAsset, InvalidFundOrAsset)\nValidatedAsset@InvalidFundOrAsset derive(Validation_Error = toString(\"Invalid Fund Or Asset\")) ~> InvalidFundOrAsseterrormessage\nInvalidFundOrAsseterrormessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tOther_Sale_Id,\n\t\tReporting_Period,\n\t\tSale_Type_Code,\n\t\tSales_UOM,\n\t\tSales_Point,\n\t\tTotal_Units_Sold,\n\t\tSales_revenue,\n\t\tSales_Cost,\n\t\tSales_Net_Revenue,\n\t\tSales_Net_Revenue_Per_Unit,\n\t\tCurrency_Code,\n\t\tBudget_Sales_Quantity,\n\t\tBudget_Sales_Revenue,\n\t\tBudget_Sales_Cost,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidFundOrAsset\nSelectValidRecord, SelectInvalidDateOrIdOrNumbers, SelectInvalidFundOrAsset union(byName: true)~> UnionAll\nRelationalSalesType select(mapColumn(\n\t\tRelation_Sale_Type_Code = Sale_Type_Code\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRelationalIncidentType\nUnionAll sink(input(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tOther_Sale_Id as string,\n\t\tReporting_Period as string,\n\t\tSale_Type_Code as string,\n\t\tSales_UOM as string,\n\t\tSales_Point as string,\n\t\tTotal_Units_Sold as string,\n\t\tSales_revenue as string,\n\t\tSales_Cost as string,\n\t\tSales_Net_Revenue as string,\n\t\tSales_Net_Revenue_Per_Unit as string,\n\t\tCurrency_Code as string,\n\t\tBudget_Sales_Quantity as string,\n\t\tBudget_Sales_Revenue as string,\n\t\tBudget_Sales_Cost as string,\n\t\tValidation_Error as string,\n\t\tSales_Type as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tOther_Sale_Id,\n\t\tReporting_Period,\n\t\tSales_Type = Sale_Type_Code,\n\t\tSales_UOM,\n\t\tSales_Point,\n\t\tTotal_Units_Sold,\n\t\tSales_revenue,\n\t\tSales_Cost,\n\t\tSales_Net_Revenue,\n\t\tSales_Net_Revenue_Per_Unit,\n\t\tCurrency_Code,\n\t\tBudget_Sales_Quantity,\n\t\tBudget_Sales_Revenue,\n\t\tBudget_Sales_Cost,\n\t\tValidation_Error\n\t)) ~> StagingDB"
+				}
+			},
+			"dependsOn": []
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/LoadTxtToDBstaging_opssalesunit_df')]",
 			"type": "Microsoft.DataFactory/factories/dataflows",
 			"apiVersion": "2018-06-01",
@@ -849,6 +1025,102 @@
 			"dependsOn": []
 		},
 		{
+			"name": "[concat(parameters('factoryName'), '/ProcessMktUpdateDimDataSource_pl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "ProcessDimData",
+						"type": "ExecuteDataFlow",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "LoadMktDimDataSource_InsertUpdate_df",
+								"type": "DataFlowReference",
+								"parameters": {
+									"GeneratedBatchDate": {
+										"value": "'@{pipeline().parameters.GeneratedBatchDate}'",
+										"type": "Expression"
+									},
+									"WorkbookName": {
+										"value": "'@{pipeline().parameters.WorkbookName}'",
+										"type": "Expression"
+									},
+									"WorksheetName": {
+										"value": "'@{pipeline().parameters.WorksheetName}'",
+										"type": "Expression"
+									},
+									"MasterPipelineName": {
+										"value": "'@{pipeline().parameters.MasterPipelineName}'",
+										"type": "Expression"
+									}
+								},
+								"datasetParameters": {
+									"ReadSource": {
+										"FileName": {
+											"value": "MKTINFO_DIM_DATA_SOURCE_Extract.csv",
+											"type": "Expression"
+										}
+									},
+									"DatamartDimDataSourceLkp": {},
+									"TargetDim": {
+										"Schema": {
+											"value": "datamart",
+											"type": "Expression"
+										},
+										"TableName": {
+											"value": "Dim_Data_Source",
+											"type": "Expression"
+										}
+									},
+									"ErrorTable": {
+										"Schema": {
+											"value": "audit",
+											"type": "Expression"
+										},
+										"TableName": {
+											"value": "Dim_Data_Source_Error",
+											"type": "Expression"
+										}
+									}
+								}
+							},
+							"staging": {},
+							"compute": {
+								"coreCount": 8,
+								"computeType": "General"
+							}
+						}
+					}
+				],
+				"parameters": {
+					"WorkbookName": {
+						"type": "string"
+					},
+					"WorksheetName": {
+						"type": "string"
+					},
+					"GeneratedBatchDate": {
+						"type": "string"
+					},
+					"MasterPipelineName": {
+						"type": "string"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": []
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/ProcessMktUpdateDimDeliveryPoint_pl')]",
 			"type": "Microsoft.DataFactory/factories/pipelines",
 			"apiVersion": "2018-06-01",
@@ -1041,6 +1313,104 @@
 			"dependsOn": []
 		},
 		{
+			"name": "[concat(parameters('factoryName'), '/ProcessMktUpdateDimProduct_pl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "ProcessDimData",
+						"type": "ExecuteDataFlow",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "LoadMktDimProduct_InsertUpdate_df",
+								"type": "DataFlowReference",
+								"parameters": {
+									"GeneratedBatchDate": {
+										"value": "'@{pipeline().parameters.GeneratedBatchDate}'",
+										"type": "Expression"
+									},
+									"WorkbookName": {
+										"value": "'@{pipeline().parameters.WorkbookName}'",
+										"type": "Expression"
+									},
+									"WorksheetName": {
+										"value": "'@{pipeline().parameters.WorksheetName}'",
+										"type": "Expression"
+									},
+									"MasterPipelineName": {
+										"value": "'@{pipeline().parameters.MasterPipelineName}'",
+										"type": "Expression"
+									}
+								},
+								"datasetParameters": {
+									"ReadSource": {
+										"FileName": {
+											"value": "MKTINFO_DIM_PRODUCT_Extract.csv",
+											"type": "Expression"
+										}
+									},
+									"DatamartDimProductLkp": {},
+									"DatamartSpeciesLkp": {},
+									"RelationalChartOfAccountLkp": {},
+									"TargetDim": {
+										"Schema": {
+											"value": "datamart",
+											"type": "Expression"
+										},
+										"TableName": {
+											"value": "Dim_Product",
+											"type": "Expression"
+										}
+									},
+									"ErrorTable": {
+										"Schema": {
+											"value": "audit",
+											"type": "Expression"
+										},
+										"TableName": {
+											"value": "Dim_Product_Error",
+											"type": "Expression"
+										}
+									}
+								}
+							},
+							"staging": {},
+							"compute": {
+								"coreCount": 8,
+								"computeType": "General"
+							}
+						}
+					}
+				],
+				"parameters": {
+					"WorkbookName": {
+						"type": "string"
+					},
+					"WorksheetName": {
+						"type": "string"
+					},
+					"GeneratedBatchDate": {
+						"type": "string"
+					},
+					"MasterPipelineName": {
+						"type": "string"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": []
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/ProcessMktUpdateDimSpecies_pl')]",
 			"type": "Microsoft.DataFactory/factories/pipelines",
 			"apiVersion": "2018-06-01",
@@ -1135,546 +1505,6 @@
 				"annotations": []
 			},
 			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/ProcessMktUpdateDimType_pl')]",
-			"type": "Microsoft.DataFactory/factories/pipelines",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"activities": [
-					{
-						"name": "ProcessDimData",
-						"type": "ExecuteDataFlow",
-						"dependsOn": [],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"dataflow": {
-								"referenceName": "LoadMktDimUom_InsertUpdate_df",
-								"type": "DataFlowReference",
-								"parameters": {
-									"GeneratedBatchDate": {
-										"value": "'@{pipeline().parameters.GeneratedBatchDate}'",
-										"type": "Expression"
-									},
-									"WorkbookName": {
-										"value": "'@{pipeline().parameters.WorkbookName}'",
-										"type": "Expression"
-									},
-									"WorksheetName": {
-										"value": "'@{pipeline().parameters.WorksheetName}'",
-										"type": "Expression"
-									},
-									"MasterPipelineName": {
-										"value": "'@{pipeline().parameters.MasterPipelineName}'",
-										"type": "Expression"
-									}
-								},
-								"datasetParameters": {
-									"ReadSource": {
-										"FileName": {
-											"value": "MKTINFO_DIM_UOM_Extract.csv",
-											"type": "Expression"
-										}
-									},
-									"RelationalDimUomLkp": {},
-									"TargetDim": {
-										"Schema": {
-											"value": "datamart",
-											"type": "Expression"
-										},
-										"TableName": {
-											"value": "Dim_Uom",
-											"type": "Expression"
-										}
-									},
-									"ErrorTable": {
-										"Schema": {
-											"value": "audit",
-											"type": "Expression"
-										},
-										"TableName": {
-											"value": "Dim_Uom_Error",
-											"type": "Expression"
-										}
-									}
-								}
-							},
-							"staging": {},
-							"compute": {
-								"coreCount": 8,
-								"computeType": "General"
-							}
-						}
-					}
-				],
-				"parameters": {
-					"WorkbookName": {
-						"type": "string"
-					},
-					"WorksheetName": {
-						"type": "string"
-					},
-					"GeneratedBatchDate": {
-						"type": "string"
-					},
-					"MasterPipelineName": {
-						"type": "string"
-					}
-				},
-				"annotations": []
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/ProcessOpsWorkbookTabCertificates_pl')]",
-			"type": "Microsoft.DataFactory/factories/pipelines",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"description": "Certificates tab",
-				"activities": [
-					{
-						"name": "ProcessExcelWorkbookTab",
-						"type": "ExecuteDataFlow",
-						"dependsOn": [],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"dataflow": {
-								"referenceName": "LoadXlsxCertificates_Step1_df",
-								"type": "DataFlowReference",
-								"parameters": {
-									"MasterUtcTag": {
-										"value": "'@{pipeline().parameters.MasterUtcTag}'",
-										"type": "Expression"
-									},
-									"CurrentRunDateTime": {
-										"value": "'@{pipeline().parameters.CurrentRunDateTime}'",
-										"type": "Expression"
-									},
-									"WorkbookName": {
-										"value": "'@{pipeline().parameters.WorkbookName}'",
-										"type": "Expression"
-									},
-									"TabName": {
-										"value": "'@{pipeline().parameters.Certifications}'",
-										"type": "Expression"
-									},
-									"CurrentQuarterDate": {
-										"value": "'@{pipeline().parameters.CurrentQuarterDate}'",
-										"type": "Expression"
-									},
-									"MasterPipeline": {
-										"value": "'@{pipeline().parameters.MasterPipeline}'",
-										"type": "Expression"
-									}
-								},
-								"datasetParameters": {
-									"SourceDataTab": {
-										"ParquetFile": {
-											"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.Certifications,'_',pipeline().parameters.CurrentQuarterDate,'_Extract')",
-											"type": "Expression"
-										}
-									},
-									"RelationalOpsCertificationType": {},
-									"RelationalCertification": {},
-									"TargetPersistentParquetInsert": {},
-									"ErrorTable": {},
-									"OpsWorkbookWorksheetList": {},
-									"TargetPersistenParquetUpdate": {}
-								}
-							},
-							"staging": {},
-							"compute": {
-								"coreCount": 8,
-								"computeType": "General"
-							}
-						}
-					}
-				],
-				"parameters": {
-					"WorkbookName": {
-						"type": "string",
-						"defaultValue": "Wenita Forestry Products Q4 FY20 V2.xlsx"
-					},
-					"CurrentQuarterDate": {
-						"type": "string",
-						"defaultValue": "2020-06-30"
-					},
-					"Certifications": {
-						"type": "string",
-						"defaultValue": "Certifications"
-					},
-					"CurrentRunDateTime": {
-						"type": "string",
-						"defaultValue": "2020-08-01"
-					},
-					"MasterUtcTag": {
-						"type": "string",
-						"defaultValue": "2020-08-28T06:05:53.4181322Z"
-					},
-					"MasterPipeline": {
-						"type": "string",
-						"defaultValue": "Wenita Forestry Products Q4 FY20 V2.xlsx-Certifications"
-					}
-				},
-				"annotations": []
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/dataflows/LoadXlsxCertificates_Step1_df')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/ProcessOpsWorkbookTabCertificates_spl')]",
-			"type": "Microsoft.DataFactory/factories/pipelines",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"description": "Certificates tab",
-				"activities": [
-					{
-						"name": "GetTableErrorCount",
-						"type": "Lookup",
-						"dependsOn": [],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"source": {
-								"type": "AzureSqlSource",
-								"sqlReaderQuery": {
-									"value": "SELECT COUNT(*) AS ERROR_COUNT FROM (\n SELECT DISTINCT LIS.Work_Book, LIS.Work_Sheet FROM \n audit.OPS_Workbook_Worksheet_Asset_List LIS\n JOIN audit.OPS_Certification_Error ERR\n ON LIS.Work_Book = ERR.Source_File  \n AND LIS.Work_Sheet = ERR.Source_Sub_File\n WHERE LIS.Work_Book = '@{pipeline().parameters.WorkbookName}'\n AND LIS.Work_Sheet = '@{pipeline().parameters.Certifications}'\n)x",
-									"type": "Expression"
-								},
-								"queryTimeout": "02:00:00",
-								"partitionOption": "None"
-							},
-							"dataset": {
-								"referenceName": "SQLtableGeneric_ds",
-								"type": "DatasetReference",
-								"parameters": {}
-							}
-						}
-					},
-					{
-						"name": "CheckConditionIfErrorExist",
-						"type": "IfCondition",
-						"dependsOn": [
-							{
-								"activity": "GetTableErrorCount",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"expression": {
-								"value": "@greaterOrEquals(activity('GetTableErrorCount').output.firstRow.ERROR_COUNT, 0)",
-								"type": "Expression"
-							},
-							"ifTrueActivities": [
-								{
-									"name": "LoadValidatedDataset",
-									"type": "ExecuteDataFlow",
-									"dependsOn": [
-										{
-											"activity": "DeleteExistingRowsForCurrentPeriod",
-											"dependencyConditions": [
-												"Succeeded"
-											]
-										}
-									],
-									"policy": {
-										"timeout": "7.00:00:00",
-										"retry": 0,
-										"retryIntervalInSeconds": 30,
-										"secureOutput": false,
-										"secureInput": false
-									},
-									"userProperties": [],
-									"typeProperties": {
-										"dataflow": {
-											"referenceName": "LoadXlsxCertificates_Step3_df",
-											"type": "DataFlowReference",
-											"parameters": {
-												"WorkbookName": {
-													"value": "'@{pipeline().parameters.WorkbookName}'",
-													"type": "Expression"
-												},
-												"TabName": {
-													"value": "'@{pipeline().parameters.Certifications}'",
-													"type": "Expression"
-												}
-											},
-											"datasetParameters": {
-												"SourceReadyLoad": {
-													"ParquetFile": {
-														"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.Certifications,'_',pipeline().parameters.CurrentQuarterDate,'_LoadReady')",
-														"type": "Expression"
-													}
-												},
-												"TargetRelational": {}
-											}
-										},
-										"staging": {},
-										"compute": {
-											"coreCount": 8,
-											"computeType": "General"
-										}
-									}
-								},
-								{
-									"name": "UpdateValidatedDataset",
-									"type": "ExecuteDataFlow",
-									"dependsOn": [
-										{
-											"activity": "LoadValidatedDataset",
-											"dependencyConditions": [
-												"Succeeded"
-											]
-										}
-									],
-									"policy": {
-										"timeout": "7.00:00:00",
-										"retry": 0,
-										"retryIntervalInSeconds": 30,
-										"secureOutput": false,
-										"secureInput": false
-									},
-									"userProperties": [],
-									"typeProperties": {
-										"dataflow": {
-											"referenceName": "LoadXlsxCertificates_Step4_df",
-											"type": "DataFlowReference",
-											"parameters": {
-												"WorkbookName": {
-													"value": "'@{pipeline().parameters.WorkbookName}'",
-													"type": "Expression"
-												},
-												"TabName": {
-													"value": "'@{pipeline().parameters.Certifications}'",
-													"type": "Expression"
-												}
-											},
-											"datasetParameters": {
-												"SourceUpdate": {
-													"ParquetFile": {
-														"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.Certifications,'_',pipeline().parameters.CurrentQuarterDate,'_Update')",
-														"type": "Expression"
-													}
-												},
-												"TargetRelational": {}
-											}
-										},
-										"staging": {},
-										"compute": {
-											"coreCount": 8,
-											"computeType": "General"
-										}
-									}
-								},
-								{
-									"name": "DeleteExistingRowsForCurrentPeriod",
-									"type": "ExecuteDataFlow",
-									"dependsOn": [],
-									"policy": {
-										"timeout": "7.00:00:00",
-										"retry": 0,
-										"retryIntervalInSeconds": 30,
-										"secureOutput": false,
-										"secureInput": false
-									},
-									"userProperties": [],
-									"typeProperties": {
-										"dataflow": {
-											"referenceName": "LoadXlsxCertificates_Step2_df",
-											"type": "DataFlowReference",
-											"parameters": {
-												"WorkbookName": {
-													"value": "'@{pipeline().parameters.WorkbookName}'",
-													"type": "Expression"
-												},
-												"TabName": {
-													"value": "'@{pipeline().parameters.Certifications}'",
-													"type": "Expression"
-												}
-											},
-											"datasetParameters": {
-												"SourceReadyLoad": {
-													"ParquetFile": {
-														"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.Certifications,'_',pipeline().parameters.CurrentQuarterDate,'_LoadReady')",
-														"type": "Expression"
-													}
-												},
-												"TargetRelationalDelete": {}
-											}
-										},
-										"staging": {},
-										"compute": {
-											"coreCount": 8,
-											"computeType": "General"
-										}
-									}
-								}
-							]
-						}
-					}
-				],
-				"parameters": {
-					"WorkbookName": {
-						"type": "string",
-						"defaultValue": "Wenita Forestry Products Q4 FY20 V2.xlsx"
-					},
-					"CurrentQuarterDate": {
-						"type": "string",
-						"defaultValue": "30/09/2020"
-					},
-					"Certifications": {
-						"type": "string",
-						"defaultValue": "Certifications"
-					},
-					"CurrentRunDateTime": {
-						"type": "string",
-						"defaultValue": "2020-08-01"
-					},
-					"MasterUtcTag": {
-						"type": "string",
-						"defaultValue": "2020-08-28T06:05:53.4181322Z"
-					}
-				},
-				"annotations": []
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/dataflows/LoadXlsxCertificates_Step3_df')]",
-				"[concat(variables('factoryId'), '/dataflows/LoadXlsxCertificates_Step4_df')]",
-				"[concat(variables('factoryId'), '/dataflows/LoadXlsxCertificates_Step2_df')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/ProcessOpsWorkbookTabTimberSales_pl')]",
-			"type": "Microsoft.DataFactory/factories/pipelines",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"description": "Certificates tab",
-				"activities": [
-					{
-						"name": "ProcessExcelWorkbookTab",
-						"type": "ExecuteDataFlow",
-						"dependsOn": [],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"dataflow": {
-								"referenceName": "LoadXlsxTimberSales_Step1_df",
-								"type": "DataFlowReference",
-								"parameters": {
-									"MasterUtcTag": {
-										"value": "'@{pipeline().parameters.MasterUtcTag}'",
-										"type": "Expression"
-									},
-									"CurrentRunDateTime": {
-										"value": "'@{pipeline().parameters.CurrentRunDateTime}'",
-										"type": "Expression"
-									},
-									"WorkbookName": {
-										"value": "'@{pipeline().parameters.WorkbookName}'",
-										"type": "Expression"
-									},
-									"TabName": {
-										"value": "'@{pipeline().parameters.TimberSales}'",
-										"type": "Expression"
-									},
-									"CurrentQuarterDate": {
-										"value": "'@{pipeline().parameters.CurrentQuarterDate}'",
-										"type": "Expression"
-									},
-									"MasterPipeline": {
-										"value": "'@{pipeline().parameters.MasterPipeline}'",
-										"type": "Expression"
-									}
-								},
-								"datasetParameters": {
-									"SourceDataTab": {
-										"ParquetFile": {
-											"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.TimberSales,'_',pipeline().parameters.CurrentQuarterDate,'_Extract')",
-											"type": "Expression"
-										}
-									},
-									"RelationalSpeciesType": {},
-									"RelationalSalesUnit": {},
-									"RelationalDeliveryPoint": {},
-									"TargetPersistentParquetInsert": {},
-									"ErrorTable": {},
-									"OpsWorkbookWorksheetList": {}
-								}
-							},
-							"staging": {},
-							"compute": {
-								"coreCount": 8,
-								"computeType": "General"
-							}
-						}
-					}
-				],
-				"parameters": {
-					"WorkbookName": {
-						"type": "string",
-						"defaultValue": "Wenita Forestry Products Q4 FY20 V2.xlsx"
-					},
-					"CurrentQuarterDate": {
-						"type": "string",
-						"defaultValue": "2020-06-30"
-					},
-					"TimberSales": {
-						"type": "string",
-						"defaultValue": "Timber Sales"
-					},
-					"CurrentRunDateTime": {
-						"type": "string",
-						"defaultValue": "2020-08-01"
-					},
-					"MasterUtcTag": {
-						"type": "string",
-						"defaultValue": "2020-08-28T06:05:53.4181322Z"
-					},
-					"MasterPipeline": {
-						"type": "string"
-					}
-				},
-				"variables": {
-					"Range": {
-						"type": "String",
-						"defaultValue": "A6:W99999"
-					}
-				},
-				"annotations": []
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/dataflows/LoadXlsxTimberSales_Step1_df')]"
-			]
 		}
 	]
 }
