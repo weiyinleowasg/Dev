@@ -13,6 +13,158 @@
 	},
 	"resources": [
 		{
+			"name": "[concat(parameters('factoryName'), '/ProcessSourceBlob_opsaudit_spl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "LookupStagingOpsIncident",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": "SELECT count(*) Total_Error\n  FROM [staging].[OPS_Audit]\n  WHERE [Validation_Error] IS NOT NULL",
+								"partitionOption": "None"
+							},
+							"dataset": {
+								"referenceName": "SQLstagingopsaudit_ds",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						}
+					},
+					{
+						"name": "If Condition1",
+						"type": "IfCondition",
+						"dependsOn": [
+							{
+								"activity": "LookupStagingOpsIncident",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@greater(activity('LookupStagingOpsIncident').output.firstRow.TOTAL_ERROR,0)",
+								"type": "Expression"
+							},
+							"ifFalseActivities": [
+								{
+									"name": "LoadStagingDBtoRelationDB_opsaudit_df",
+									"type": "ExecuteDataFlow",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"dataflow": {
+											"referenceName": "LoadStagingDBtoRelationDB_opsaudit_df",
+											"type": "DataFlowReference",
+											"parameters": {
+												"ProcessName": {
+													"value": "'@{pipeline().parameters.ProcessName}'",
+													"type": "Expression"
+												},
+												"FileName": {
+													"value": "'@{pipeline().parameters.FileName}'",
+													"type": "Expression"
+												},
+												"Etl_Utc_Tag": {
+													"value": "'@{pipeline().parameters.Etl_Utc_Tag}'",
+													"type": "Expression"
+												}
+											},
+											"datasetParameters": {
+												"StagingDB": {},
+												"RelationalAudit": {},
+												"UpserttRow": {}
+											}
+										},
+										"staging": {},
+										"compute": {
+											"coreCount": 8,
+											"computeType": "General"
+										}
+									}
+								}
+							],
+							"ifTrueActivities": [
+								{
+									"name": "UpdateSourceRegisterTableAbort",
+									"type": "SqlServerStoredProcedure",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"storedProcedureName": "[[log].[UpdateSourceRegisterFailedAbort]",
+										"storedProcedureParameters": {
+											"EtlUtcTag": {
+												"value": {
+													"value": "@pipeline().parameters.Etl_Utc_Tag",
+													"type": "Expression"
+												},
+												"type": "String"
+											},
+											"FileName": {
+												"value": {
+													"value": "@pipeline().parameters.OriginalBlobName",
+													"type": "Expression"
+												},
+												"type": "String"
+											}
+										}
+									},
+									"linkedServiceName": {
+										"referenceName": "SQLdbConnection",
+										"type": "LinkedServiceReference"
+									}
+								}
+							]
+						}
+					}
+				],
+				"parameters": {
+					"ProcessName": {
+						"type": "string"
+					},
+					"FileName": {
+						"type": "string"
+					},
+					"Etl_Utc_Tag": {
+						"type": "string"
+					},
+					"OriginalBlobName": {
+						"type": "string"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": []
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/ProcessSourceBlob_opscertification_spl')]",
 			"type": "Microsoft.DataFactory/factories/pipelines",
 			"apiVersion": "2018-06-01",
@@ -3077,1091 +3229,6 @@
 						}
 					}
 				],
-				"annotations": []
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/ProcessMktMasterDimDataSource_pl')]",
-			"type": "Microsoft.DataFactory/factories/pipelines",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"activities": [
-					{
-						"name": "MasterUtcTag",
-						"type": "SetVariable",
-						"dependsOn": [],
-						"userProperties": [],
-						"typeProperties": {
-							"variableName": "MasterUtcTag",
-							"value": {
-								"value": "@utcnow()",
-								"type": "Expression"
-							}
-						}
-					},
-					{
-						"name": "CopyWorksheetToCsvFile",
-						"type": "Copy",
-						"dependsOn": [
-							{
-								"activity": "MoveFIleFromFileshareToBlob",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"source": {
-								"type": "ExcelSource",
-								"storeSettings": {
-									"type": "AzureBlobStorageReadSettings",
-									"recursive": true
-								}
-							},
-							"sink": {
-								"type": "DelimitedTextSink",
-								"storeSettings": {
-									"type": "AzureBlobStorageWriteSettings"
-								},
-								"formatSettings": {
-									"type": "DelimitedTextWriteSettings",
-									"quoteAllText": true,
-									"fileExtension": ".txt"
-								}
-							},
-							"enableStaging": false,
-							"translator": {
-								"type": "TabularTranslator",
-								"mappings": [
-									{
-										"source": {
-											"name": "Source Metric",
-											"type": "String",
-											"physicalType": "String"
-										},
-										"sink": {
-											"name": "Source Metric",
-											"type": "String"
-										}
-									},
-									{
-										"source": {
-											"name": "Source Name",
-											"type": "String",
-											"physicalType": "String"
-										},
-										"sink": {
-											"name": "Source Name",
-											"type": "String"
-										}
-									},
-									{
-										"source": {
-											"name": "Source Type",
-											"type": "String",
-											"physicalType": "String"
-										},
-										"sink": {
-											"name": "Source Type",
-											"type": "String"
-										}
-									},
-									{
-										"source": {
-											"name": "Source Link",
-											"physicalType": "String"
-										},
-										"sink": {
-											"name": "Source Link"
-										}
-									},
-									{
-										"source": {
-											"name": "Source Data Type",
-											"physicalType": "String"
-										},
-										"sink": {
-											"name": "Source Data Type"
-										}
-									},
-									{
-										"source": {
-											"name": "Data Process Type",
-											"physicalType": "String"
-										},
-										"sink": {
-											"name": "Data Process Type"
-										}
-									},
-									{
-										"source": {
-											"name": "Source Status",
-											"physicalType": "String"
-										},
-										"sink": {
-											"name": "Source Status"
-										}
-									},
-									{
-										"source": {
-											"name": "Frequency",
-											"type": "String",
-											"physicalType": "String"
-										},
-										"sink": {
-											"name": "Frequency",
-											"type": "String"
-										}
-									},
-									{
-										"source": {
-											"name": "Confidence Level",
-											"physicalType": "String"
-										},
-										"sink": {
-											"name": "Confidence Level"
-										}
-									},
-									{
-										"source": {
-											"name": "Person Responsible",
-											"type": "String",
-											"physicalType": "String"
-										},
-										"sink": {
-											"name": "Person Responsible",
-											"type": "String"
-										}
-									}
-								],
-								"typeConversion": true,
-								"typeConversionSettings": {
-									"allowDataTruncation": true,
-									"treatBooleanAsNumber": false
-								}
-							}
-						},
-						"inputs": [
-							{
-								"referenceName": "ExcelWorkbook_AllTabs_ds",
-								"type": "DatasetReference",
-								"parameters": {
-									"WorkbookName": {
-										"value": "@pipeline().parameters.WorkbookName",
-										"type": "Expression"
-									},
-									"TabName": {
-										"value": "@variables('WorksheetName')",
-										"type": "Expression"
-									},
-									"Range": {
-										"value": "@variables('WorksheetRange')",
-										"type": "Expression"
-									}
-								}
-							}
-						],
-						"outputs": [
-							{
-								"referenceName": "CSVgenericWithParameter_ds",
-								"type": "DatasetReference",
-								"parameters": {
-									"FileName": {
-										"value": "MKTINFO_DIM_DATA_SOURCE_Extract.csv",
-										"type": "Expression"
-									}
-								}
-							}
-						]
-					},
-					{
-						"name": "TruncateAuditTable",
-						"type": "SqlServerStoredProcedure",
-						"dependsOn": [
-							{
-								"activity": "CopyWorksheetToCsvFile",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"storedProcedureName": "[[audit].[TruncateAuditTable]",
-							"storedProcedureParameters": {
-								"TableName": {
-									"value": {
-										"value": "Dim_Data_Source_Error",
-										"type": "Expression"
-									},
-									"type": "String"
-								}
-							}
-						},
-						"linkedServiceName": {
-							"referenceName": "SQLdbConnection",
-							"type": "LinkedServiceReference"
-						}
-					},
-					{
-						"name": "ProcessDimension",
-						"type": "ExecutePipeline",
-						"dependsOn": [
-							{
-								"activity": "TruncateAuditTable",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"pipeline": {
-								"referenceName": "ProcessMktUpdateDimDataSource_pl",
-								"type": "PipelineReference"
-							},
-							"waitOnCompletion": true,
-							"parameters": {
-								"WorkbookName": {
-									"value": "@pipeline().parameters.WorkbookName",
-									"type": "Expression"
-								},
-								"WorksheetName": {
-									"value": "@variables('WorksheetName')",
-									"type": "Expression"
-								},
-								"GeneratedBatchDate": {
-									"value": "@variables('GenerateBatchDate')",
-									"type": "Expression"
-								},
-								"MasterPipelineName": {
-									"value": "@pipeline().Pipeline",
-									"type": "Expression"
-								}
-							}
-						}
-					},
-					{
-						"name": "GenerateBatchDate",
-						"type": "SetVariable",
-						"dependsOn": [
-							{
-								"activity": "MasterUtcTag",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"variableName": "GenerateBatchDate",
-							"value": {
-								"value": "@formatDateTime(convertFromUtc(utcnow(),'AUS Eastern Standard Time'),'yyyy-MM-dd HH:mm:ss')",
-								"type": "Expression"
-							}
-						}
-					},
-					{
-						"name": "CopyToSourceArchive",
-						"type": "Copy",
-						"dependsOn": [
-							{
-								"activity": "ProcessDimension",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"source": {
-								"type": "BinarySource",
-								"storeSettings": {
-									"type": "AzureBlobStorageReadSettings",
-									"recursive": true
-								},
-								"formatSettings": {
-									"type": "BinaryReadSettings"
-								}
-							},
-							"sink": {
-								"type": "BinarySink",
-								"storeSettings": {
-									"type": "AzureBlobStorageWriteSettings"
-								}
-							},
-							"enableStaging": false
-						},
-						"inputs": [
-							{
-								"referenceName": "BinaryFromSourceLandingRaw_ds",
-								"type": "DatasetReference",
-								"parameters": {
-									"file": {
-										"value": "@pipeline().parameters.WorkbookName",
-										"type": "Expression"
-									}
-								}
-							}
-						],
-						"outputs": [
-							{
-								"referenceName": "BinaryToSourceArchive_ds",
-								"type": "DatasetReference",
-								"parameters": {
-									"path": {
-										"value": "@concat(substring(variables('GenerateBatchDate'),0,4), '/', concat(if(equals(substring(variables('GenerateBatchDate'),5,2),'01'),'JAN',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'02'),'FEB',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'03'),'MAR',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'04'),'APR',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'05'),'MAY',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'06'),'JUN',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'07'),'JUL',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'08'),'AUG',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'09'),'SEP',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'10'),'OCT',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'11'),'NOV',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'12'),'DEC','')), '/', substring(variables('GenerateBatchDate'),8,2))",
-										"type": "Expression"
-									},
-									"file": {
-										"value": "@pipeline().parameters.WorkbookName",
-										"type": "Expression"
-									}
-								}
-							}
-						]
-					},
-					{
-						"name": "CopyToSourceArchiveFailed",
-						"type": "Copy",
-						"dependsOn": [
-							{
-								"activity": "ProcessDimension",
-								"dependencyConditions": [
-									"Failed"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"source": {
-								"type": "BinarySource",
-								"storeSettings": {
-									"type": "AzureBlobStorageReadSettings",
-									"recursive": true
-								},
-								"formatSettings": {
-									"type": "BinaryReadSettings"
-								}
-							},
-							"sink": {
-								"type": "BinarySink",
-								"storeSettings": {
-									"type": "AzureBlobStorageWriteSettings"
-								}
-							},
-							"enableStaging": false
-						},
-						"inputs": [
-							{
-								"referenceName": "BinaryFromSourceLandingRaw_ds",
-								"type": "DatasetReference",
-								"parameters": {
-									"file": {
-										"value": "@pipeline().parameters.WorkbookName",
-										"type": "Expression"
-									}
-								}
-							}
-						],
-						"outputs": [
-							{
-								"referenceName": "BinaryToSourceArchive_ds",
-								"type": "DatasetReference",
-								"parameters": {
-									"path": {
-										"value": "@concat(substring(variables('GenerateBatchDate'),0,4), '/', concat(if(equals(substring(variables('GenerateBatchDate'),5,2),'01'),'JAN',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'02'),'FEB',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'03'),'MAR',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'04'),'APR',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'05'),'MAY',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'06'),'JUN',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'07'),'JUL',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'08'),'AUG',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'09'),'SEP',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'10'),'OCT',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'11'),'NOV',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'12'),'DEC','')), '/', substring(variables('GenerateBatchDate'),8,2))",
-										"type": "Expression"
-									},
-									"file": {
-										"value": "@pipeline().parameters.WorkbookName",
-										"type": "Expression"
-									}
-								}
-							}
-						]
-					},
-					{
-						"name": "CopyToDataLake",
-						"type": "Copy",
-						"dependsOn": [
-							{
-								"activity": "CopyToSourceArchive",
-								"dependencyConditions": [
-									"Completed"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"source": {
-								"type": "BinarySource",
-								"storeSettings": {
-									"type": "AzureBlobStorageReadSettings",
-									"recursive": true
-								},
-								"formatSettings": {
-									"type": "BinaryReadSettings"
-								}
-							},
-							"sink": {
-								"type": "BinarySink",
-								"storeSettings": {
-									"type": "AzureBlobStorageWriteSettings"
-								}
-							},
-							"enableStaging": false
-						},
-						"inputs": [
-							{
-								"referenceName": "BinaryFromSourceLandingRaw_ds",
-								"type": "DatasetReference",
-								"parameters": {
-									"file": {
-										"value": "@pipeline().parameters.WorkbookName",
-										"type": "Expression"
-									}
-								}
-							}
-						],
-						"outputs": [
-							{
-								"referenceName": "BinaryToDatalake_ds",
-								"type": "DatasetReference",
-								"parameters": {
-									"path": {
-										"value": "@concat('manual/',substring(variables('GenerateBatchDate'),0,4), '/', concat(if(equals(substring(variables('GenerateBatchDate'),5,2),'01'),'JAN',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'02'),'FEB',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'03'),'MAR',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'04'),'APR',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'05'),'MAY',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'06'),'JUN',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'07'),'JUL',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'08'),'AUG',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'09'),'SEP',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'10'),'OCT',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'11'),'NOV',''),if(equals(substring(variables('GenerateBatchDate'),5,2),'12'),'DEC','')), '/', substring(variables('GenerateBatchDate'),8,2))",
-										"type": "Expression"
-									},
-									"file": {
-										"value": "@pipeline().parameters.WorkbookName",
-										"type": "Expression"
-									}
-								}
-							}
-						]
-					},
-					{
-						"name": "DeleteFromSourceLandingScrubbed",
-						"type": "Delete",
-						"dependsOn": [
-							{
-								"activity": "CopyToDataLake",
-								"dependencyConditions": [
-									"Completed"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"dataset": {
-								"referenceName": "BinaryFromSourceLandingScrubbed_ds",
-								"type": "DatasetReference",
-								"parameters": {}
-							},
-							"enableLogging": false,
-							"storeSettings": {
-								"type": "AzureBlobStorageReadSettings",
-								"recursive": true,
-								"prefix": {
-									"value": "MKTINFO_DIM_TYPE",
-									"type": "Expression"
-								}
-							}
-						}
-					},
-					{
-						"name": "DeleteFromSourceLandingScrubbedFailed",
-						"type": "Delete",
-						"dependsOn": [
-							{
-								"activity": "CopyToSourceArchiveFailed",
-								"dependencyConditions": [
-									"Completed"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"dataset": {
-								"referenceName": "BinaryFromSourceLandingScrubbed_ds",
-								"type": "DatasetReference",
-								"parameters": {}
-							},
-							"enableLogging": false,
-							"storeSettings": {
-								"type": "AzureBlobStorageReadSettings",
-								"recursive": true,
-								"prefix": {
-									"value": "MKTINFO_DIM_TYPE",
-									"type": "Expression"
-								}
-							}
-						}
-					},
-					{
-						"name": "DeleteFromSourceLandingRaw",
-						"type": "Delete",
-						"dependsOn": [
-							{
-								"activity": "DeleteFromSourceLandingScrubbed",
-								"dependencyConditions": [
-									"Completed"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"dataset": {
-								"referenceName": "BinaryFromSourceLandingRaw_ds",
-								"type": "DatasetReference",
-								"parameters": {
-									"file": {
-										"value": "@pipeline().parameters.WorkbookName",
-										"type": "Expression"
-									}
-								}
-							},
-							"enableLogging": false,
-							"storeSettings": {
-								"type": "AzureBlobStorageReadSettings",
-								"recursive": true
-							}
-						}
-					},
-					{
-						"name": "DeleteFromSourceLandingRawFailed",
-						"type": "Delete",
-						"dependsOn": [
-							{
-								"activity": "DeleteFromSourceLandingScrubbedFailed",
-								"dependencyConditions": [
-									"Completed"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"dataset": {
-								"referenceName": "BinaryFromSourceLandingRaw_ds",
-								"type": "DatasetReference",
-								"parameters": {
-									"file": {
-										"value": "@pipeline().parameters.WorkbookName",
-										"type": "Expression"
-									}
-								}
-							},
-							"enableLogging": false,
-							"storeSettings": {
-								"type": "AzureBlobStorageReadSettings",
-								"recursive": true
-							}
-						}
-					},
-					{
-						"name": "UpdateSourceRegisterFailed",
-						"type": "SqlServerStoredProcedure",
-						"dependsOn": [
-							{
-								"activity": "DeleteFromSourceLandingRawFailed",
-								"dependencyConditions": [
-									"Completed"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"storedProcedureName": "[[log].[SourceRegisterTableInsert]",
-							"storedProcedureParameters": {
-								"ArchiveContainer": {
-									"value": {
-										"value": "sourcearchive",
-										"type": "Expression"
-									},
-									"type": "String"
-								},
-								"Comment": {
-									"value": {
-										"value": "Pipeline Failed",
-										"type": "Expression"
-									},
-									"type": "String"
-								},
-								"DatalakeContainer": {
-									"value": {
-										"value": "nonfinancial",
-										"type": "Expression"
-									},
-									"type": "String"
-								},
-								"EtlUtcTag": {
-									"value": {
-										"value": "@variables('MasterUtcTag')",
-										"type": "Expression"
-									},
-									"type": "String"
-								},
-								"FileName": {
-									"value": {
-										"value": "@pipeline().parameters.WorkbookName",
-										"type": "Expression"
-									},
-									"type": "String"
-								},
-								"InputDate": {
-									"value": {
-										"value": "@variables('GenerateBatchDate')",
-										"type": "Expression"
-									},
-									"type": "String"
-								},
-								"InputMethod": {
-									"value": {
-										"value": "manual",
-										"type": "Expression"
-									},
-									"type": "String"
-								},
-								"ProcessName": {
-									"value": {
-										"value": "@pipeline().Pipeline",
-										"type": "Expression"
-									},
-									"type": "String"
-								},
-								"RunStatus": {
-									"value": {
-										"value": "ABORT",
-										"type": "Expression"
-									},
-									"type": "String"
-								},
-								"SourceContainer": {
-									"value": {
-										"value": "sourcelandingraw",
-										"type": "Expression"
-									},
-									"type": "String"
-								},
-								"TargetContainer": {
-									"value": {
-										"value": "sourcelandingscrubbed",
-										"type": "Expression"
-									},
-									"type": "String"
-								}
-							}
-						},
-						"linkedServiceName": {
-							"referenceName": "SQLdbConnection",
-							"type": "LinkedServiceReference"
-						}
-					},
-					{
-						"name": "UpdateSourceRegisterTable",
-						"type": "ExecutePipeline",
-						"dependsOn": [
-							{
-								"activity": "DeleteFromSourceLandingRaw",
-								"dependencyConditions": [
-									"Completed"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"pipeline": {
-								"referenceName": "ProcessMktUpdateSourceRegister_pl",
-								"type": "PipelineReference"
-							},
-							"waitOnCompletion": true,
-							"parameters": {
-								"WorkbookName": {
-									"value": "@pipeline().parameters.WorkbookName",
-									"type": "Expression"
-								},
-								"ErrorTableName": {
-									"value": "[[audit].[Dim_Delivery_Point_Error]",
-									"type": "Expression"
-								},
-								"MasterUtcTag": {
-									"value": "@variables('MasterUtcTag')",
-									"type": "Expression"
-								},
-								"MasterPipelineName": {
-									"value": "@pipeline().Pipeline",
-									"type": "Expression"
-								},
-								"GenerateBatchDate": {
-									"value": "@variables('GenerateBatchDate')",
-									"type": "Expression"
-								}
-							}
-						}
-					},
-					{
-						"name": "SendFinalEmail",
-						"type": "ExecutePipeline",
-						"dependsOn": [
-							{
-								"activity": "UpdateSourceRegisterTable",
-								"dependencyConditions": [
-									"Completed"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"pipeline": {
-								"referenceName": "ProcessMktSendMailOK_pl",
-								"type": "PipelineReference"
-							},
-							"waitOnCompletion": true,
-							"parameters": {
-								"DataFactoryName": {
-									"value": "@pipeline().DataFactory",
-									"type": "Expression"
-								},
-								"PipelineName": {
-									"value": "@pipeline().Pipeline",
-									"type": "Expression"
-								},
-								"WorkbookName": {
-									"value": "@pipeline().parameters.WorkbookName",
-									"type": "Expression"
-								},
-								"ErrorTableName": {
-									"value": "[[audit].[Dim_Delivery_Point_Error]",
-									"type": "Expression"
-								},
-								"emailAddress": {
-									"value": "@pipeline().parameters.emailAddress",
-									"type": "Expression"
-								}
-							}
-						}
-					},
-					{
-						"name": "MoveFIleFromFileshareToBlob",
-						"type": "Copy",
-						"dependsOn": [
-							{
-								"activity": "SendEmailFileReceivedConfirmation",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"source": {
-								"type": "BinarySource",
-								"storeSettings": {
-									"type": "FileServerReadSettings",
-									"recursive": false,
-									"deleteFilesAfterCompletion": false
-								},
-								"formatSettings": {
-									"type": "BinaryReadSettings"
-								}
-							},
-							"sink": {
-								"type": "BinarySink",
-								"storeSettings": {
-									"type": "AzureBlobStorageWriteSettings"
-								}
-							},
-							"enableStaging": false
-						},
-						"inputs": [
-							{
-								"referenceName": "BinaryDataSourceFileshareMktDataDir_MoveFile_ds",
-								"type": "DatasetReference",
-								"parameters": {
-									"filename": {
-										"value": "@pipeline().parameters.WorkbookName",
-										"type": "Expression"
-									}
-								}
-							}
-						],
-						"outputs": [
-							{
-								"referenceName": "BinaryDataDestinationBlob_MoveFile_ds",
-								"type": "DatasetReference",
-								"parameters": {
-									"filename": {
-										"value": "@pipeline().parameters.WorkbookName",
-										"type": "Expression"
-									}
-								}
-							}
-						]
-					},
-					{
-						"name": "SendEmailFileReceivedConfirmation",
-						"type": "ExecutePipeline",
-						"dependsOn": [
-							{
-								"activity": "GenerateBatchDate",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"pipeline": {
-								"referenceName": "ProcessMktSendMailFileReceived_pl",
-								"type": "PipelineReference"
-							},
-							"waitOnCompletion": true,
-							"parameters": {
-								"DataFactoryName": {
-									"value": "@pipeline().DataFactory",
-									"type": "Expression"
-								},
-								"PipelineName": {
-									"value": "@pipeline().Pipeline",
-									"type": "Expression"
-								},
-								"WorkbookName": {
-									"value": "@pipeline().parameters.WorkbookName",
-									"type": "Expression"
-								},
-								"ErrorTableName": "None",
-								"emailAddress": {
-									"value": "@pipeline().parameters.emailAddress",
-									"type": "Expression"
-								}
-							}
-						}
-					},
-					{
-						"name": "SendMailMoveFileFailed",
-						"type": "ExecutePipeline",
-						"dependsOn": [
-							{
-								"activity": "MoveFIleFromFileshareToBlob",
-								"dependencyConditions": [
-									"Failed"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"pipeline": {
-								"referenceName": "ProcessMktSendMailCopyFailed_pl",
-								"type": "PipelineReference"
-							},
-							"waitOnCompletion": true,
-							"parameters": {
-								"DataFactoryName": {
-									"value": "@pipeline().DataFactory",
-									"type": "Expression"
-								},
-								"PipelineName": {
-									"value": "@pipeline().Pipeline",
-									"type": "Expression"
-								},
-								"WorkbookName": {
-									"value": "@pipeline().parameters.WorkbookName",
-									"type": "Expression"
-								},
-								"ErrorTableName": "None",
-								"emailAddress": {
-									"value": "@pipeline().parameters.emailAddress",
-									"type": "Expression"
-								}
-							}
-						}
-					},
-					{
-						"name": "SendMailCopyFileFailed",
-						"type": "ExecutePipeline",
-						"dependsOn": [
-							{
-								"activity": "CopyWorksheetToCsvFile",
-								"dependencyConditions": [
-									"Failed"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"pipeline": {
-								"referenceName": "ProcessMktSendMailCopyFailed_pl",
-								"type": "PipelineReference"
-							},
-							"waitOnCompletion": true,
-							"parameters": {
-								"DataFactoryName": {
-									"value": "@pipeline().DataFactory",
-									"type": "Expression"
-								},
-								"PipelineName": {
-									"value": "@pipeline().Pipeline",
-									"type": "Expression"
-								},
-								"WorkbookName": {
-									"value": "@pipeline().parameters.WorkbookName",
-									"type": "Expression"
-								},
-								"ErrorTableName": "None",
-								"emailAddress": {
-									"value": "@pipeline().parameters.emailAddress",
-									"type": "Expression"
-								}
-							}
-						}
-					},
-					{
-						"name": "SendMailLoadFailed",
-						"type": "ExecutePipeline",
-						"dependsOn": [
-							{
-								"activity": "UpdateSourceRegisterFailed",
-								"dependencyConditions": [
-									"Completed"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"pipeline": {
-								"referenceName": "ProcessMktSendMailFinalFailedMsg_pl",
-								"type": "PipelineReference"
-							},
-							"waitOnCompletion": true,
-							"parameters": {
-								"DataFactoryName": {
-									"value": "@pipeline().DataFactory",
-									"type": "Expression"
-								},
-								"PipelineName": {
-									"value": "@pipeline().Pipeline",
-									"type": "Expression"
-								},
-								"WorkbookName": {
-									"value": "@pipeline().parameters.WorkbookName",
-									"type": "Expression"
-								},
-								"ErrorTableName": "None",
-								"emailAddress": {
-									"value": "@pipeline().parameters.emailAddress",
-									"type": "Expression"
-								}
-							}
-						}
-					}
-				],
-				"concurrency": 1,
-				"parameters": {
-					"emailAddress": {
-						"type": "string",
-						"defaultValue": "weiyin.leow@asggroup.com.au"
-					},
-					"WorkbookName": {
-						"type": "string",
-						"defaultValue": "Sources.xlsx"
-					}
-				},
-				"variables": {
-					"WorksheetName": {
-						"type": "String",
-						"defaultValue": "Sources"
-					},
-					"WorksheetRange": {
-						"type": "String",
-						"defaultValue": "A8:J9999"
-					},
-					"GenerateBatchDate": {
-						"type": "String"
-					},
-					"MasterUtcTag": {
-						"type": "String"
-					}
-				},
 				"annotations": []
 			},
 			"dependsOn": []
