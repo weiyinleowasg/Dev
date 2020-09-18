@@ -13,6 +13,812 @@
 	},
 	"resources": [
 		{
+			"name": "[concat(parameters('factoryName'), '/ProcessSourceBlob_opsincident_pl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "GetUnprocessedBlobFromRegister",
+						"type": "Lookup",
+						"dependsOn": [
+							{
+								"activity": "SetEtlUtcTag",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": "SELECT [ORIGINAL_BLOB_LANDING_CONTAINER],\n\t[ORIGINAL_BLOB_NAME],\n\t[ORIGINAL_BLOP_FULLPATH],\n\t[TARGET_BLOB_LANDING_CONTAINER],\n\t[TARGET_BLOB_NAME],\n\t[DATALAKE_CONTAINER],\n\t[DATALAKE_FILE_PATH],\n\t[ORIGINAL_BLOB_ARCHIVE_CONTAINER],\n\t[ORIGINAL_BLOB_ARCHIVE_FULLPATH],\n\tCONCAT(DATALAKE_CONTAINER,'/',DATALAKE_FILE_PATH,'/',TARGET_BLOB_NAME) AS DATALAKE_FULL_PATHFILE\nFROM [log].[SOURCE_REGISTER_TABLE]\nWHERE [ETL_IS_PROCESSED] = 'N'\nAND [ORIGINAL_BLOB_NAME] LIKE 'OPS_INCIDENT_%'\nORDER BY [ORIGINAL_BLOB_NAME];",
+								"partitionOption": "None"
+							},
+							"dataset": {
+								"referenceName": "SQLsourceRegisterTable_ds2",
+								"type": "DatasetReference",
+								"parameters": {}
+							},
+							"firstRowOnly": false
+						}
+					},
+					{
+						"name": "CheckProcessArchiveBlobUpdateRegister",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "GetUnprocessedBlobFromRegister",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('GetUnprocessedBlobFromRegister').output.value",
+								"type": "Expression"
+							},
+							"isSequential": true,
+							"activities": [
+								{
+									"name": "GetBlopPath",
+									"type": "GetMetadata",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"dataset": {
+											"referenceName": "DelimitedText_sourcelandingraw_ds2",
+											"type": "DatasetReference",
+											"parameters": {}
+										},
+										"fieldList": [
+											"itemName",
+											"exists"
+										],
+										"storeSettings": {
+											"type": "AzureBlobStorageReadSettings",
+											"recursive": true
+										},
+										"formatSettings": {
+											"type": "DelimitedTextReadSettings"
+										}
+									}
+								},
+								{
+									"name": "IsPhysicalFileExist",
+									"type": "IfCondition",
+									"dependsOn": [
+										{
+											"activity": "GetBlopPath",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"expression": {
+											"value": "@activity('GetBlopPath').output.exists",
+											"type": "Expression"
+										},
+										"ifFalseActivities": [
+											{
+												"name": "UpdateSourceRegisterNoFile",
+												"type": "SqlServerStoredProcedure",
+												"dependsOn": [
+													{
+														"activity": "DeleteFromScrubbedNoFile",
+														"dependencyConditions": [
+															"Completed"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"storedProcedureName": "[[log].[UpdateSourceRegisterNoFile]",
+													"storedProcedureParameters": {
+														"EtlUtcTag": {
+															"value": {
+																"value": "@variables('Etl_Utc_Tag')",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"FileName": {
+															"value": {
+																"value": "@{item().ORIGINAL_BLOB_NAME}",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"JobName": {
+															"value": {
+																"value": "@pipeline().Pipeline",
+																"type": "Expression"
+															},
+															"type": "String"
+														}
+													}
+												},
+												"linkedServiceName": {
+													"referenceName": "SQLdbConnection",
+													"type": "LinkedServiceReference"
+												}
+											},
+											{
+												"name": "DeleteFromScrubbedNoFile",
+												"type": "Delete",
+												"dependsOn": [],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"dataset": {
+														"referenceName": "DelimitedText_sourcelandingscrubbed_opsincident_ds",
+														"type": "DatasetReference",
+														"parameters": {}
+													},
+													"enableLogging": false,
+													"storeSettings": {
+														"type": "AzureBlobStorageReadSettings",
+														"recursive": false
+													}
+												}
+											}
+										],
+										"ifTrueActivities": [
+											{
+												"name": "UpdateSourceRegisterRun",
+												"type": "SqlServerStoredProcedure",
+												"dependsOn": [],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"storedProcedureName": "[[log].[UpdateSourceRegisterRun]",
+													"storedProcedureParameters": {
+														"EtlUtcTag": {
+															"value": {
+																"value": "@variables('Etl_Utc_Tag')",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"FileName": {
+															"value": {
+																"value": "@{item().ORIGINAL_BLOB_NAME}",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"JobName": {
+															"value": {
+																"value": "@pipeline().Pipeline",
+																"type": "Expression"
+															},
+															"type": "String"
+														}
+													}
+												},
+												"linkedServiceName": {
+													"referenceName": "SQLdbConnection",
+													"type": "LinkedServiceReference"
+												}
+											},
+											{
+												"name": "UpdateSourceRegisterPassed",
+												"type": "SqlServerStoredProcedure",
+												"dependsOn": [
+													{
+														"activity": "DeleteFromScrubbed",
+														"dependencyConditions": [
+															"Completed"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"storedProcedureName": "[[log].[UpdateSourceRegisterPassed]",
+													"storedProcedureParameters": {
+														"EtlUtcTag": {
+															"value": {
+																"value": "@variables('Etl_Utc_Tag')",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"FileName": {
+															"value": {
+																"value": "@{item().ORIGINAL_BLOB_NAME}",
+																"type": "Expression"
+															},
+															"type": "String"
+														}
+													}
+												},
+												"linkedServiceName": {
+													"referenceName": "SQLdbConnection",
+													"type": "LinkedServiceReference"
+												}
+											},
+											{
+												"name": "CopyScrubbedToDataLake",
+												"type": "Copy",
+												"dependsOn": [
+													{
+														"activity": "LoadStagingDBtoRelationDB_spl_df",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "DelimitedTextSource",
+														"storeSettings": {
+															"type": "AzureBlobStorageReadSettings",
+															"recursive": false,
+															"enablePartitionDiscovery": false
+														},
+														"formatSettings": {
+															"type": "DelimitedTextReadSettings"
+														}
+													},
+													"sink": {
+														"type": "DelimitedTextSink",
+														"storeSettings": {
+															"type": "AzureBlobStorageWriteSettings"
+														},
+														"formatSettings": {
+															"type": "DelimitedTextWriteSettings",
+															"quoteAllText": true,
+															"fileExtension": ".txt"
+														}
+													},
+													"enableStaging": false
+												},
+												"inputs": [
+													{
+														"referenceName": "DelimitedText_sourcelandingscrubbed_opsincident_ds",
+														"type": "DatasetReference",
+														"parameters": {}
+													}
+												],
+												"outputs": [
+													{
+														"referenceName": "DelimitedText_datalake_nonfinancial_ds2",
+														"type": "DatasetReference",
+														"parameters": {}
+													}
+												]
+											},
+											{
+												"name": "LoadTxtToDBstaging_ds",
+												"type": "ExecuteDataFlow",
+												"dependsOn": [
+													{
+														"activity": "UpdateSourceRegisterRun",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"dataflow": {
+														"referenceName": "LoadTxtToDBstaging_opsincident_df",
+														"type": "DataFlowReference",
+														"parameters": {},
+														"datasetParameters": {
+															"LoadFromScrubbedToStagingDB": {},
+															"RelationalAsset": {},
+															"RelationalIncidentType": {},
+															"StagingDB": {}
+														}
+													},
+													"staging": {},
+													"compute": {
+														"coreCount": 8,
+														"computeType": "General"
+													}
+												}
+											},
+											{
+												"name": "UpdateSourceRegisterFailedAbort_CopyToArchive",
+												"type": "SqlServerStoredProcedure",
+												"dependsOn": [
+													{
+														"activity": "CopyOriginalToArchive",
+														"dependencyConditions": [
+															"Failed"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"storedProcedureName": "[[log].[UpdateSourceRegisterFailedAbort]",
+													"storedProcedureParameters": {
+														"EtlUtcTag": {
+															"value": {
+																"value": "@variables('Etl_Utc_Tag')",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"FileName": {
+															"value": {
+																"value": "@{item().ORIGINAL_BLOB_NAME}",
+																"type": "Expression"
+															},
+															"type": "String"
+														}
+													}
+												},
+												"linkedServiceName": {
+													"referenceName": "SQLdbConnection",
+													"type": "LinkedServiceReference"
+												}
+											},
+											{
+												"name": "CopyOriginalToArchive",
+												"type": "Copy",
+												"dependsOn": [
+													{
+														"activity": "CopyScrubbedToDataLake",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "DelimitedTextSource",
+														"storeSettings": {
+															"type": "AzureBlobStorageReadSettings",
+															"recursive": false,
+															"enablePartitionDiscovery": false
+														},
+														"formatSettings": {
+															"type": "DelimitedTextReadSettings"
+														}
+													},
+													"sink": {
+														"type": "DelimitedTextSink",
+														"storeSettings": {
+															"type": "AzureBlobStorageWriteSettings"
+														},
+														"formatSettings": {
+															"type": "DelimitedTextWriteSettings",
+															"quoteAllText": true,
+															"fileExtension": ".txt"
+														}
+													},
+													"enableStaging": false
+												},
+												"inputs": [
+													{
+														"referenceName": "DelimitedText_sourcelandingraw_ds2",
+														"type": "DatasetReference",
+														"parameters": {}
+													}
+												],
+												"outputs": [
+													{
+														"referenceName": "DelimitedText_sourcearchive_ds2",
+														"type": "DatasetReference",
+														"parameters": {}
+													}
+												]
+											},
+											{
+												"name": "DeleteSourceRaw",
+												"type": "Delete",
+												"dependsOn": [
+													{
+														"activity": "CopyOriginalToArchive",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"dataset": {
+														"referenceName": "DelimitedText_sourcelandingraw_ds2",
+														"type": "DatasetReference",
+														"parameters": {}
+													},
+													"enableLogging": false,
+													"storeSettings": {
+														"type": "AzureBlobStorageReadSettings",
+														"recursive": false
+													}
+												}
+											},
+											{
+												"name": "DeleteFromScrubbed",
+												"type": "Delete",
+												"dependsOn": [
+													{
+														"activity": "DeleteSourceRaw",
+														"dependencyConditions": [
+															"Completed"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"dataset": {
+														"referenceName": "DelimitedText_sourcelandingscrubbed_opsincident_ds",
+														"type": "DatasetReference",
+														"parameters": {}
+													},
+													"enableLogging": false,
+													"storeSettings": {
+														"type": "AzureBlobStorageReadSettings",
+														"recursive": false
+													}
+												}
+											},
+											{
+												"name": "UpdateSourceRegisterFailedAbort_Staging",
+												"type": "SqlServerStoredProcedure",
+												"dependsOn": [
+													{
+														"activity": "LoadTxtToDBstaging_ds",
+														"dependencyConditions": [
+															"Failed"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"storedProcedureName": "[[log].[UpdateSourceRegisterFailedAbort]",
+													"storedProcedureParameters": {
+														"EtlUtcTag": {
+															"value": {
+																"value": "@variables('Etl_Utc_Tag')",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"FileName": {
+															"value": {
+																"value": "@{item().ORIGINAL_BLOB_NAME}",
+																"type": "Expression"
+															},
+															"type": "String"
+														}
+													}
+												},
+												"linkedServiceName": {
+													"referenceName": "SQLdbConnection",
+													"type": "LinkedServiceReference"
+												}
+											},
+											{
+												"name": "UpdateSourceRegisterFailedAbort_LoadDW",
+												"type": "SqlServerStoredProcedure",
+												"dependsOn": [
+													{
+														"activity": "LoadStagingDBtoRelationDB_spl_df",
+														"dependencyConditions": [
+															"Failed"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"storedProcedureName": "[[log].[UpdateSourceRegisterFailedAbort]",
+													"storedProcedureParameters": {
+														"EtlUtcTag": {
+															"value": {
+																"value": "@variables('Etl_Utc_Tag')",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"FileName": {
+															"value": {
+																"value": "@{item().ORIGINAL_BLOB_NAME}",
+																"type": "Expression"
+															},
+															"type": "String"
+														}
+													}
+												},
+												"linkedServiceName": {
+													"referenceName": "SQLdbConnection",
+													"type": "LinkedServiceReference"
+												}
+											},
+											{
+												"name": "UpdateSourceRegisterFailedAbort_CopyToDL",
+												"type": "SqlServerStoredProcedure",
+												"dependsOn": [
+													{
+														"activity": "CopyScrubbedToDataLake",
+														"dependencyConditions": [
+															"Failed"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"storedProcedureName": "[[log].[UpdateSourceRegisterFailedAbort]",
+													"storedProcedureParameters": {
+														"EtlUtcTag": {
+															"value": {
+																"value": "@variables('Etl_Utc_Tag')",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"FileName": {
+															"value": {
+																"value": "@{item().ORIGINAL_BLOB_NAME}",
+																"type": "Expression"
+															},
+															"type": "String"
+														}
+													}
+												},
+												"linkedServiceName": {
+													"referenceName": "SQLdbConnection",
+													"type": "LinkedServiceReference"
+												}
+											},
+											{
+												"name": "LoadStagingDBtoRelationDB_spl_df",
+												"type": "ExecutePipeline",
+												"dependsOn": [
+													{
+														"activity": "LoadTxtToDBstaging_ds",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"userProperties": [],
+												"typeProperties": {
+													"pipeline": {
+														"referenceName": "ProcessSourceBlob_opsincident_spl",
+														"type": "PipelineReference"
+													},
+													"waitOnCompletion": true,
+													"parameters": {
+														"ProcessName": {
+															"value": "@pipeline().Pipeline",
+															"type": "Expression"
+														},
+														"FileName": {
+															"value": "@item().DATALAKE_FULL_PATHFILE",
+															"type": "Expression"
+														},
+														"Etl_Utc_Tag": {
+															"value": "@variables('Etl_Utc_Tag')",
+															"type": "Expression"
+														},
+														"OriginalBlobName": {
+															"value": "@item().ORIGINAL_BLOB_NAME",
+															"type": "Expression"
+														}
+													}
+												}
+											}
+										]
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "SetEtlUtcTag",
+						"type": "SetVariable",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "Etl_Utc_Tag",
+							"value": {
+								"value": "@utcnow()",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "SendPipelineMailSuccess",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "CheckProcessArchiveBlobUpdateRegister",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "PipelineSendMail_pl2",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"Parent_DataFactory": {
+									"value": "@pipeline().DataFactory",
+									"type": "Expression"
+								},
+								"Parent_Pipeline": {
+									"value": "@pipeline().Pipeline",
+									"type": "Expression"
+								},
+								"Success_Fail_Header": "***SUCCESS***",
+								"Etl_Utc_Tag": {
+									"value": "@variables('Etl_Utc_Tag')",
+									"type": "Expression"
+								},
+								"File_Pattern": "OPS_INCIDENT_%"
+							}
+						}
+					},
+					{
+						"name": "SendPipelineMailFail",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "CheckProcessArchiveBlobUpdateRegister",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "PipelineSendMail_pl2",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"Parent_DataFactory": {
+									"value": "@pipeline().DataFactory",
+									"type": "Expression"
+								},
+								"Parent_Pipeline": {
+									"value": "@pipeline().Pipeline",
+									"type": "Expression"
+								},
+								"Success_Fail_Header": "!!!FAILED!!!",
+								"Etl_Utc_Tag": {
+									"value": "@variables('Etl_Utc_Tag')",
+									"type": "Expression"
+								},
+								"File_Pattern": "OPS_INCIDENT_%"
+							}
+						}
+					}
+				],
+				"variables": {
+					"Success_Fail_Header": {
+						"type": "String",
+						"defaultValue": "***SUCCESS***"
+					},
+					"Etl_Utc_Tag": {
+						"type": "String",
+						"defaultValue": "2019-10-22"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": []
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/ProcessSourceBlob_opsoperation_pl')]",
 			"type": "Microsoft.DataFactory/factories/pipelines",
 			"apiVersion": "2018-06-01",
@@ -11890,6 +12696,7 @@
 			},
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/pipelines/ProcessSourceBlob_opsquestions_pl')]",
+				"[concat(variables('factoryId'), '/pipelines/ProcessSourceBlob_opsincident_pl')]",
 				"[concat(variables('factoryId'), '/pipelines/ProcessSourceBlob_opsriskopportunityreg_pl')]",
 				"[concat(variables('factoryId'), '/pipelines/ProcessSourceBlob_opsrelatedpartytrx_pl')]",
 				"[concat(variables('factoryId'), '/pipelines/ProcessSourceBlob_opspricepoint_pl')]",
@@ -12629,6 +13436,271 @@
 				"[concat(variables('factoryId'), '/pipelines/ProcessSourceBlob_opsstrategicproject_pl')]",
 				"[concat(variables('factoryId'), '/pipelines/ProcessSourceBlob_opsstrategicdeliverable_pl')]"
 			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ProcessMktMainMaster_pl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "SelectPipelineToRun",
+						"type": "Switch",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"on": {
+								"value": "@pipeline().parameters.WorkbookName",
+								"type": "Expression"
+							},
+							"cases": [
+								{
+									"value": "Sources.xlsx",
+									"activities": [
+										{
+											"name": "ProcessMktMasterDimDataSource_pl",
+											"type": "ExecutePipeline",
+											"dependsOn": [],
+											"userProperties": [],
+											"typeProperties": {
+												"pipeline": {
+													"referenceName": "ProcessMktMasterDimDataSource_pl",
+													"type": "PipelineReference"
+												},
+												"waitOnCompletion": true,
+												"parameters": {
+													"emailAddress": {
+														"value": "@pipeline().parameters.emailAddress",
+														"type": "Expression"
+													},
+													"WorkbookName": {
+														"value": "@pipeline().parameters.WorkbookName",
+														"type": "Expression"
+													}
+												}
+											}
+										}
+									]
+								},
+								{
+									"value": "Delivery Point.xlsx",
+									"activities": [
+										{
+											"name": "ProcessMktMasterDimDeliveryPoint_pl",
+											"type": "ExecutePipeline",
+											"dependsOn": [],
+											"userProperties": [],
+											"typeProperties": {
+												"pipeline": {
+													"referenceName": "ProcessMktMasterDimDeliveryPoint_pl",
+													"type": "PipelineReference"
+												},
+												"waitOnCompletion": true,
+												"parameters": {
+													"emailAddress": {
+														"value": "@pipeline().parameters.emailAddress",
+														"type": "Expression"
+													},
+													"WorkbookName": {
+														"value": "@pipeline().parameters.WorkbookName",
+														"type": "Expression"
+													}
+												}
+											}
+										}
+									]
+								},
+								{
+									"value": "Indicator.xlsx",
+									"activities": [
+										{
+											"name": "ProcessMktMasterDimIndicator_pl",
+											"type": "ExecutePipeline",
+											"dependsOn": [],
+											"userProperties": [],
+											"typeProperties": {
+												"pipeline": {
+													"referenceName": "ProcessMktMasterDimIndicator_pl",
+													"type": "PipelineReference"
+												},
+												"waitOnCompletion": true,
+												"parameters": {
+													"emailAddress": {
+														"value": "@pipeline().parameters.emailAddress",
+														"type": "Expression"
+													},
+													"WorkbookName": {
+														"value": "@pipeline().parameters.WorkbookName",
+														"type": "Expression"
+													}
+												}
+											}
+										}
+									]
+								},
+								{
+									"value": "Product.xlsx",
+									"activities": [
+										{
+											"name": "ProcessMktMasterDimProduct_pl",
+											"type": "ExecutePipeline",
+											"dependsOn": [],
+											"userProperties": [],
+											"typeProperties": {
+												"pipeline": {
+													"referenceName": "ProcessMktMasterDimProduct_pl",
+													"type": "PipelineReference"
+												},
+												"waitOnCompletion": true,
+												"parameters": {
+													"emailAddress": {
+														"value": "@pipeline().parameters.emailAddress",
+														"type": "Expression"
+													},
+													"WorkbookName": {
+														"value": "@pipeline().parameters.WorkbookName",
+														"type": "Expression"
+													}
+												}
+											}
+										}
+									]
+								},
+								{
+									"value": "Species.xlsx",
+									"activities": [
+										{
+											"name": "ProcessMktMasterDimSpecies_pl",
+											"type": "ExecutePipeline",
+											"dependsOn": [],
+											"userProperties": [],
+											"typeProperties": {
+												"pipeline": {
+													"referenceName": "ProcessMktMasterDimSpecies_pl",
+													"type": "PipelineReference"
+												},
+												"waitOnCompletion": true,
+												"parameters": {
+													"emailAddress": {
+														"value": "@pipeline().parameters.emailAddress",
+														"type": "Expression"
+													},
+													"WorkbookName": {
+														"value": "@pipeline().parameters.WorkbookName",
+														"type": "Expression"
+													}
+												}
+											}
+										}
+									]
+								},
+								{
+									"value": "Type.xlsx",
+									"activities": [
+										{
+											"name": "ProcessMktMasterDimType_pl",
+											"type": "ExecutePipeline",
+											"dependsOn": [],
+											"userProperties": [],
+											"typeProperties": {
+												"pipeline": {
+													"referenceName": "ProcessMktMasterDimType_pl",
+													"type": "PipelineReference"
+												},
+												"waitOnCompletion": true,
+												"parameters": {
+													"emailAddress": {
+														"value": "@pipeline().parameters.emailAddress",
+														"type": "Expression"
+													},
+													"WorkbookName": {
+														"value": "@pipeline().parameters.WorkbookName",
+														"type": "Expression"
+													}
+												}
+											}
+										}
+									]
+								},
+								{
+									"value": "UOM.xlsx",
+									"activities": [
+										{
+											"name": "ProcessMktMasterDimUom_pl",
+											"type": "ExecutePipeline",
+											"dependsOn": [],
+											"userProperties": [],
+											"typeProperties": {
+												"pipeline": {
+													"referenceName": "ProcessMktMasterDimUom_pl",
+													"type": "PipelineReference"
+												},
+												"waitOnCompletion": true,
+												"parameters": {
+													"emailAddress": {
+														"value": "@pipeline().parameters.emailAddress",
+														"type": "Expression"
+													},
+													"WorkbookName": {
+														"value": "@pipeline().parameters.WorkbookName",
+														"type": "Expression"
+													}
+												}
+											}
+										}
+									]
+								}
+							],
+							"defaultActivities": [
+								{
+									"name": "ProcessMktSendMailNothingToRun_pl",
+									"type": "ExecutePipeline",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"pipeline": {
+											"referenceName": "ProcessMktSendMailNothingToRun_pl",
+											"type": "PipelineReference"
+										},
+										"waitOnCompletion": true,
+										"parameters": {
+											"DataFactoryName": {
+												"value": "@pipeline().DataFactory",
+												"type": "Expression"
+											},
+											"PipelineName": {
+												"value": "@pipeline().Pipeline",
+												"type": "Expression"
+											},
+											"WorkbookName": {
+												"value": "@pipeline().parameters.WorkbookName",
+												"type": "Expression"
+											},
+											"ErrorTableName": "None",
+											"emailAddress": {
+												"value": "@pipeline().parameters.emailAddress",
+												"type": "Expression"
+											}
+										}
+									}
+								}
+							]
+						}
+					}
+				],
+				"parameters": {
+					"emailAddress": {
+						"type": "string",
+						"defaultValue": "weiyin.leow@asggroup.com.au"
+					},
+					"WorkbookName": {
+						"type": "string",
+						"defaultValue": "Sources.xlsx"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": []
 		},
 		{
 			"name": "[concat(parameters('factoryName'), '/ProcessOpsWorkbookMaster_pl')]",
@@ -14329,162 +15401,6 @@
 				"[concat(variables('factoryId'), '/pipelines/MasterPipeline_Sub3_pl')]",
 				"[concat(variables('factoryId'), '/pipelines/MasterPipeline_Sub2_pl')]",
 				"[concat(variables('factoryId'), '/pipelines/MasterPipeline_Sub4_pl')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/MasterPipeline_GlobalMain_pl')]",
-			"type": "Microsoft.DataFactory/factories/pipelines",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"activities": [
-					{
-						"name": "MasterUTCtag",
-						"type": "SetVariable",
-						"dependsOn": [],
-						"userProperties": [],
-						"typeProperties": {
-							"variableName": "MasterUTCtag",
-							"value": {
-								"value": "@utcnow()",
-								"type": "Expression"
-							}
-						}
-					},
-					{
-						"name": "RunPipelineMainMaster",
-						"type": "ExecutePipeline",
-						"dependsOn": [
-							{
-								"activity": "MasterUTCtag",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"pipeline": {
-								"referenceName": "MasterPipeline_Main_pl",
-								"type": "PipelineReference"
-							},
-							"waitOnCompletion": true,
-							"parameters": {}
-						}
-					},
-					{
-						"name": "RunPipelineCleanupContainerRaw",
-						"type": "ExecutePipeline",
-						"dependsOn": [
-							{
-								"activity": "RunPipelineCopyFailedBlobToFileshare",
-								"dependencyConditions": [
-									"Completed"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"pipeline": {
-								"referenceName": "PipelineCleanupContainer_raw_pl",
-								"type": "PipelineReference"
-							},
-							"waitOnCompletion": true,
-							"parameters": {}
-						}
-					},
-					{
-						"name": "RunPipelineCleanupContainerScrubbed",
-						"type": "ExecutePipeline",
-						"dependsOn": [
-							{
-								"activity": "RunPipelineCleanupContainerRaw",
-								"dependencyConditions": [
-									"Completed"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"pipeline": {
-								"referenceName": "PipelineCleanupContainer_scrubbed_pl",
-								"type": "PipelineReference"
-							},
-							"waitOnCompletion": true,
-							"parameters": {}
-						}
-					},
-					{
-						"name": "RunPipelineCopyFailedBlobToFileshare",
-						"type": "ExecutePipeline",
-						"dependsOn": [
-							{
-								"activity": "RunPipelineMainMaster",
-								"dependencyConditions": [
-									"Completed"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"pipeline": {
-								"referenceName": "PipelineCopyFailedBlobToFileshare_pl",
-								"type": "PipelineReference"
-							},
-							"waitOnCompletion": true,
-							"parameters": {}
-						}
-					},
-					{
-						"name": "RunMasterPipelineSendMail",
-						"type": "ExecutePipeline",
-						"dependsOn": [
-							{
-								"activity": "RunPipelineCleanupContainerScrubbed",
-								"dependencyConditions": [
-									"Completed"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"pipeline": {
-								"referenceName": "MasterPipelineSendMail_pl",
-								"type": "PipelineReference"
-							},
-							"waitOnCompletion": true,
-							"parameters": {
-								"Parent_DataFactory": {
-									"value": "@pipeline().DataFactory",
-									"type": "Expression"
-								},
-								"Parent_Pipeline": {
-									"value": "@pipeline().Pipeline",
-									"type": "Expression"
-								},
-								"Master_Utc_Tag": {
-									"value": "@variables('MasterUTCtag')",
-									"type": "Expression"
-								},
-								"Run_Message_Success": "Global Pipeline completed successfully",
-								"Run_Message_Fail": "Global Pipeline failed"
-							}
-						}
-					}
-				],
-				"variables": {
-					"PipelineName": {
-						"type": "String",
-						"defaultValue": "MasterPipeline_Global_pl"
-					},
-					"MasterUTCtag": {
-						"type": "String",
-						"defaultValue": "2019-11-07"
-					}
-				},
-				"annotations": []
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/pipelines/MasterPipeline_Main_pl')]"
 			]
 		}
 	]

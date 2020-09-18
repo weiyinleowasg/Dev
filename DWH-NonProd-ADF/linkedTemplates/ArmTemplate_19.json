@@ -13,6 +13,206 @@
 	},
 	"resources": [
 		{
+			"name": "[concat(parameters('factoryName'), '/ProcessSourceBlob_opsanswers_spl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "LookupStagingOpsAnswers",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": "SELECT count(*) Total_Error\n  FROM [staging].[OPS_Answers]\n  WHERE [Validation_Error] IS NOT NULL",
+								"partitionOption": "None"
+							},
+							"dataset": {
+								"referenceName": "SQLstagingopsanswers_ds",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						}
+					},
+					{
+						"name": "If Condition1",
+						"type": "IfCondition",
+						"dependsOn": [
+							{
+								"activity": "LookupStagingOpsAnswers",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@greater(activity('LookupStagingOpsAnswers').output.firstRow.TOTAL_ERROR,0)",
+								"type": "Expression"
+							},
+							"ifFalseActivities": [
+								{
+									"name": "LoadStagingDBtoRelationDB_opsanswers_delete_df",
+									"type": "ExecuteDataFlow",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"dataflow": {
+											"referenceName": "LoadStagingDBtoRelationDB_opsanswers_delete_df",
+											"type": "DataFlowReference",
+											"parameters": {
+												"ProcessName": {
+													"value": "'@{pipeline().parameters.ProcessName}'",
+													"type": "Expression"
+												},
+												"FileName": {
+													"value": "'@{pipeline().parameters.FileName}'",
+													"type": "Expression"
+												},
+												"Etl_Utc_Tag": {
+													"value": "'@{pipeline().parameters.Etl_Utc_Tag}'",
+													"type": "Expression"
+												}
+											},
+											"datasetParameters": {
+												"StagingDB": {},
+												"DeleteRecords": {}
+											}
+										},
+										"staging": {},
+										"compute": {
+											"coreCount": 8,
+											"computeType": "General"
+										}
+									}
+								},
+								{
+									"name": "LoadStagingDBtoRelationDB_opsanswers_insert_df",
+									"type": "ExecuteDataFlow",
+									"dependsOn": [
+										{
+											"activity": "LoadStagingDBtoRelationDB_opsanswers_delete_df",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"dataflow": {
+											"referenceName": "LoadStagingDBtoRelationDB_opsanswers_insert_df",
+											"type": "DataFlowReference",
+											"parameters": {
+												"ProcessName": {
+													"value": "'@{pipeline().parameters.ProcessName}'",
+													"type": "Expression"
+												},
+												"FileName": {
+													"value": "'@{pipeline().parameters.FileName}'",
+													"type": "Expression"
+												},
+												"Etl_Utc_Tag": {
+													"value": "'@{pipeline().parameters.Etl_Utc_Tag}'",
+													"type": "Expression"
+												}
+											},
+											"datasetParameters": {
+												"StagingDB": {},
+												"InsertRecords": {}
+											}
+										},
+										"staging": {},
+										"compute": {
+											"coreCount": 8,
+											"computeType": "General"
+										}
+									}
+								}
+							],
+							"ifTrueActivities": [
+								{
+									"name": "UpdateSourceRegisterTableAbort",
+									"type": "SqlServerStoredProcedure",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"storedProcedureName": "[[log].[UpdateSourceRegisterFailedAbort]",
+										"storedProcedureParameters": {
+											"EtlUtcTag": {
+												"value": {
+													"value": "@pipeline().parameters.Etl_Utc_Tag",
+													"type": "Expression"
+												},
+												"type": "String"
+											},
+											"FileName": {
+												"value": {
+													"value": "@pipeline().parameters.OriginalBlobName",
+													"type": "Expression"
+												},
+												"type": "String"
+											}
+										}
+									},
+									"linkedServiceName": {
+										"referenceName": "SQLdbConnection",
+										"type": "LinkedServiceReference"
+									}
+								}
+							]
+						}
+					}
+				],
+				"parameters": {
+					"ProcessName": {
+						"type": "string"
+					},
+					"FileName": {
+						"type": "string"
+					},
+					"Etl_Utc_Tag": {
+						"type": "string"
+					},
+					"OriginalBlobName": {
+						"type": "string"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": []
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/ProcessSourceBlob_opsaudit_spl')]",
 			"type": "Microsoft.DataFactory/factories/pipelines",
 			"apiVersion": "2018-06-01",
@@ -3178,46 +3378,6 @@
 								"parameters": {},
 								"datasetParameters": {
 									"source1": {},
-									"sink1": {}
-								}
-							},
-							"staging": {},
-							"compute": {
-								"coreCount": 8,
-								"computeType": "General"
-							}
-						}
-					}
-				],
-				"annotations": []
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/pipelineJson')]",
-			"type": "Microsoft.DataFactory/factories/pipelines",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"activities": [
-					{
-						"name": "dataflow1",
-						"type": "ExecuteDataFlow",
-						"dependsOn": [],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"dataflow": {
-								"referenceName": "dataflow1",
-								"type": "DataFlowReference",
-								"parameters": {},
-								"datasetParameters": {
-									"geojsonmodified": {},
 									"sink1": {}
 								}
 							},
