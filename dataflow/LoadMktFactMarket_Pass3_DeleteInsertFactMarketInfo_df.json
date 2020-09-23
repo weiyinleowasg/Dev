@@ -1,0 +1,54 @@
+{
+	"name": "LoadMktFactMarket_Pass3_DeleteInsertFactMarketInfo_df",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "CSVgenericWithParameter_ds",
+						"type": "DatasetReference"
+					},
+					"name": "ReadSource"
+				}
+			],
+			"sinks": [
+				{
+					"dataset": {
+						"referenceName": "SQLtableGenericWithParam_ds",
+						"type": "DatasetReference"
+					},
+					"name": "InsertNewSpeciesDim"
+				},
+				{
+					"dataset": {
+						"referenceName": "SQLtableGenericWithParam_ds",
+						"type": "DatasetReference"
+					},
+					"name": "InsertNewProductDim"
+				}
+			],
+			"transformations": [
+				{
+					"name": "DataTransformation"
+				},
+				{
+					"name": "GetUniqueSpicesProductCombination"
+				},
+				{
+					"name": "SplitSpeciesProductDetails"
+				},
+				{
+					"name": "SelectSpeciesOutput"
+				},
+				{
+					"name": "SelectProductOutput"
+				},
+				{
+					"name": "AddPoductGroup"
+				}
+			],
+			"script": "parameters{\n\tGeneratedBatchDate as string,\n\tWorkbookName as string,\n\tWorksheetName as string,\n\tMasterPipelineName as string,\n\tProduct_Group as string\n}\nsource(output(\n\t\t{Source Metric} as string,\n\t\t{Period Date} as string,\n\t\tCountry as string,\n\t\tRegion as string,\n\t\t{Species Common Name} as string,\n\t\t{Product Common Name} as string,\n\t\tCurrency as string,\n\t\tUOM as string,\n\t\tMarket as string,\n\t\t{Delivery Point} as string,\n\t\tIndicator as string,\n\t\tType as string,\n\t\tBasis as string,\n\t\t{Origin Port Country} as string,\n\t\t{Origin Port Region} as string,\n\t\t{Origin Port} as string,\n\t\t{Destination Port Country} as string,\n\t\t{Destination Port Region} as string,\n\t\t{Destination Port} as string,\n\t\t{Vessel Name} as string,\n\t\tLow as string,\n\t\tHigh as string,\n\t\tAverage as string,\n\t\tSpot as string,\n\t\tComment as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false) ~> ReadSource\nGetUniqueSpicesProductCombination derive(Source_File = concat($WorkbookName,'-', $WorksheetName),\n\t\tBatch_ID = replace(replace(replace($GeneratedBatchDate, \"-\", \"\"),\":\",\"\"),\" \",\"\"),\n\t\tProcess_Name = $MasterPipelineName,\n\t\tInsert_DateTime = fromUTC(currentUTC(), 'Australia/Sydney')) ~> DataTransformation\nReadSource aggregate(groupBy({Species Common Name},\n\t\t{Product Common Name}),\n\tUniqueCount = count()) ~> GetUniqueSpicesProductCombination\nDataTransformation split(isNull(Species_ID_Lkp),\n\tisNull(Product_Id_Lkp) || (not(isNull(Species_ID_Lkp)) && not(isNull(Product_Id_Lkp)) && notEquals(Species_Common_Name_Lkp, Product_Species_Common_Name_Lkp)),\n\tdisjoint: true) ~> SplitSpeciesProductDetails@(Species, Product)\nSplitSpeciesProductDetails@Species select(mapColumn(\n\t\tSpecies_Common_Name = {Species Common Name},\n\t\tSource_File,\n\t\tBatch_ID,\n\t\tProcess_Name,\n\t\tInsert_DateTime\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectSpeciesOutput\nAddPoductGroup select(mapColumn(\n\t\tProduct_Common_Name = {Product Common Name},\n\t\tSpecies_Common_Name = {Species Common Name},\n\t\tProduct_Group,\n\t\tSource_File,\n\t\tBatch_ID,\n\t\tProcess_Name,\n\t\tInsert_DateTime\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectProductOutput\nSplitSpeciesProductDetails@Product derive(Product_Group = $Product_Group) ~> AddPoductGroup\nSelectSpeciesOutput sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tSpecies_Common_Name,\n\t\tSource_File,\n\t\tBatch_ID,\n\t\tProcess_Name,\n\t\tInsert_DateTime\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> InsertNewSpeciesDim\nSelectProductOutput sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tProduct_Common_Name,\n\t\tSpecies_Common_Name,\n\t\tProduct_Group,\n\t\tSource_File,\n\t\tBatch_ID,\n\t\tProcess_Name,\n\t\tInsert_DateTime\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> InsertNewProductDim"
+		}
+	}
+}
