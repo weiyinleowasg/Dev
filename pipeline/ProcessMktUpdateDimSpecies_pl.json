@@ -3,67 +3,7 @@
 	"properties": {
 		"activities": [
 			{
-				"name": "Pass2ProcessFields",
-				"type": "ExecuteDataFlow",
-				"dependsOn": [
-					{
-						"activity": "Pass1_InsertNewSpeciesProductDims_df",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"policy": {
-					"timeout": "7.00:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"dataflow": {
-						"referenceName": "LoadMktFactMarket_Pass2_ProcessFields_df",
-						"type": "DataFlowReference",
-						"parameters": {
-							"GeneratedBatchDate": {
-								"value": "'@{pipeline().parameters.GeneratedBatchDate}'",
-								"type": "Expression"
-							},
-							"WorkbookName": {
-								"value": "'@{pipeline().parameters.WorkbookName}'",
-								"type": "Expression"
-							},
-							"WorksheetName": {
-								"value": "'@{pipeline().parameters.WorksheetName}'",
-								"type": "Expression"
-							},
-							"MasterPipelineName": {
-								"value": "'@{pipeline().parameters.MasterPipelineName}'",
-								"type": "Expression"
-							},
-							"Product_Group": {
-								"value": "'@{pipeline().parameters.Product_Group}'",
-								"type": "Expression"
-							}
-						},
-						"datasetParameters": {
-							"ReadSource": {
-								"FileName": {
-									"value": "@pipeline().parameters.ScrubbedFileName",
-									"type": "Expression"
-								}
-							}
-						}
-					},
-					"compute": {
-						"coreCount": 8,
-						"computeType": "General"
-					}
-				}
-			},
-			{
-				"name": "Pass1_InsertNewSpeciesProductDims_df",
+				"name": "ProcessDimData",
 				"type": "ExecuteDataFlow",
 				"dependsOn": [],
 				"policy": {
@@ -76,7 +16,7 @@
 				"userProperties": [],
 				"typeProperties": {
 					"dataflow": {
-						"referenceName": "LoadMktFactMarket_Pass1_InsertNewSpeciesProductDims_df",
+						"referenceName": "LoadMktDimSpecies_InsertUpdate_df",
 						"type": "DataFlowReference",
 						"parameters": {
 							"GeneratedBatchDate": {
@@ -94,10 +34,6 @@
 							"MasterPipelineName": {
 								"value": "'@{pipeline().parameters.MasterPipelineName}'",
 								"type": "Expression"
-							},
-							"Product_Group": {
-								"value": "'@{pipeline().parameters.Product_Group}'",
-								"type": "Expression"
 							}
 						},
 						"datasetParameters": {
@@ -107,23 +43,23 @@
 									"type": "Expression"
 								}
 							},
-							"InsertNewSpeciesDim": {
+							"TargetDim": {
 								"Schema": {
 									"value": "@pipeline().parameters.DimSchemaName",
 									"type": "Expression"
 								},
 								"TableName": {
-									"value": "Dim_Species",
+									"value": "@pipeline().parameters.ShortDimTableName",
 									"type": "Expression"
 								}
 							},
-							"InsertNewProductDim": {
+							"ErrorTable": {
 								"Schema": {
-									"value": "@pipeline().parameters.DimSchemaName",
+									"value": "@pipeline().parameters.ErrorSchemaName",
 									"type": "Expression"
 								},
 								"TableName": {
-									"value": "Dim_Product",
+									"value": "@pipeline().parameters.ShortErrorTableName",
 									"type": "Expression"
 								}
 							}
@@ -133,38 +69,6 @@
 						"coreCount": 8,
 						"computeType": "General"
 					}
-				}
-			},
-			{
-				"name": "DeleteExistingRecord",
-				"type": "Wait",
-				"dependsOn": [
-					{
-						"activity": "Pass2ProcessFields",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"userProperties": [],
-				"typeProperties": {
-					"waitTimeInSeconds": 1
-				}
-			},
-			{
-				"name": "InsertRecord",
-				"type": "Wait",
-				"dependsOn": [
-					{
-						"activity": "DeleteExistingRecord",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"userProperties": [],
-				"typeProperties": {
-					"waitTimeInSeconds": 1
 				}
 			}
 		],
@@ -194,9 +98,6 @@
 				"type": "string"
 			},
 			"ShortErrorTableName": {
-				"type": "string"
-			},
-			"Product_Group": {
 				"type": "string"
 			}
 		},
