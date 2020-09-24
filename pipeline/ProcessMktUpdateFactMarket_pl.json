@@ -3,7 +3,7 @@
 	"properties": {
 		"activities": [
 			{
-				"name": "Pass2_ProcessFields_df",
+				"name": "Pass2_ProcessAndPopulate_df",
 				"type": "ExecuteDataFlow",
 				"dependsOn": [
 					{
@@ -23,7 +23,7 @@
 				"userProperties": [],
 				"typeProperties": {
 					"dataflow": {
-						"referenceName": "LoadMktFactMarket_Pass2_ProcessFields_df",
+						"referenceName": "LoadMktFactMarket_Pass2_ProcessAndPopulate_df",
 						"type": "DataFlowReference",
 						"parameters": {
 							"GeneratedBatchDate": {
@@ -46,8 +46,20 @@
 								"value": "'@{pipeline().parameters.Product_Group}'",
 								"type": "Expression"
 							},
-							"TargetFileName": {
-								"value": "'@{pipeline().parameters.ScrubbedFileName}'",
+							"DimSchemaName": {
+								"value": "'@{pipeline().parameters.DimSchemaName}'",
+								"type": "Expression"
+							},
+							"ErrorSchemaName": {
+								"value": "'@{pipeline().parameters.ErrorSchemaName}'",
+								"type": "Expression"
+							},
+							"ShortFactTableName": {
+								"value": "'@{pipeline().parameters.ShortFactTableName}'",
+								"type": "Expression"
+							},
+							"ShortErrorTableName": {
+								"value": "'@{pipeline().parameters.ShortErrorTableName}'",
 								"type": "Expression"
 							}
 						},
@@ -55,6 +67,36 @@
 							"ReadSource": {
 								"FileName": {
 									"value": "@pipeline().parameters.ScrubbedFileName",
+									"type": "Expression"
+								}
+							},
+							"FactErrorTable": {
+								"Schema": {
+									"value": "@pipeline().parameters.ErrorSchemaName",
+									"type": "Expression"
+								},
+								"TableName": {
+									"value": "@pipeline().parameters.ShortErrorTableName",
+									"type": "Expression"
+								}
+							},
+							"TargetFactInsert": {
+								"Schema": {
+									"value": "@pipeline().parameters.DimSchemaName",
+									"type": "Expression"
+								},
+								"TableName": {
+									"value": "@pipeline().parameters.ShortFactTableName",
+									"type": "Expression"
+								}
+							},
+							"TargetFactDelete": {
+								"Schema": {
+									"value": "@pipeline().parameters.DimSchemaName",
+									"type": "Expression"
+								},
+								"TableName": {
+									"value": "@pipeline().parameters.ShortFactTableName",
 									"type": "Expression"
 								}
 							}
@@ -138,38 +180,6 @@
 						"computeType": "General"
 					}
 				}
-			},
-			{
-				"name": "DeleteExistingRecord",
-				"type": "Wait",
-				"dependsOn": [
-					{
-						"activity": "Pass2_ProcessFields_df",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"userProperties": [],
-				"typeProperties": {
-					"waitTimeInSeconds": 1
-				}
-			},
-			{
-				"name": "InsertRecord",
-				"type": "Wait",
-				"dependsOn": [
-					{
-						"activity": "DeleteExistingRecord",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"userProperties": [],
-				"typeProperties": {
-					"waitTimeInSeconds": 1
-				}
 			}
 		],
 		"parameters": {
@@ -191,7 +201,7 @@
 			"DimSchemaName": {
 				"type": "string"
 			},
-			"ShortDimTableName": {
+			"ShortFactTableName": {
 				"type": "string"
 			},
 			"ErrorSchemaName": {
