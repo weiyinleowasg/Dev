@@ -4,15 +4,6 @@
 		"description": "Sub Master job to orchestrate multiple pipelines run. Each pipeline correspond to one tab in the Excel workbook.",
 		"activities": [
 			{
-				"name": "PipelineOperations",
-				"type": "Wait",
-				"dependsOn": [],
-				"userProperties": [],
-				"typeProperties": {
-					"waitTimeInSeconds": 1
-				}
-			},
-			{
 				"name": "PipelineContracts",
 				"type": "Wait",
 				"dependsOn": [],
@@ -870,7 +861,14 @@
 			{
 				"name": "ExtractOperations",
 				"type": "Copy",
-				"dependsOn": [],
+				"dependsOn": [
+					{
+						"activity": "DeleteOperations",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
 				"policy": {
 					"timeout": "7.00:00:00",
 					"retry": 0,
@@ -1130,6 +1128,84 @@
 						}
 					}
 				]
+			},
+			{
+				"name": "DeleteOperations",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": {
+						"value": "[audit].[DeleteAuditTable]",
+						"type": "Expression"
+					},
+					"storedProcedureParameters": {
+						"TableName": {
+							"value": {
+								"value": "@pipeline().parameters.Operations",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"WorkBookName": {
+							"value": {
+								"value": "@pipeline().parameters.WorkbookName",
+								"type": "Expression"
+							},
+							"type": "String"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "ProcessWorkbookTabOperations",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "ProcessOpsWorkbookTabTimberSales_pl",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"WorkbookName": {
+							"value": "@pipeline().parameters.WorkbookName",
+							"type": "Expression"
+						},
+						"CurrentQuarterDate": {
+							"value": "@pipeline().parameters.CurrentQuarterDate",
+							"type": "Expression"
+						},
+						"TimberSales": {
+							"value": "@pipeline().parameters.TimberSales",
+							"type": "Expression"
+						},
+						"CurrentRunDateTime": {
+							"value": "@pipeline().parameters.CurrentRunDateTime",
+							"type": "Expression"
+						},
+						"MasterUtcTag": {
+							"value": "@pipeline().parameters.MasterUtcTag",
+							"type": "Expression"
+						},
+						"MasterPipeline": {
+							"value": "@pipeline().parameters.MasterPipeline",
+							"type": "Expression"
+						}
+					}
+				}
 			}
 		],
 		"parameters": {
