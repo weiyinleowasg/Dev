@@ -1,0 +1,182 @@
+{
+	"name": "ProcessOpsWorkbookTabRelatedPartyTrans_spl",
+	"properties": {
+		"description": "Related Party Transactions",
+		"activities": [
+			{
+				"name": "GetTableErrorCount",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "SELECT COUNT(*) AS ERROR_COUNT FROM (\n SELECT DISTINCT LIS.Work_Book, LIS.Work_Sheet FROM \n audit.OPS_Workbook_Worksheet_Asset_List LIS\n JOIN audit.OPS_Timber_Sales_Error ERR\n ON LIS.Work_Book = ERR.Source_File  \n AND LIS.Work_Sheet = ERR.Source_Sub_File\n WHERE LIS.Work_Book = '@{pipeline().parameters.WorkbookName}'\n AND LIS.Work_Sheet = '@{pipeline().parameters.TimberSales}'\n)x",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "SQLtableGeneric_ds",
+						"type": "DatasetReference"
+					}
+				}
+			},
+			{
+				"name": "CheckConditionIfErrorExist",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "GetTableErrorCount",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greaterOrEquals(activity('GetTableErrorCount').output.firstRow.ERROR_COUNT, 0)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "LoadValidatedDataset",
+							"type": "ExecuteDataFlow",
+							"dependsOn": [
+								{
+									"activity": "DeleteOperationTableByAssetFundReportingDate",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataflow": {
+									"referenceName": "LoadXlsxTimberSales_Step3_df",
+									"type": "DataFlowReference",
+									"parameters": {
+										"WorkbookName": {
+											"value": "'@{pipeline().parameters.WorkbookName}'",
+											"type": "Expression"
+										},
+										"TabName": {
+											"value": "'@{pipeline().parameters.TimberSales}'",
+											"type": "Expression"
+										}
+									},
+									"datasetParameters": {
+										"SourceReadyLoad": {
+											"ParquetFile": {
+												"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.TimberSales,'_',pipeline().parameters.CurrentQuarterDate,'_LoadReady')",
+												"type": "Expression"
+											}
+										}
+									}
+								},
+								"compute": {
+									"coreCount": 8,
+									"computeType": "General"
+								}
+							}
+						},
+						{
+							"name": "DeleteOperationTableByAssetFundReportingDate",
+							"type": "ExecuteDataFlow",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataflow": {
+									"referenceName": "LoadXlsxTimberSales_Step2_df",
+									"type": "DataFlowReference",
+									"parameters": {
+										"WorkbookName": {
+											"value": "'@{pipeline().parameters.WorkbookName}'",
+											"type": "Expression"
+										},
+										"TabName": {
+											"value": "'@{pipeline().parameters.TimberSales}'",
+											"type": "Expression"
+										}
+									},
+									"datasetParameters": {
+										"SourceReadyLoad": {
+											"ParquetFile": {
+												"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.TimberSales,'_',pipeline().parameters.CurrentQuarterDate,'_LoadReady')",
+												"type": "Expression"
+											}
+										}
+									}
+								},
+								"compute": {
+									"coreCount": 8,
+									"computeType": "General"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "ProcessOpsWorkbookSubMaster_Set2_pl",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "ProcessOpsWorkbookSubMaster_Set2_pl",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true
+				}
+			}
+		],
+		"parameters": {
+			"WorkbookName": {
+				"type": "string",
+				"defaultValue": "Wenita Forestry Products Q4 FY20 V2.xlsx"
+			},
+			"CurrentQuarterDate": {
+				"type": "string",
+				"defaultValue": "2020-06-30"
+			},
+			"TimberSales": {
+				"type": "string",
+				"defaultValue": "Timber Sales"
+			},
+			"CurrentRunDateTime": {
+				"type": "string",
+				"defaultValue": "2020-08-01"
+			},
+			"MasterUtcTag": {
+				"type": "string",
+				"defaultValue": "2020-08-28T06:05:53.4181322Z"
+			}
+		},
+		"annotations": []
+	}
+}
