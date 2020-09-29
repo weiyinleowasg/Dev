@@ -405,6 +405,210 @@
 					"referenceName": "SQLdbConnection",
 					"type": "LinkedServiceReference"
 				}
+			},
+			{
+				"name": "ExtractIncident_copy",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "DeleteIncidentAuditTable",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "ExcelSource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": true
+						}
+					},
+					"sink": {
+						"type": "ParquetSink",
+						"storeSettings": {
+							"type": "AzureBlobStorageWriteSettings"
+						},
+						"formatSettings": {
+							"type": "ParquetWriteSettings"
+						}
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "Asset_ID",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Asset_ID",
+									"type": "String",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Fund_ID",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Fund_ID",
+									"type": "String",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Reporting_Period",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Reporting_Period",
+									"type": "String",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Validation Flag",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Validation_Flag",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Reporting_Period2",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Reporting_Period2",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Transaction Date",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Transaction_Date",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Related Parties Involved",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Related_Parties_Involved",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Transaction Description",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Transaction_Description",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Transaction Size (Value)",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Transaction_Size_Value",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "How Managed?",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "How_Managed",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "How does the transaction benefit both parties?",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "How_does_the_transaction_benefit_both_parties",
+									"physicalType": "UTF8"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "ExcelWorkbook_AllTabs_ds",
+						"type": "DatasetReference",
+						"parameters": {
+							"WorkbookName": {
+								"value": "@pipeline().parameters.WorkbookName",
+								"type": "Expression"
+							},
+							"TabName": {
+								"value": "@pipeline().parameters.MajorSevereIncidents",
+								"type": "Expression"
+							},
+							"Range": {
+								"value": "@pipeline().parameters.MajorSevereIncidentsRange",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "ParquetPersistentOpsWithTabParam_ds",
+						"type": "DatasetReference",
+						"parameters": {
+							"ParquetFile": {
+								"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.MajorSevereIncidents\n,'_',pipeline().parameters.CurrentQuarterDate,'_Extract')",
+								"type": "Expression"
+							}
+						}
+					}
+				]
 			}
 		],
 		"parameters": {
@@ -472,7 +676,8 @@
 				"type": "string"
 			},
 			"MajorSevereIncidentsRange": {
-				"type": "string"
+				"type": "string",
+				"defaultValue": "A8:L99999"
 			},
 			"RiskOpportunityRegisterRange": {
 				"type": "string"
