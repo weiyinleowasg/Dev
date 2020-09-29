@@ -1,0 +1,28 @@
+{
+	"name": "DeleteRiskOpsCurrentPeriod",
+	"properties": {
+		"description": "Deletes existing records from relational table for this reporting period",
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "ParquetPersistentOpsWithTabParam_ds",
+						"type": "DatasetReference"
+					},
+					"name": "NewRecords"
+				}
+			],
+			"sinks": [],
+			"transformations": [
+				{
+					"name": "SelectDeleteKeys"
+				},
+				{
+					"name": "DerivedColumn1"
+				}
+			],
+			"script": "source(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as string,\n\t\tRisk_Opp_ID as string,\n\t\tValidation_Flag as string,\n\t\tRisk_Sub_Class as string,\n\t\tRisk_Class as string,\n\t\tRisk_Description as string,\n\t\tActions_and_Controls as string,\n\t\tDate_Lodged as string,\n\t\tLikelihood as string,\n\t\tSeverity as string,\n\t\tInherent_Risk_Rating as string,\n\t\tEliminate_or_Mitigate as string,\n\t\tResidual_Likelihood as string,\n\t\tResidual_Severity as string,\n\t\tResidual_Risk_Rating as string,\n\t\tFuture_Controls as string,\n\t\tPerson_Responsible as string,\n\t\tDate_Closed as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tformat: 'parquet') ~> NewRecords\nNewRecords select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectDeleteKeys\nSelectDeleteKeys derive(Current_Reporting_Period = 'a') ~> DerivedColumn1"
+		}
+	}
+}
