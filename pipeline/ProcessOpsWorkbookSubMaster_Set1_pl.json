@@ -4,15 +4,6 @@
 		"description": "Sub Master job to orchestrate multiple pipelines run. Each pipeline correspond to one tab in the Excel workbook.",
 		"activities": [
 			{
-				"name": "PipelineStrategicProjects",
-				"type": "Wait",
-				"dependsOn": [],
-				"userProperties": [],
-				"typeProperties": {
-					"waitTimeInSeconds": 1
-				}
-			},
-			{
 				"name": "LoadAndUpdateCertificates",
 				"type": "ExecutePipeline",
 				"dependsOn": [
@@ -2119,6 +2110,248 @@
 					"referenceName": "SQLdbConnection",
 					"type": "LinkedServiceReference"
 				}
+			},
+			{
+				"name": "ExtractStrategicProjects",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "DeleteStrategicProjects",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "ExcelSource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": true
+						}
+					},
+					"sink": {
+						"type": "ParquetSink",
+						"storeSettings": {
+							"type": "AzureBlobStorageWriteSettings"
+						},
+						"formatSettings": {
+							"type": "ParquetWriteSettings"
+						}
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "Project_ID",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Project_ID",
+									"type": "String",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Asset_ID",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Asset_ID",
+									"type": "String",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Fund_ID",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Fund_ID",
+									"type": "String",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Reporting_Period",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Reporting_Period",
+									"type": "String",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Validation Flag",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Validation_Flag",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Primary Management Activity",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Primary_Management_Activity",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Project Objectives",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Project_Objectives",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Expected Value Impact",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Expected_Value_Impact",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Deliverable",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Deliverable",
+									"type": "String",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Deliverable Project Weighting",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Deliverable_Project_Weighting",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Deliverable Expected Completion Date",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Deliverable_Expected_Completion_Date",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Deliverable Planned Completion Date",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Deliverable_Planned_Completion_Date",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Current Progress % Complete",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Current Progress % Complete",
+									"type": "String",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Notes",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Notes",
+									"type": "String",
+									"physicalType": "UTF8"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "ExcelWorkbook_AllTabs_ds",
+						"type": "DatasetReference",
+						"parameters": {
+							"WorkbookName": {
+								"value": "@pipeline().parameters.WorkbookName",
+								"type": "Expression"
+							},
+							"TabName": {
+								"value": "@pipeline().parameters.StrategicProjects",
+								"type": "Expression"
+							},
+							"Range": {
+								"value": "@pipeline().parameters.StrategicProjectsRange",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "ParquetPersistentOpsWithTabParam_ds",
+						"type": "DatasetReference",
+						"parameters": {
+							"ParquetFile": {
+								"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.StrategicProjects,'_',pipeline().parameters.CurrentQuarterDate,'_Extract')",
+								"type": "Expression"
+							}
+						}
+					}
+				]
 			}
 		],
 		"parameters": {
