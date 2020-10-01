@@ -1,0 +1,38 @@
+{
+	"name": "LoadXlsxContract_Step2_df",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "ParquetPersistentOpsWithTabParam_ds",
+						"type": "DatasetReference"
+					},
+					"name": "SourceReadyLoad"
+				}
+			],
+			"sinks": [
+				{
+					"dataset": {
+						"referenceName": "SQLtableGenericWithParam_ds",
+						"type": "DatasetReference"
+					},
+					"name": "TargetRelationalDelete"
+				}
+			],
+			"transformations": [
+				{
+					"name": "SelectColumnsForDelete"
+				},
+				{
+					"name": "AggregateAssetFundReportingPeriod"
+				},
+				{
+					"name": "AlterRowDelete"
+				}
+			],
+			"script": "parameters{\n\tWorkbookName as string,\n\tTabName as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as date,\n\t\tExecution_Date as date,\n\t\tTermination_Date as date,\n\t\tCompany_Name as string,\n\t\tContract_Value as decimal(19,4),\n\t\tContract_Currency as string,\n\t\tContract_Type as string,\n\t\tExecuted_By_Entity1 as string,\n\t\tExecuted_By_Entity2 as string,\n\t\tExecuted_By_Entity3 as string,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tformat: 'parquet',\n\tpartitionBy('hash', 1)) ~> SourceReadyLoad\nSourceReadyLoad select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectColumnsForDelete\nSelectColumnsForDelete aggregate(groupBy(Asset_ID,\n\t\tFund_ID,\n\t\tReporting_Period),\n\tUniqueCount = count()) ~> AggregateAssetFundReportingPeriod\nAggregateAssetFundReportingPeriod alterRow(deleteIf(UniqueCount>0)) ~> AlterRowDelete\nAlterRowDelete sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:true,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:false,\n\tkeys:['Asset_ID','Fund_ID','Reporting_Period'],\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetRelationalDelete"
+		}
+	}
+}
