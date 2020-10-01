@@ -1,44 +1,8 @@
 {
-	"name": "ProcessOpsWorkbookSubMaster_Set3",
+	"name": "ProcessOpsWorkbookSubMaster_Set3_pl",
 	"properties": {
 		"description": "Sub Master job to orchestrate multiple pipelines run. Each pipeline correspond to one tab in the Excel workbook.",
 		"activities": [
-			{
-				"name": "PipelineMajorSevereIncidents",
-				"type": "Wait",
-				"dependsOn": [],
-				"userProperties": [],
-				"typeProperties": {
-					"waitTimeInSeconds": 1
-				}
-			},
-			{
-				"name": "PipelineRiskOpportunityRegister",
-				"type": "Wait",
-				"dependsOn": [],
-				"userProperties": [],
-				"typeProperties": {
-					"waitTimeInSeconds": 1
-				}
-			},
-			{
-				"name": "PipelineRelatedPartyTransactions",
-				"type": "Wait",
-				"dependsOn": [],
-				"userProperties": [],
-				"typeProperties": {
-					"waitTimeInSeconds": 1
-				}
-			},
-			{
-				"name": "QuestionAnswer",
-				"type": "Wait",
-				"dependsOn": [],
-				"userProperties": [],
-				"typeProperties": {
-					"waitTimeInSeconds": 1
-				}
-			},
 			{
 				"name": "DeleteRiskOpAuditTable",
 				"description": "removes existing audit table for Risk Opportunity Register",
@@ -381,7 +345,7 @@
 				]
 			},
 			{
-				"name": "LoadXlsxRiskOps_Step1_df_copy",
+				"name": "LoadXlsxRiskOps_Step1_df",
 				"type": "ExecuteDataFlow",
 				"dependsOn": [
 					{
@@ -401,7 +365,7 @@
 				"userProperties": [],
 				"typeProperties": {
 					"dataflow": {
-						"referenceName": "LoadXlsxRiskOps_Step1_df_copy",
+						"referenceName": "LoadXlsxRiskOps_Step1_df",
 						"type": "DataFlowReference",
 						"parameters": {
 							"MasterUtcTag": {
@@ -431,7 +395,20 @@
 						},
 						"datasetParameters": {
 							"SourceDataTab": {
-								"ParquetFile": "Wenita Forestry Products Q4 FY20 V2.xlsx_Harvest Reconcilliation_2020-06-30_LoadReady"
+								"ParquetFile": {
+									"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.RiskOpportunityRegister,'_',pipeline().parameters.CurrentQuarterDate,'_Extract')",
+									"type": "Expression"
+								}
+							},
+							"ErrorTable": {
+								"Schema": {
+									"value": "audit",
+									"type": "Expression"
+								},
+								"TableName": {
+									"value": "OPS_Risk_Opportunity_Register_Error",
+									"type": "Expression"
+								}
 							}
 						}
 					},
@@ -446,7 +423,7 @@
 				"type": "ExecutePipeline",
 				"dependsOn": [
 					{
-						"activity": "LoadXlsxRiskOps_Step1_df_copy",
+						"activity": "LoadXlsxRiskOps_Step1_df",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -458,7 +435,29 @@
 						"referenceName": "ProcessOpsWorkbookTabRiskOpportunity_spl",
 						"type": "PipelineReference"
 					},
-					"waitOnCompletion": true
+					"waitOnCompletion": true,
+					"parameters": {
+						"WorkbookName": {
+							"value": "@pipeline().parameters.WorkbookName",
+							"type": "Expression"
+						},
+						"CurrentQuarterDate": {
+							"value": "@pipeline().parameters.CurrentQuarterDate",
+							"type": "Expression"
+						},
+						"RiskOpportunity": {
+							"value": "@pipeline().parameters.RiskOpportunityRegister",
+							"type": "Expression"
+						},
+						"CurrentRunDateTime": {
+							"value": "@pipeline().parameters.CurrentRunDateTime",
+							"type": "Expression"
+						},
+						"MasterUtcTag": {
+							"value": "@pipeline().parameters.MasterUtcTag",
+							"type": "Expression"
+						}
+					}
 				}
 			},
 			{
@@ -758,7 +757,7 @@
 				]
 			},
 			{
-				"name": "LoadXlsx_OtherSales_Step1",
+				"name": "LoadXlsx_OtherSales_Step1_df",
 				"type": "ExecuteDataFlow",
 				"dependsOn": [
 					{
@@ -778,7 +777,7 @@
 				"userProperties": [],
 				"typeProperties": {
 					"dataflow": {
-						"referenceName": "LoadXlsx_OtherSales_Step1",
+						"referenceName": "LoadXlsxOtherSales_Step1_df",
 						"type": "DataFlowReference",
 						"parameters": {
 							"MasterUtcTag": {
@@ -808,7 +807,20 @@
 						},
 						"datasetParameters": {
 							"SourceDataTab": {
-								"ParquetFile": "Wenita Forestry Products Q4 FY20 V2.xlsx_Strategic Projects_2020-06-30_LoadReady"
+								"ParquetFile": {
+									"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.OtherSales,'_',pipeline().parameters.CurrentQuarterDate,'_Extract')",
+									"type": "Expression"
+								}
+							},
+							"ErrorTable": {
+								"Schema": {
+									"value": "audit",
+									"type": "Expression"
+								},
+								"TableName": {
+									"value": "OPS_Sales_Other_Error",
+									"type": "Expression"
+								}
 							}
 						}
 					},
@@ -823,7 +835,7 @@
 				"type": "ExecutePipeline",
 				"dependsOn": [
 					{
-						"activity": "LoadXlsx_OtherSales_Step1",
+						"activity": "LoadXlsx_OtherSales_Step1_df",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -835,14 +847,36 @@
 						"referenceName": "ProcessOpsWorkbookTabSalesOther_spl",
 						"type": "PipelineReference"
 					},
-					"waitOnCompletion": true
+					"waitOnCompletion": true,
+					"parameters": {
+						"WorkbookName": {
+							"value": "@pipeline().parameters.WorkbookName",
+							"type": "Expression"
+						},
+						"CurrentQuarterDate": {
+							"value": "@pipeline().parameters.CurrentQuarterDate",
+							"type": "Expression"
+						},
+						"SalesOther": {
+							"value": "@pipeline().parameters.OtherSales",
+							"type": "Expression"
+						},
+						"CurrentRunDateTime": {
+							"value": "@pipeline().parameters.CurrentRunDateTime",
+							"type": "Expression"
+						},
+						"MasterUtcTag": {
+							"value": "@pipeline().parameters.MasterUtcTag",
+							"type": "Expression"
+						}
+					}
 				}
 			}
 		],
 		"parameters": {
 			"WorkbookName": {
 				"type": "string",
-				"defaultValue": "Wenita Forestry Products Q4 FY20 V2.xlsx"
+				"defaultValue": "Wenita Forestry Products Q4 FY20 test.xlsx"
 			},
 			"CurrentQuarterDate": {
 				"type": "string",
