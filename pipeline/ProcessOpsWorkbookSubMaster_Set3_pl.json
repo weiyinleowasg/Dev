@@ -1,0 +1,941 @@
+{
+	"name": "ProcessOpsWorkbookSubMaster_Set3_pl",
+	"properties": {
+		"description": "Sub Master job to orchestrate multiple pipelines run. Each pipeline correspond to one tab in the Excel workbook.",
+		"activities": [
+			{
+				"name": "PipelineMajorSevereIncidents",
+				"type": "Wait",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"waitTimeInSeconds": 1
+				}
+			},
+			{
+				"name": "PipelineRiskOpportunityRegister",
+				"type": "Wait",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"waitTimeInSeconds": 1
+				}
+			},
+			{
+				"name": "PipelineRelatedPartyTransactions",
+				"type": "Wait",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"waitTimeInSeconds": 1
+				}
+			},
+			{
+				"name": "QuestionAnswer",
+				"type": "Wait",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"waitTimeInSeconds": 1
+				}
+			},
+			{
+				"name": "DeleteRiskOpAuditTable",
+				"description": "removes existing audit table for Risk Opportunity Register",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[audit].[DeleteAuditTable]",
+					"storedProcedureParameters": {
+						"TableName": {
+							"value": "OPS_Risk_Opportunity_Register_Error",
+							"type": "String"
+						},
+						"WorkBookName": {
+							"value": {
+								"value": "@pipeline().parameters.WorkbookName",
+								"type": "Expression"
+							},
+							"type": "String"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "ExtractRiskOps",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "DeleteRiskOpAuditTable",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "ExcelSource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": true
+						}
+					},
+					"sink": {
+						"type": "ParquetSink",
+						"storeSettings": {
+							"type": "AzureBlobStorageWriteSettings"
+						},
+						"formatSettings": {
+							"type": "ParquetWriteSettings"
+						}
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "Asset_ID",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Asset_ID",
+									"type": "String",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Fund_ID",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Fund_ID",
+									"type": "String",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Reporting_Period",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Reporting_Period",
+									"type": "String",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Risk_Opp_ID",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Risk_Opp_ID",
+									"type": "String",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Validation Flag",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Validation_Flag",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Risk Sub Class",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Risk_Sub_Class",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Risk Class",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Risk_Class",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Risk Description",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Risk_Description",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Actions and Controls",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Actions_and_Controls",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Date Lodged",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Date_Lodged",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Likelihood",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Likelihood",
+									"type": "String",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Severity",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Severity",
+									"type": "String",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Inherent Risk Rating",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Inherent_Risk_Rating",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Eliminate or Mitigate",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Eliminate_or_Mitigate",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Residual Likelihood",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Residual_Likelihood",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Residual Severity",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Residual_Severity",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Residual Risk Rating",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Residual_Risk_Rating",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Future Controls",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Future_Controls",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Person Responsible",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Person_Responsible",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Date Closed",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Date_Closed",
+									"physicalType": "UTF8"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "ExcelWorkbook_AllTabs_ds",
+						"type": "DatasetReference",
+						"parameters": {
+							"WorkbookName": {
+								"value": "@pipeline().parameters.WorkbookName",
+								"type": "Expression"
+							},
+							"TabName": {
+								"value": "@pipeline().parameters.RiskOpportunityRegister",
+								"type": "Expression"
+							},
+							"Range": {
+								"value": "@pipeline().parameters.RiskOpportunityRegisterRange",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "ParquetPersistentOpsWithTabParam_ds",
+						"type": "DatasetReference",
+						"parameters": {
+							"ParquetFile": {
+								"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.RiskOpportunityRegister,'_',pipeline().parameters.CurrentQuarterDate,'_Extract')",
+								"type": "Expression"
+							}
+						}
+					}
+				]
+			},
+			{
+				"name": "LoadXlsxRiskOps_Step1_df_copy",
+				"type": "ExecuteDataFlow",
+				"dependsOn": [
+					{
+						"activity": "ExtractRiskOps",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataflow": {
+						"referenceName": "LoadXlsxRiskOps_Step1_df_copy",
+						"type": "DataFlowReference",
+						"parameters": {
+							"MasterUtcTag": {
+								"value": "'@{pipeline().parameters.MasterUtcTag}'",
+								"type": "Expression"
+							},
+							"CurrentRunDateTime": {
+								"value": "'@{pipeline().parameters.CurrentRunDateTime}'",
+								"type": "Expression"
+							},
+							"WorkbookName": {
+								"value": "'@{pipeline().parameters.WorkbookName}'",
+								"type": "Expression"
+							},
+							"TabName": {
+								"value": "'@{pipeline().parameters.RiskOpportunityRegister}'",
+								"type": "Expression"
+							},
+							"CurrentQuarterDate": {
+								"value": "'@{pipeline().parameters.CurrentQuarterDate}'",
+								"type": "Expression"
+							},
+							"MasterPipeline": {
+								"value": "'@{pipeline().parameters.MasterPipeline}'",
+								"type": "Expression"
+							}
+						},
+						"datasetParameters": {
+							"SourceDataTab": {
+								"ParquetFile": "Wenita Forestry Products Q4 FY20 V2.xlsx_Harvest Reconcilliation_2020-06-30_LoadReady"
+							}
+						}
+					},
+					"compute": {
+						"coreCount": 8,
+						"computeType": "General"
+					}
+				}
+			},
+			{
+				"name": "ProcessOpsWorkbookTabRiskOpportunity_spl",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "LoadXlsxRiskOps_Step1_df_copy",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "ProcessOpsWorkbookTabRiskOpportunity_spl",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true
+				}
+			},
+			{
+				"name": "DeleteOtherSalesAudirtTable",
+				"description": "removes exist audit table for Risk Opportunity Register",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[audit].[DeleteAuditTable]",
+					"storedProcedureParameters": {
+						"TableName": {
+							"value": "OPS_Sales_Other_Error",
+							"type": "String"
+						},
+						"WorkBookName": {
+							"value": {
+								"value": "@pipeline().parameters.WorkbookName",
+								"type": "Expression"
+							},
+							"type": "String"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "SQLdbConnection",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "Extract_Other_Sales",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "DeleteOtherSalesAudirtTable",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "ExcelSource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": true
+						}
+					},
+					"sink": {
+						"type": "ParquetSink",
+						"storeSettings": {
+							"type": "AzureBlobStorageWriteSettings"
+						},
+						"formatSettings": {
+							"type": "ParquetWriteSettings"
+						}
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "Asset_ID",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Asset_ID",
+									"type": "String",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Fund_ID",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Fund_ID",
+									"type": "String",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Reporting_Period",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Reporting_Period",
+									"type": "String",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Validation Flag",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Validation_Flag",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Sales Type",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Sales_Type",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Sales UOM",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Sales_UOM",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Sales Point",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Sales_Point",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Total Units Sold",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Total_Units_Sold",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Total Revenue",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Total_Revenue",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Total Sales Costs",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Total_Sales_Costs",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Total Net Revenue",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Total_Net_Revenue",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Sales_Net_Revenue_Per_Unit",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Sales_Net_Revenue_Per_Unit",
+									"type": "String",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Currency_Code",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Currency_Code",
+									"type": "String",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Budget Units Sold",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Budget_Units_Sold",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Budget Sales Revenue",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Budget_Sales_Revenue",
+									"physicalType": "UTF8"
+								}
+							},
+							{
+								"source": {
+									"name": "Budget Sales Costs",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Budget_Sales_Costs",
+									"physicalType": "UTF8"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "ExcelWorkbook_AllTabs_ds",
+						"type": "DatasetReference",
+						"parameters": {
+							"WorkbookName": {
+								"value": "@pipeline().parameters.WorkbookName",
+								"type": "Expression"
+							},
+							"TabName": {
+								"value": "@pipeline().parameters.OtherSales",
+								"type": "Expression"
+							},
+							"Range": {
+								"value": "@pipeline().parameters.OtherSalesRange",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "ParquetPersistentOpsWithTabParam_ds",
+						"type": "DatasetReference",
+						"parameters": {
+							"ParquetFile": {
+								"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.OtherSales,'_',pipeline().parameters.CurrentQuarterDate,'_Extract')",
+								"type": "Expression"
+							}
+						}
+					}
+				]
+			},
+			{
+				"name": "LoadXlsx_OtherSales_Step1",
+				"type": "ExecuteDataFlow",
+				"dependsOn": [
+					{
+						"activity": "Extract_Other_Sales",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataflow": {
+						"referenceName": "LoadXlsx_OtherSales_Step1",
+						"type": "DataFlowReference",
+						"parameters": {
+							"MasterUtcTag": {
+								"value": "'@{pipeline().parameters.MasterUtcTag}'",
+								"type": "Expression"
+							},
+							"CurrentRunDateTime": {
+								"value": "'@{pipeline().parameters.CurrentRunDateTime}'",
+								"type": "Expression"
+							},
+							"WorkbookName": {
+								"value": "'@{pipeline().parameters.WorkbookName}'",
+								"type": "Expression"
+							},
+							"TabName": {
+								"value": "'@{pipeline().parameters.OtherSales}'",
+								"type": "Expression"
+							},
+							"CurrentQuarterDate": {
+								"value": "'@{pipeline().parameters.CurrentQuarterDate}'",
+								"type": "Expression"
+							},
+							"MasterPipeline": {
+								"value": "'@{pipeline().parameters.MasterPipeline}'",
+								"type": "Expression"
+							}
+						},
+						"datasetParameters": {
+							"SourceDataTab": {
+								"ParquetFile": "Wenita Forestry Products Q4 FY20 V2.xlsx_Strategic Projects_2020-06-30_LoadReady"
+							}
+						}
+					},
+					"compute": {
+						"coreCount": 8,
+						"computeType": "General"
+					}
+				}
+			},
+			{
+				"name": "ProcessOpsWorkbookTabSalesOther_spl",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "LoadXlsx_OtherSales_Step1",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "ProcessOpsWorkbookTabSalesOther_spl",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true
+				}
+			}
+		],
+		"parameters": {
+			"WorkbookName": {
+				"type": "string",
+				"defaultValue": "Wenita Forestry Products Q4 FY20 V2.xlsx"
+			},
+			"CurrentQuarterDate": {
+				"type": "string",
+				"defaultValue": "2020-06-30"
+			},
+			"OtherSales": {
+				"type": "string",
+				"defaultValue": "Other Sales"
+			},
+			"MajorSevereIncidents": {
+				"type": "string",
+				"defaultValue": "Major Severe Incidents"
+			},
+			"RiskOpportunityRegister": {
+				"type": "string",
+				"defaultValue": "Risk Opportunity Register"
+			},
+			"Certifications": {
+				"type": "string",
+				"defaultValue": "Certifications"
+			},
+			"RelatedPartyTransactions": {
+				"type": "string",
+				"defaultValue": "Related Party Transactions"
+			},
+			"TimberSales": {
+				"type": "string",
+				"defaultValue": "Timber Sales"
+			},
+			"HarvestReconcilliation": {
+				"type": "string",
+				"defaultValue": "Harvest Reconcilliation"
+			},
+			"Operations": {
+				"type": "string",
+				"defaultValue": "Operations"
+			},
+			"Contracts": {
+				"type": "string",
+				"defaultValue": "Contracts"
+			},
+			"StrategicProjects": {
+				"type": "string",
+				"defaultValue": "Strategic Projects"
+			},
+			"CurrentRunDateTime": {
+				"type": "string",
+				"defaultValue": "2020-08-01"
+			},
+			"MasterUtcTag": {
+				"type": "string",
+				"defaultValue": "2020-08-28T06:05:53.4181322Z"
+			},
+			"MasterPipeline": {
+				"type": "string",
+				"defaultValue": "ProcessOpsWorkbookMaster_pl"
+			},
+			"OtherSalesRange": {
+				"type": "string",
+				"defaultValue": "A8:P999"
+			},
+			"MajorSevereIncidentsRange": {
+				"type": "string"
+			},
+			"RiskOpportunityRegisterRange": {
+				"type": "string",
+				"defaultValue": "A7:T9999"
+			},
+			"CertificationsRange": {
+				"type": "string",
+				"defaultValue": "A6:N99999"
+			},
+			"RelatedPartyTransactionsRange": {
+				"type": "string",
+				"defaultValue": "A8:K99999"
+			},
+			"TimberSalesRange": {
+				"type": "string",
+				"defaultValue": "A6:W99999"
+			},
+			"HarvestReconcilliationRange": {
+				"type": "string"
+			},
+			"OperationsRange": {
+				"type": "string"
+			},
+			"ContractsRange": {
+				"type": "string"
+			},
+			"StrategicProjectsRange": {
+				"type": "string"
+			}
+		},
+		"annotations": []
+	}
+}
