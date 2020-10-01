@@ -1,0 +1,2714 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory name",
+			"defaultValue": "DWH-NonProd-ADF"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/ProcessOpsWorkbookSubMaster_Set3_pl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Sub Master job to orchestrate multiple pipelines run. Each pipeline correspond to one tab in the Excel workbook.",
+				"activities": [
+					{
+						"name": "DeleteRiskOpAuditTable",
+						"description": "removes existing audit table for Risk Opportunity Register",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[audit].[DeleteAuditTable]",
+							"storedProcedureParameters": {
+								"TableName": {
+									"value": "OPS_Risk_Opportunity_Register_Error",
+									"type": "String"
+								},
+								"WorkBookName": {
+									"value": {
+										"value": "@pipeline().parameters.WorkbookName",
+										"type": "Expression"
+									},
+									"type": "String"
+								}
+							}
+						},
+						"linkedServiceName": {
+							"referenceName": "SQLdbConnection",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "ExtractRiskOps",
+						"type": "Copy",
+						"dependsOn": [
+							{
+								"activity": "DeleteRiskOpAuditTable",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "ExcelSource",
+								"storeSettings": {
+									"type": "AzureBlobStorageReadSettings",
+									"recursive": true
+								}
+							},
+							"sink": {
+								"type": "ParquetSink",
+								"storeSettings": {
+									"type": "AzureBlobStorageWriteSettings"
+								},
+								"formatSettings": {
+									"type": "ParquetWriteSettings"
+								}
+							},
+							"enableStaging": false,
+							"translator": {
+								"type": "TabularTranslator",
+								"mappings": [
+									{
+										"source": {
+											"name": "Asset_ID",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Asset_ID",
+											"type": "String",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Fund_ID",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Fund_ID",
+											"type": "String",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Reporting_Period",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Reporting_Period",
+											"type": "String",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Risk_Opp_ID",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Risk_Opp_ID",
+											"type": "String",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Validation Flag",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Validation_Flag",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Risk Sub Class",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Risk_Sub_Class",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Risk Class",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Risk_Class",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Risk Description",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Risk_Description",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Actions and Controls",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Actions_and_Controls",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Date Lodged",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Date_Lodged",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Likelihood",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Likelihood",
+											"type": "String",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Severity",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Severity",
+											"type": "String",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Inherent Risk Rating",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Inherent_Risk_Rating",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Eliminate or Mitigate",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Eliminate_or_Mitigate",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Residual Likelihood",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Residual_Likelihood",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Residual Severity",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Residual_Severity",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Residual Risk Rating",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Residual_Risk_Rating",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Future Controls",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Future_Controls",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Person Responsible",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Person_Responsible",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Date Closed",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Date_Closed",
+											"physicalType": "UTF8"
+										}
+									}
+								],
+								"typeConversion": true,
+								"typeConversionSettings": {
+									"allowDataTruncation": true,
+									"treatBooleanAsNumber": false
+								}
+							}
+						},
+						"inputs": [
+							{
+								"referenceName": "ExcelWorkbook_AllTabs_ds",
+								"type": "DatasetReference",
+								"parameters": {
+									"WorkbookName": {
+										"value": "@pipeline().parameters.WorkbookName",
+										"type": "Expression"
+									},
+									"TabName": {
+										"value": "@pipeline().parameters.RiskOpportunityRegister",
+										"type": "Expression"
+									},
+									"Range": {
+										"value": "@pipeline().parameters.RiskOpportunityRegisterRange",
+										"type": "Expression"
+									}
+								}
+							}
+						],
+						"outputs": [
+							{
+								"referenceName": "ParquetPersistentOpsWithTabParam_ds",
+								"type": "DatasetReference",
+								"parameters": {
+									"ParquetFile": {
+										"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.RiskOpportunityRegister,'_',pipeline().parameters.CurrentQuarterDate,'_Extract')",
+										"type": "Expression"
+									}
+								}
+							}
+						]
+					},
+					{
+						"name": "LoadXlsxRiskOps_Step1_df",
+						"type": "ExecuteDataFlow",
+						"dependsOn": [
+							{
+								"activity": "ExtractRiskOps",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "LoadXlsxRiskOps_Step1_df",
+								"type": "DataFlowReference",
+								"parameters": {
+									"MasterUtcTag": {
+										"value": "'@{pipeline().parameters.MasterUtcTag}'",
+										"type": "Expression"
+									},
+									"CurrentRunDateTime": {
+										"value": "'@{pipeline().parameters.CurrentRunDateTime}'",
+										"type": "Expression"
+									},
+									"WorkbookName": {
+										"value": "'@{pipeline().parameters.WorkbookName}'",
+										"type": "Expression"
+									},
+									"TabName": {
+										"value": "'@{pipeline().parameters.RiskOpportunityRegister}'",
+										"type": "Expression"
+									},
+									"CurrentQuarterDate": {
+										"value": "'@{pipeline().parameters.CurrentQuarterDate}'",
+										"type": "Expression"
+									},
+									"MasterPipeline": {
+										"value": "'@{pipeline().parameters.MasterPipeline}'",
+										"type": "Expression"
+									}
+								},
+								"datasetParameters": {
+									"SourceDataTab": {
+										"ParquetFile": {
+											"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.RiskOpportunityRegister,'_',pipeline().parameters.CurrentQuarterDate,'_Extract')",
+											"type": "Expression"
+										}
+									},
+									"ErrorTable": {
+										"Schema": {
+											"value": "audit",
+											"type": "Expression"
+										},
+										"TableName": {
+											"value": "OPS_Risk_Opportunity_Register_Error",
+											"type": "Expression"
+										}
+									}
+								}
+							},
+							"compute": {
+								"coreCount": 8,
+								"computeType": "General"
+							}
+						}
+					},
+					{
+						"name": "ProcessOpsWorkbookTabRiskOpportunity_spl",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "LoadXlsxRiskOps_Step1_df",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "ProcessOpsWorkbookTabRiskOpportunity_spl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"WorkbookName": {
+									"value": "@pipeline().parameters.WorkbookName",
+									"type": "Expression"
+								},
+								"CurrentQuarterDate": {
+									"value": "@pipeline().parameters.CurrentQuarterDate",
+									"type": "Expression"
+								},
+								"RiskOpportunity": {
+									"value": "@pipeline().parameters.RiskOpportunityRegister",
+									"type": "Expression"
+								},
+								"CurrentRunDateTime": {
+									"value": "@pipeline().parameters.CurrentRunDateTime",
+									"type": "Expression"
+								},
+								"MasterUtcTag": {
+									"value": "@pipeline().parameters.MasterUtcTag",
+									"type": "Expression"
+								}
+							}
+						}
+					},
+					{
+						"name": "DeleteOtherSalesAudirtTable",
+						"description": "removes exist audit table for Risk Opportunity Register",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[audit].[DeleteAuditTable]",
+							"storedProcedureParameters": {
+								"TableName": {
+									"value": "OPS_Sales_Other_Error",
+									"type": "String"
+								},
+								"WorkBookName": {
+									"value": {
+										"value": "@pipeline().parameters.WorkbookName",
+										"type": "Expression"
+									},
+									"type": "String"
+								}
+							}
+						},
+						"linkedServiceName": {
+							"referenceName": "SQLdbConnection",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "Extract_Other_Sales",
+						"type": "Copy",
+						"dependsOn": [
+							{
+								"activity": "DeleteOtherSalesAudirtTable",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "ExcelSource",
+								"storeSettings": {
+									"type": "AzureBlobStorageReadSettings",
+									"recursive": true
+								}
+							},
+							"sink": {
+								"type": "ParquetSink",
+								"storeSettings": {
+									"type": "AzureBlobStorageWriteSettings"
+								},
+								"formatSettings": {
+									"type": "ParquetWriteSettings"
+								}
+							},
+							"enableStaging": false,
+							"translator": {
+								"type": "TabularTranslator",
+								"mappings": [
+									{
+										"source": {
+											"name": "Asset_ID",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Asset_ID",
+											"type": "String",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Fund_ID",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Fund_ID",
+											"type": "String",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Reporting_Period",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Reporting_Period",
+											"type": "String",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Validation Flag",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Validation_Flag",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Sales Type",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Sales_Type",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Sales UOM",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Sales_UOM",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Sales Point",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Sales_Point",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Total Units Sold",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Total_Units_Sold",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Total Revenue",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Total_Revenue",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Total Sales Costs",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Total_Sales_Costs",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Total Net Revenue",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Total_Net_Revenue",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Sales_Net_Revenue_Per_Unit",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Sales_Net_Revenue_Per_Unit",
+											"type": "String",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Currency_Code",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Currency_Code",
+											"type": "String",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Budget Units Sold",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Budget_Units_Sold",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Budget Sales Revenue",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Budget_Sales_Revenue",
+											"physicalType": "UTF8"
+										}
+									},
+									{
+										"source": {
+											"name": "Budget Sales Costs",
+											"type": "String",
+											"physicalType": "String"
+										},
+										"sink": {
+											"name": "Budget_Sales_Costs",
+											"physicalType": "UTF8"
+										}
+									}
+								],
+								"typeConversion": true,
+								"typeConversionSettings": {
+									"allowDataTruncation": true,
+									"treatBooleanAsNumber": false
+								}
+							}
+						},
+						"inputs": [
+							{
+								"referenceName": "ExcelWorkbook_AllTabs_ds",
+								"type": "DatasetReference",
+								"parameters": {
+									"WorkbookName": {
+										"value": "@pipeline().parameters.WorkbookName",
+										"type": "Expression"
+									},
+									"TabName": {
+										"value": "@pipeline().parameters.OtherSales",
+										"type": "Expression"
+									},
+									"Range": {
+										"value": "@pipeline().parameters.OtherSalesRange",
+										"type": "Expression"
+									}
+								}
+							}
+						],
+						"outputs": [
+							{
+								"referenceName": "ParquetPersistentOpsWithTabParam_ds",
+								"type": "DatasetReference",
+								"parameters": {
+									"ParquetFile": {
+										"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.OtherSales,'_',pipeline().parameters.CurrentQuarterDate,'_Extract')",
+										"type": "Expression"
+									}
+								}
+							}
+						]
+					},
+					{
+						"name": "LoadXlsx_OtherSales_Step1_df",
+						"type": "ExecuteDataFlow",
+						"dependsOn": [
+							{
+								"activity": "Extract_Other_Sales",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "LoadXlsxOtherSales_Step1_df",
+								"type": "DataFlowReference",
+								"parameters": {
+									"MasterUtcTag": {
+										"value": "'@{pipeline().parameters.MasterUtcTag}'",
+										"type": "Expression"
+									},
+									"CurrentRunDateTime": {
+										"value": "'@{pipeline().parameters.CurrentRunDateTime}'",
+										"type": "Expression"
+									},
+									"WorkbookName": {
+										"value": "'@{pipeline().parameters.WorkbookName}'",
+										"type": "Expression"
+									},
+									"TabName": {
+										"value": "'@{pipeline().parameters.OtherSales}'",
+										"type": "Expression"
+									},
+									"CurrentQuarterDate": {
+										"value": "'@{pipeline().parameters.CurrentQuarterDate}'",
+										"type": "Expression"
+									},
+									"MasterPipeline": {
+										"value": "'@{pipeline().parameters.MasterPipeline}'",
+										"type": "Expression"
+									}
+								},
+								"datasetParameters": {
+									"SourceDataTab": {
+										"ParquetFile": {
+											"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.OtherSales,'_',pipeline().parameters.CurrentQuarterDate,'_Extract')",
+											"type": "Expression"
+										}
+									},
+									"ErrorTable": {
+										"Schema": {
+											"value": "audit",
+											"type": "Expression"
+										},
+										"TableName": {
+											"value": "OPS_Sales_Other_Error",
+											"type": "Expression"
+										}
+									}
+								}
+							},
+							"compute": {
+								"coreCount": 8,
+								"computeType": "General"
+							}
+						}
+					},
+					{
+						"name": "ProcessOpsWorkbookTabSalesOther_spl",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "LoadXlsx_OtherSales_Step1_df",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "ProcessOpsWorkbookTabSalesOther_spl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"WorkbookName": {
+									"value": "@pipeline().parameters.WorkbookName",
+									"type": "Expression"
+								},
+								"CurrentQuarterDate": {
+									"value": "@pipeline().parameters.CurrentQuarterDate",
+									"type": "Expression"
+								},
+								"SalesOther": {
+									"value": "@pipeline().parameters.OtherSales",
+									"type": "Expression"
+								},
+								"CurrentRunDateTime": {
+									"value": "@pipeline().parameters.CurrentRunDateTime",
+									"type": "Expression"
+								},
+								"MasterUtcTag": {
+									"value": "@pipeline().parameters.MasterUtcTag",
+									"type": "Expression"
+								}
+							}
+						}
+					}
+				],
+				"parameters": {
+					"WorkbookName": {
+						"type": "string",
+						"defaultValue": "Wenita Forestry Products Q4 FY20 test.xlsx"
+					},
+					"CurrentQuarterDate": {
+						"type": "string",
+						"defaultValue": "2020-06-30"
+					},
+					"OtherSales": {
+						"type": "string",
+						"defaultValue": "Other Sales"
+					},
+					"MajorSevereIncidents": {
+						"type": "string",
+						"defaultValue": "Major Severe Incidents"
+					},
+					"RiskOpportunityRegister": {
+						"type": "string",
+						"defaultValue": "Risk Opportunity Register"
+					},
+					"Certifications": {
+						"type": "string",
+						"defaultValue": "Certifications"
+					},
+					"RelatedPartyTransactions": {
+						"type": "string",
+						"defaultValue": "Related Party Transactions"
+					},
+					"TimberSales": {
+						"type": "string",
+						"defaultValue": "Timber Sales"
+					},
+					"HarvestReconcilliation": {
+						"type": "string",
+						"defaultValue": "Harvest Reconcilliation"
+					},
+					"Operations": {
+						"type": "string",
+						"defaultValue": "Operations"
+					},
+					"Contracts": {
+						"type": "string",
+						"defaultValue": "Contracts"
+					},
+					"StrategicProjects": {
+						"type": "string",
+						"defaultValue": "Strategic Projects"
+					},
+					"CurrentRunDateTime": {
+						"type": "string",
+						"defaultValue": "2020-08-01"
+					},
+					"MasterUtcTag": {
+						"type": "string",
+						"defaultValue": "2020-08-28T06:05:53.4181322Z"
+					},
+					"MasterPipeline": {
+						"type": "string",
+						"defaultValue": "ProcessOpsWorkbookMaster_pl"
+					},
+					"OtherSalesRange": {
+						"type": "string",
+						"defaultValue": "A8:P999"
+					},
+					"MajorSevereIncidentsRange": {
+						"type": "string"
+					},
+					"RiskOpportunityRegisterRange": {
+						"type": "string",
+						"defaultValue": "A7:T9999"
+					},
+					"CertificationsRange": {
+						"type": "string",
+						"defaultValue": "A6:N99999"
+					},
+					"RelatedPartyTransactionsRange": {
+						"type": "string",
+						"defaultValue": "A8:K99999"
+					},
+					"TimberSalesRange": {
+						"type": "string",
+						"defaultValue": "A6:W99999"
+					},
+					"HarvestReconcilliationRange": {
+						"type": "string"
+					},
+					"OperationsRange": {
+						"type": "string"
+					},
+					"ContractsRange": {
+						"type": "string"
+					},
+					"StrategicProjectsRange": {
+						"type": "string"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/dataflows/LoadXlsxRiskOps_Step1_df')]",
+				"[concat(variables('factoryId'), '/pipelines/ProcessOpsWorkbookTabRiskOpportunity_spl')]",
+				"[concat(variables('factoryId'), '/dataflows/LoadXlsxOtherSales_Step1_df')]",
+				"[concat(variables('factoryId'), '/pipelines/ProcessOpsWorkbookTabSalesOther_spl')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ProcessOpsWorkbookSubMaster_pl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Sub Master job to orchestrate multiple pipelines run. Each pipeline correspond to one tab in the Excel workbook.",
+				"activities": [
+					{
+						"name": "ProcessOpsWorkbookSubMaster_Set1_pl",
+						"type": "ExecutePipeline",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "ProcessOpsWorkbookSubMaster_Set1_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"WorkbookName": {
+									"value": "@pipeline().parameters.WorkbookName",
+									"type": "Expression"
+								},
+								"CurrentQuarterDate": {
+									"value": "@pipeline().parameters.CurrentQuarterDate",
+									"type": "Expression"
+								},
+								"OtherSales": {
+									"value": "@pipeline().parameters.OtherSales",
+									"type": "Expression"
+								},
+								"MajorSevereIncidents": {
+									"value": "@pipeline().parameters.MajorSevereIncidents",
+									"type": "Expression"
+								},
+								"RiskOpportunityRegister": {
+									"value": "@pipeline().parameters.RiskOpportunityRegister",
+									"type": "Expression"
+								},
+								"Certifications": {
+									"value": "@pipeline().parameters.Certifications",
+									"type": "Expression"
+								},
+								"RelatedPartyTransactions": {
+									"value": "@pipeline().parameters.RelatedPartyTransactions",
+									"type": "Expression"
+								},
+								"TimberSales": {
+									"value": "@pipeline().parameters.TimberSales",
+									"type": "Expression"
+								},
+								"HarvestReconcilliation": {
+									"value": "@pipeline().parameters.HarvestReconcilliation",
+									"type": "Expression"
+								},
+								"Operations": {
+									"value": "@pipeline().parameters.Operations",
+									"type": "Expression"
+								},
+								"Contracts": {
+									"value": "@pipeline().parameters.Contracts",
+									"type": "Expression"
+								},
+								"StrategicProjects": {
+									"value": "@pipeline().parameters.StrategicProjects",
+									"type": "Expression"
+								},
+								"CurrentRunDateTime": {
+									"value": "@pipeline().parameters.CurrentRunDateTime",
+									"type": "Expression"
+								},
+								"MasterUtcTag": {
+									"value": "@pipeline().parameters.MasterUtcTag",
+									"type": "Expression"
+								},
+								"MasterPipeline": {
+									"value": "@pipeline().parameters.MasterPipeline",
+									"type": "Expression"
+								},
+								"OtherSalesRange": {
+									"value": "@pipeline().parameters.OtherSalesRange",
+									"type": "Expression"
+								},
+								"MajorSevereIncidentsRange": {
+									"value": "@pipeline().parameters.MajorSevereIncidentsRange",
+									"type": "Expression"
+								},
+								"RiskOpportunityRegisterRange": {
+									"value": "@pipeline().parameters.RiskOpportunityRegisterRange",
+									"type": "Expression"
+								},
+								"CertificationsRange": {
+									"value": "@pipeline().parameters.CertificationsRange",
+									"type": "Expression"
+								},
+								"RelatedPartyTransactionsRange": {
+									"value": "@pipeline().parameters.RelatedPartyTransactionsRange",
+									"type": "Expression"
+								},
+								"TimberSalesRange": {
+									"value": "@pipeline().parameters.TimberSalesRange",
+									"type": "Expression"
+								},
+								"HarvestReconcilliationRange": {
+									"value": "@pipeline().parameters.HarvestReconcilliationRange",
+									"type": "Expression"
+								},
+								"OperationsRange": {
+									"value": "@pipeline().parameters.OperationsRange",
+									"type": "Expression"
+								},
+								"ContractsRange": {
+									"value": "@pipeline().parameters.ContractsRange",
+									"type": "Expression"
+								},
+								"StrategicProjectsRange": {
+									"value": "@pipeline().parameters.StrategicProjectsRange",
+									"type": "Expression"
+								},
+								"Answers": {
+									"value": "@pipeline().parameters.Answers",
+									"type": "Expression"
+								},
+								"AnswersRange": {
+									"value": "@pipeline().parameters.AnswersRange",
+									"type": "Expression"
+								}
+							}
+						}
+					},
+					{
+						"name": "ProcessOpsWorkbookSubMaster_Set2_pl",
+						"type": "ExecutePipeline",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "ProcessOpsWorkbookSubMaster_Set2_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"WorkbookName": {
+									"value": "@pipeline().parameters.WorkbookName",
+									"type": "Expression"
+								},
+								"CurrentQuarterDate": {
+									"value": "@pipeline().parameters.CurrentQuarterDate",
+									"type": "Expression"
+								},
+								"OtherSales": {
+									"value": "@pipeline().parameters.OtherSales",
+									"type": "Expression"
+								},
+								"MajorSevereIncidents": {
+									"value": "@pipeline().parameters.MajorSevereIncidents",
+									"type": "Expression"
+								},
+								"RiskOpportunityRegister": {
+									"value": "@pipeline().parameters.RiskOpportunityRegister",
+									"type": "Expression"
+								},
+								"Certifications": {
+									"value": "@pipeline().parameters.Certifications",
+									"type": "Expression"
+								},
+								"RelatedPartyTransactions": {
+									"value": "@pipeline().parameters.RelatedPartyTransactions",
+									"type": "Expression"
+								},
+								"TimberSales": {
+									"value": "@pipeline().parameters.TimberSales",
+									"type": "Expression"
+								},
+								"HarvestReconcilliation": {
+									"value": "@pipeline().parameters.HarvestReconcilliation",
+									"type": "Expression"
+								},
+								"Operations": {
+									"value": "@pipeline().parameters.Operations",
+									"type": "Expression"
+								},
+								"Contracts": {
+									"value": "@pipeline().parameters.Contracts",
+									"type": "Expression"
+								},
+								"StrategicProjects": {
+									"value": "@pipeline().parameters.StrategicProjects",
+									"type": "Expression"
+								},
+								"CurrentRunDateTime": {
+									"value": "@pipeline().parameters.CurrentRunDateTime",
+									"type": "Expression"
+								},
+								"MasterUtcTag": {
+									"value": "@pipeline().parameters.MasterUtcTag",
+									"type": "Expression"
+								},
+								"MasterPipeline": {
+									"value": "@pipeline().parameters.MasterPipeline",
+									"type": "Expression"
+								},
+								"OtherSalesRange": {
+									"value": "@pipeline().parameters.OtherSalesRange",
+									"type": "Expression"
+								},
+								"MajorSevereIncidentsRange": {
+									"value": "@pipeline().parameters.MajorSevereIncidentsRange",
+									"type": "Expression"
+								},
+								"RiskOpportunityRegisterRange": {
+									"value": "@pipeline().parameters.RiskOpportunityRegisterRange",
+									"type": "Expression"
+								},
+								"CertificationsRange": {
+									"value": "@pipeline().parameters.CertificationsRange",
+									"type": "Expression"
+								},
+								"RelatedPartyTransactionsRange": {
+									"value": "@pipeline().parameters.RelatedPartyTransactionsRange",
+									"type": "Expression"
+								},
+								"TimberSalesRange": {
+									"value": "@pipeline().parameters.TimberSalesRange",
+									"type": "Expression"
+								},
+								"HarvestReconcilliationRange": {
+									"value": "@pipeline().parameters.HarvestReconcilliationRange",
+									"type": "Expression"
+								},
+								"OperationsRange": {
+									"value": "@pipeline().parameters.OperationsRange",
+									"type": "Expression"
+								},
+								"ContractsRange": {
+									"value": "@pipeline().parameters.ContractsRange",
+									"type": "Expression"
+								},
+								"StrategicProjectsRange": {
+									"value": "@pipeline().parameters.StrategicProjectsRange",
+									"type": "Expression"
+								}
+							}
+						}
+					},
+					{
+						"name": "ProcessOpsWorkbookSubMaster_Set3_pl",
+						"type": "ExecutePipeline",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "ProcessOpsWorkbookSubMaster_Set3_pl",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"WorkbookName": {
+									"value": "@pipeline().parameters.WorkbookName",
+									"type": "Expression"
+								},
+								"CurrentQuarterDate": {
+									"value": "@pipeline().parameters.CurrentQuarterDate",
+									"type": "Expression"
+								},
+								"OtherSales": {
+									"value": "@pipeline().parameters.OtherSales",
+									"type": "Expression"
+								},
+								"MajorSevereIncidents": {
+									"value": "@pipeline().parameters.MajorSevereIncidents",
+									"type": "Expression"
+								},
+								"RiskOpportunityRegister": {
+									"value": "@pipeline().parameters.RiskOpportunityRegister",
+									"type": "Expression"
+								},
+								"Certifications": {
+									"value": "@pipeline().parameters.Certifications",
+									"type": "Expression"
+								},
+								"RelatedPartyTransactions": {
+									"value": "@pipeline().parameters.RelatedPartyTransactions",
+									"type": "Expression"
+								},
+								"TimberSales": {
+									"value": "@pipeline().parameters.TimberSales",
+									"type": "Expression"
+								},
+								"HarvestReconcilliation": {
+									"value": "@pipeline().parameters.HarvestReconcilliation",
+									"type": "Expression"
+								},
+								"Operations": {
+									"value": "@pipeline().parameters.Operations",
+									"type": "Expression"
+								},
+								"Contracts": {
+									"value": "@pipeline().parameters.Contracts",
+									"type": "Expression"
+								},
+								"StrategicProjects": {
+									"value": "@pipeline().parameters.StrategicProjects",
+									"type": "Expression"
+								},
+								"CurrentRunDateTime": {
+									"value": "@pipeline().parameters.CurrentRunDateTime",
+									"type": "Expression"
+								},
+								"MasterUtcTag": {
+									"value": "@pipeline().parameters.MasterUtcTag",
+									"type": "Expression"
+								},
+								"MasterPipeline": {
+									"value": "@pipeline().parameters.MasterPipeline",
+									"type": "Expression"
+								},
+								"OtherSalesRange": {
+									"value": "@pipeline().parameters.OtherSalesRange",
+									"type": "Expression"
+								},
+								"MajorSevereIncidentsRange": {
+									"value": "@pipeline().parameters.MajorSevereIncidentsRange",
+									"type": "Expression"
+								},
+								"RiskOpportunityRegisterRange": {
+									"value": "@pipeline().parameters.RiskOpportunityRegisterRange",
+									"type": "Expression"
+								},
+								"CertificationsRange": {
+									"value": "@pipeline().parameters.CertificationsRange",
+									"type": "Expression"
+								},
+								"RelatedPartyTransactionsRange": {
+									"value": "@pipeline().parameters.RelatedPartyTransactionsRange",
+									"type": "Expression"
+								},
+								"TimberSalesRange": {
+									"value": "@pipeline().parameters.TimberSalesRange",
+									"type": "Expression"
+								},
+								"HarvestReconcilliationRange": {
+									"value": "@pipeline().parameters.HarvestReconcilliationRange",
+									"type": "Expression"
+								},
+								"OperationsRange": {
+									"value": "@pipeline().parameters.OperationsRange",
+									"type": "Expression"
+								},
+								"ContractsRange": {
+									"value": "@pipeline().parameters.ContractsRange",
+									"type": "Expression"
+								},
+								"StrategicProjectsRange": {
+									"value": "@pipeline().parameters.StrategicProjectsRange",
+									"type": "Expression"
+								}
+							}
+						}
+					}
+				],
+				"concurrency": 15,
+				"parameters": {
+					"WorkbookName": {
+						"type": "string",
+						"defaultValue": "Wenita Forestry Products Q4 FY20 V2.xlsx"
+					},
+					"CurrentQuarterDate": {
+						"type": "string",
+						"defaultValue": "2020-06-30"
+					},
+					"OtherSales": {
+						"type": "string",
+						"defaultValue": "Other Sales"
+					},
+					"MajorSevereIncidents": {
+						"type": "string",
+						"defaultValue": "Major Severe Incidents"
+					},
+					"RiskOpportunityRegister": {
+						"type": "string",
+						"defaultValue": "Risk Opportunity Register"
+					},
+					"Certifications": {
+						"type": "string",
+						"defaultValue": "Certifications"
+					},
+					"RelatedPartyTransactions": {
+						"type": "string",
+						"defaultValue": "Related Party Transactions"
+					},
+					"TimberSales": {
+						"type": "string",
+						"defaultValue": "Timber Sales"
+					},
+					"HarvestReconcilliation": {
+						"type": "string",
+						"defaultValue": "Harvest Reconcilliation"
+					},
+					"Operations": {
+						"type": "string",
+						"defaultValue": "Operations"
+					},
+					"Contracts": {
+						"type": "string",
+						"defaultValue": "Contracts"
+					},
+					"StrategicProjects": {
+						"type": "string",
+						"defaultValue": "Strategic Projects"
+					},
+					"CurrentRunDateTime": {
+						"type": "string",
+						"defaultValue": "2020-08-01"
+					},
+					"MasterUtcTag": {
+						"type": "string",
+						"defaultValue": "2020-08-28T06:05:53.4181322Z"
+					},
+					"MasterPipeline": {
+						"type": "string",
+						"defaultValue": "ProcessOpsWorkbookMaster_pl"
+					},
+					"OtherSalesRange": {
+						"type": "string",
+						"defaultValue": "A8:P999"
+					},
+					"MajorSevereIncidentsRange": {
+						"type": "string",
+						"defaultValue": "A8:L99999"
+					},
+					"RiskOpportunityRegisterRange": {
+						"type": "string",
+						"defaultValue": "A7:T9999"
+					},
+					"CertificationsRange": {
+						"type": "string",
+						"defaultValue": "A6:N99999"
+					},
+					"RelatedPartyTransactionsRange": {
+						"type": "string",
+						"defaultValue": "A8:K99999"
+					},
+					"TimberSalesRange": {
+						"type": "string",
+						"defaultValue": "A6:W99999"
+					},
+					"HarvestReconcilliationRange": {
+						"type": "string",
+						"defaultValue": "A8:AA9999"
+					},
+					"OperationsRange": {
+						"type": "string",
+						"defaultValue": "A8:Q9999"
+					},
+					"ContractsRange": {
+						"type": "string",
+						"defaultValue": "A7:N9999"
+					},
+					"StrategicProjectsRange": {
+						"type": "string",
+						"defaultValue": "A7:N9999"
+					},
+					"Answers": {
+						"type": "string",
+						"defaultValue": "Answers_DWH_Export"
+					},
+					"AnswersRange": {
+						"type": "string",
+						"defaultValue": "A1:H99999"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/ProcessOpsWorkbookSubMaster_Set3_pl')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ProcessOpsWorkbookTabRiskOpportunity_spl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Risk Opportunity tab",
+				"activities": [
+					{
+						"name": "GetTableErrorCount",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": {
+									"value": "SELECT COUNT(*) AS ERROR_COUNT FROM (\n SELECT DISTINCT LIS.Work_Book, LIS.Work_Sheet FROM \n audit.OPS_Workbook_Worksheet_Asset_List LIS\n JOIN audit.OPS_Risk_Opportunity_Register_Error ERR\n ON LIS.Work_Book = ERR.Source_File  \n AND LIS.Work_Sheet = ERR.Source_Sub_File\n WHERE LIS.Work_Book = '@{pipeline().parameters.WorkbookName}'\n AND LIS.Work_Sheet = 'pipeline().parameters.RiskOpportunity'\n)x",
+									"type": "Expression"
+								},
+								"queryTimeout": "02:00:00",
+								"partitionOption": "None"
+							},
+							"dataset": {
+								"referenceName": "SQLtableGeneric_ds",
+								"type": "DatasetReference"
+							}
+						}
+					},
+					{
+						"name": "CheckConditionIfErrorExist",
+						"type": "IfCondition",
+						"dependsOn": [
+							{
+								"activity": "GetTableErrorCount",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@greaterOrEquals(activity('GetTableErrorCount').output.firstRow.ERROR_COUNT, 0)",
+								"type": "Expression"
+							},
+							"ifTrueActivities": [
+								{
+									"name": "LoadValidatedDataset",
+									"type": "ExecuteDataFlow",
+									"dependsOn": [
+										{
+											"activity": "DeleteRiskOpsCurrentPeriod",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"dataflow": {
+											"referenceName": "LoadXlsxRiskOps_Step3_df",
+											"type": "DataFlowReference",
+											"parameters": {
+												"WorkbookName": {
+													"value": "'@{pipeline().parameters.WorkbookName}'",
+													"type": "Expression"
+												},
+												"TabName": {
+													"value": "'@{pipeline().parameters.RiskOpportunity}'",
+													"type": "Expression"
+												}
+											},
+											"datasetParameters": {
+												"SourceReadyLoad": {
+													"ParquetFile": {
+														"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.RiskOpportunity,'_',pipeline().parameters.CurrentQuarterDate,'_LoadReady')",
+														"type": "Expression"
+													}
+												},
+												"TargetRelational": {
+													"Schema": {
+														"value": "relational",
+														"type": "Expression"
+													},
+													"TableName": {
+														"value": "OPS_Risk_Opportunity_Register",
+														"type": "Expression"
+													}
+												}
+											}
+										},
+										"compute": {
+											"coreCount": 8,
+											"computeType": "General"
+										}
+									}
+								},
+								{
+									"name": "UpdateValidatedDataset",
+									"type": "ExecuteDataFlow",
+									"dependsOn": [
+										{
+											"activity": "LoadValidatedDataset",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"dataflow": {
+											"referenceName": "LoadXlsxRiskOps_Step4_df",
+											"type": "DataFlowReference",
+											"parameters": {
+												"WorkbookName": {
+													"value": "'@{pipeline().parameters.WorkbookName}'",
+													"type": "Expression"
+												},
+												"TabName": {
+													"value": "'@{pipeline().parameters.RiskOpportunity}'",
+													"type": "Expression"
+												}
+											},
+											"datasetParameters": {
+												"SourceUpdate": {
+													"ParquetFile": {
+														"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.RiskOpportunity,'_',pipeline().parameters.CurrentQuarterDate,'_Update')",
+														"type": "Expression"
+													}
+												},
+												"TargetRelational": {
+													"Schema": {
+														"value": "relational",
+														"type": "Expression"
+													},
+													"TableName": {
+														"value": "OPS_Risk_Opportunity_Register",
+														"type": "Expression"
+													}
+												}
+											}
+										},
+										"compute": {
+											"coreCount": 8,
+											"computeType": "General"
+										}
+									}
+								},
+								{
+									"name": "DeleteRiskOpsCurrentPeriod",
+									"type": "ExecuteDataFlow",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"dataflow": {
+											"referenceName": "LoadXlsxRiskOps_Step2_df",
+											"type": "DataFlowReference",
+											"parameters": {
+												"WorkbookName": {
+													"value": "'@{pipeline().parameters.WorkbookName}'",
+													"type": "Expression"
+												},
+												"TabName": {
+													"value": "'@{pipeline().parameters.RiskOpportunity}'",
+													"type": "Expression"
+												}
+											},
+											"datasetParameters": {
+												"SourceReadyLoad": {
+													"ParquetFile": {
+														"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.RiskOpportunity,'_',pipeline().parameters.CurrentQuarterDate,'_LoadReady')",
+														"type": "Expression"
+													}
+												},
+												"TargetRelationalDelete": {
+													"Schema": {
+														"value": "relational",
+														"type": "Expression"
+													},
+													"TableName": {
+														"value": "OPS_Risk_Opportunity_Register",
+														"type": "Expression"
+													}
+												}
+											}
+										},
+										"compute": {
+											"coreCount": 8,
+											"computeType": "General"
+										}
+									}
+								}
+							]
+						}
+					}
+				],
+				"parameters": {
+					"WorkbookName": {
+						"type": "string",
+						"defaultValue": "Wenita Forestry Products Q4 FY20 V2.xlsx"
+					},
+					"CurrentQuarterDate": {
+						"type": "string",
+						"defaultValue": "30/09/2020"
+					},
+					"RiskOpportunity": {
+						"type": "string",
+						"defaultValue": "Risk Opportunity Register"
+					},
+					"CurrentRunDateTime": {
+						"type": "string",
+						"defaultValue": "2020-08-01"
+					},
+					"MasterUtcTag": {
+						"type": "string",
+						"defaultValue": "2020-08-28T06:05:53.4181322Z"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/dataflows/LoadXlsxRiskOps_Step3_df')]",
+				"[concat(variables('factoryId'), '/dataflows/LoadXlsxRiskOps_Step4_df')]",
+				"[concat(variables('factoryId'), '/dataflows/LoadXlsxRiskOps_Step2_df')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ProcessOpsWorkbookTabSalesOther_spl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Other Sales Tab",
+				"activities": [
+					{
+						"name": "GetTableErrorCount",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": {
+									"value": "SELECT COUNT(*) AS ERROR_COUNT FROM (\n SELECT DISTINCT LIS.Work_Book, LIS.Work_Sheet FROM \n audit.OPS_Workbook_Worksheet_Asset_List LIS\n JOIN audit.OPS_Sales_Other_Error ERR\n ON LIS.Work_Book = ERR.Source_File  \n AND LIS.Work_Sheet = ERR.Source_Sub_File\n WHERE LIS.Work_Book = '@{pipeline().parameters.WorkbookName}'\n AND LIS.Work_Sheet = 'pipeline().parameters.SalesOther'\n)x",
+									"type": "Expression"
+								},
+								"queryTimeout": "02:00:00",
+								"partitionOption": "None"
+							},
+							"dataset": {
+								"referenceName": "SQLtableGeneric_ds",
+								"type": "DatasetReference"
+							}
+						}
+					},
+					{
+						"name": "CheckConditionIfErrorExist",
+						"type": "IfCondition",
+						"dependsOn": [
+							{
+								"activity": "GetTableErrorCount",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@greaterOrEquals(activity('GetTableErrorCount').output.firstRow.ERROR_COUNT, 0)",
+								"type": "Expression"
+							},
+							"ifTrueActivities": [
+								{
+									"name": "DeleteSalesOtherCurrentPeriod",
+									"type": "ExecuteDataFlow",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"dataflow": {
+											"referenceName": "LoadXlsxOtherSales_Step2_df",
+											"type": "DataFlowReference",
+											"parameters": {
+												"WorkbookName": {
+													"value": "'@{pipeline().parameters.WorkbookName}'",
+													"type": "Expression"
+												},
+												"TabName": {
+													"value": "'@{pipeline().parameters.SalesOther}'",
+													"type": "Expression"
+												}
+											},
+											"datasetParameters": {
+												"SourceReadyLoad": {
+													"ParquetFile": {
+														"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.SalesOther,'_',pipeline().parameters.CurrentQuarterDate,'_LoadReady')",
+														"type": "Expression"
+													}
+												},
+												"TargetRelational": {
+													"Schema": {
+														"value": "relational",
+														"type": "Expression"
+													},
+													"TableName": {
+														"value": "OPS_Sales_Other",
+														"type": "Expression"
+													}
+												}
+											}
+										},
+										"compute": {
+											"coreCount": 8,
+											"computeType": "General"
+										}
+									}
+								},
+								{
+									"name": "LoadSalesOther",
+									"type": "ExecuteDataFlow",
+									"dependsOn": [
+										{
+											"activity": "DeleteSalesOtherCurrentPeriod",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"dataflow": {
+											"referenceName": "LoadXlsxOtherSales_Step3_df",
+											"type": "DataFlowReference",
+											"parameters": {
+												"WorkbookName": {
+													"value": "'@{pipeline().parameters.WorkbookName}'",
+													"type": "Expression"
+												},
+												"TabName": {
+													"value": "'@{pipeline().parameters.SalesOther}'",
+													"type": "Expression"
+												}
+											},
+											"datasetParameters": {
+												"SourceReadyLoad": {
+													"ParquetFile": {
+														"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.SalesOther,'_',pipeline().parameters.CurrentQuarterDate,'_LoadReady')",
+														"type": "Expression"
+													}
+												},
+												"TargetRelational": {
+													"Schema": {
+														"value": "relational",
+														"type": "Expression"
+													},
+													"TableName": {
+														"value": "OPS_Sales_Other",
+														"type": "Expression"
+													}
+												}
+											}
+										},
+										"compute": {
+											"coreCount": 8,
+											"computeType": "General"
+										}
+									}
+								}
+							]
+						}
+					}
+				],
+				"parameters": {
+					"WorkbookName": {
+						"type": "string",
+						"defaultValue": "Wenita Forestry Products Q4 FY20 V2.xlsx"
+					},
+					"CurrentQuarterDate": {
+						"type": "string",
+						"defaultValue": "30/09/2020"
+					},
+					"SalesOther": {
+						"type": "string",
+						"defaultValue": "Other Sales"
+					},
+					"CurrentRunDateTime": {
+						"type": "string",
+						"defaultValue": "2020-08-01"
+					},
+					"MasterUtcTag": {
+						"type": "string",
+						"defaultValue": "2020-08-28T06:05:53.4181322Z"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/dataflows/LoadXlsxOtherSales_Step2_df')]",
+				"[concat(variables('factoryId'), '/dataflows/LoadXlsxOtherSales_Step3_df')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadXlsxMajorSevereIncidents_Step1_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "ParquetPersistentOpsWithTabParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "SourceDataTab"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLtableGeneric_ds",
+								"type": "DatasetReference"
+							},
+							"name": "RelationalOpsIncidentType"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLtableGeneric_ds",
+								"type": "DatasetReference"
+							},
+							"name": "RelationalIncident"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "ParquetPersistentOps_ds",
+								"type": "DatasetReference"
+							},
+							"name": "TargetPersistentParquetInsert"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLtableGenericWithParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "ErrorTable"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLauditopsworkbookworksheetlist_ds",
+								"type": "DatasetReference"
+							},
+							"name": "OpsWorkbookWorksheetList"
+						},
+						{
+							"dataset": {
+								"referenceName": "ParquetPersistentOps_ds",
+								"type": "DatasetReference"
+							},
+							"name": "TargetPersistenParquetUpdate"
+						}
+					],
+					"transformations": [
+						{
+							"name": "ValidateMandatoryColumns",
+							"description": "ReportingDateCertificationIDValidateMsg is a test and should be considered as part of the conditional split Insert/Update activity"
+						},
+						{
+							"name": "SegregateValidInvalidRows"
+						},
+						{
+							"name": "SelectedColumnsOutputInsert"
+						},
+						{
+							"name": "ConcatenateInvalidColumnsMessage"
+						},
+						{
+							"name": "SelectedOutputColumnsError"
+						},
+						{
+							"name": "GenerateRowNumber"
+						},
+						{
+							"name": "ExcludeFirstRow"
+						},
+						{
+							"name": "AggregateSetUniqueWorksheetAsset"
+						},
+						{
+							"name": "SelectWorksheetAsset"
+						},
+						{
+							"name": "SelectUniqueWorksheetAsset"
+						},
+						{
+							"name": "DateTypeTransform"
+						},
+						{
+							"name": "SelectIncidentTypeLkp"
+						},
+						{
+							"name": "LookupIncidentType"
+						},
+						{
+							"name": "SplitInsertAndUpdate",
+							"description": "1. The condition assume that the records from the current reporting period are deleted first if any (asset id, fund id, current reporting period)\n2. Records where reporting period equal current reporting period (disregard certification id) are inserted/reinserted after delete in 1\n3. Remaining records are not from current reporting period and the certification ids must not be null. These are updated"
+						},
+						{
+							"name": "SelectColumnsOutputUpdate"
+						},
+						{
+							"name": "UpdateDatetimeValue"
+						},
+						{
+							"name": "SelectIncidentLkp"
+						},
+						{
+							"name": "LookupIncidents"
+						},
+						{
+							"name": "FilterBlankAssetAndFund"
+						}
+					],
+					"script": "parameters{\n\tMasterUtcTag as string (\"2020-08-28T06:05:53.4181322Z\"),\n\tCurrentRunDateTime as string (\"2020-08-01\"),\n\tWorkbookName as string (\"Wenita Forestry Products Q4 FY20 V2.xlsx\"),\n\tTabName as string (\"Major Severe Incidents\"),\n\tCurrentQuarterDate as string (\"2020-06-30\"),\n\tMasterPipeline as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as string,\n\t\tIncident_Id as string,\n\t\tValidation_Flag as string,\n\t\tIncident_Type as string,\n\t\tCategory as string,\n\t\tIncident_Severity as string,\n\t\tIncident_Description as string,\n\t\tInvestigation_Undertaken as string,\n\t\tIncident_Findings as string,\n\t\tIncident_Date as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tformat: 'parquet',\n\tpartitionBy('hash', 1)) ~> SourceDataTab\nsource(output(\n\t\tIncident_Type_Code as string,\n\t\tIncident_Type as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT Incident_Type_Code\\n      ,Incident_Type\\n  FROM relational.OPS_Incident_Type\\n  WHERE Active_YN = \\'Y\\'',\n\tformat: 'query',\n\tpartitionBy('hash', 1)) ~> RelationalOpsIncidentType\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as date,\n\t\tIncident_ID as integer\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT Asset_ID\\n      ,Fund_ID\\n      ,Reporting_Period\\n      ,Incident_ID\\n  FROM relational.OPS_Incident',\n\tformat: 'query') ~> RelationalIncident\nLookupIncidentType derive(IncidentTypeValidateMsg = iif(isNull(Incident_Type_Code_Lkp), \"Incident Type Lookup Error/\", \"\"),\n\t\tAssetReportingDateValidateMsg = iif(isNull(Asset_ID) || isNull(Fund_ID) || isNull(Reporting_Period), \"Invalid Asset or Reporting Period/\", \"\"),\n\t\tIncidentDateValidateMsg = iif(isNull(Incident_Date), \"Blank Incident Date/\", \"\"),\n\t\tReportingDateIncidentIDValidateMsg = iif(iif(CurrentReportingPeriod != Reporting_Period, true(), false()) && isNull(Incident_Id),\"Null Incident ID for non-current Reporting Period/\",\"\"),\n\t\tLkpRelationalIncidentIDValidateMsg = iif(not(isNull(Incident_ID_Lkp)),iif(equals(concat(Asset_ID_Lkp,Fund_ID_Lkp), concat(Asset_ID,Fund_ID)),\"\",\"Incident ID not belong to Asset/\"),\"\")) ~> ValidateMandatoryColumns\nValidateMandatoryColumns split(length(concatWS('',AssetReportingDateValidateMsg,\r\nLkpRelationalIncidentIDValidateMsg,\r\nIncidentTypeValidateMsg,\r\nIncidentDateValidateMsg,\r\nReportingDateIncidentIDValidateMsg)) == 0 && equals(Validation_Flag, \"1\"),\n\tdisjoint: false) ~> SegregateValidInvalidRows@(ValidRows, InvalidRows)\nSplitInsertAndUpdate@Insert select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tIncident_Id,\n\t\tIncident_Type_Code = Incident_Type_Code_Lkp,\n\t\tIncident_Severity,\n\t\tIncident_Description,\n\t\tInvestigation_Undertaken,\n\t\tIncident_Findings,\n\t\tIncident_Date,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tWork_Book,\n\t\tWork_Sheet,\n\t\tProcess_Name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectedColumnsOutputInsert\nSegregateValidInvalidRows@InvalidRows derive(ConcatenatedMessage = concat(IncidentTypeValidateMsg, IncidentDateValidateMsg,AssetReportingDateValidateMsg,ReportingDateIncidentIDValidateMsg,LkpRelationalIncidentIDValidateMsg)) ~> ConcatenateInvalidColumnsMessage\nConcatenateInvalidColumnsMessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tIncident_Id,\n\t\tIncident_Type,\n\t\tIncident_Severity,\n\t\tIncident_Description,\n\t\tInvestigation_Undertaken,\n\t\tIncident_Findings,\n\t\tIncident_Date,\n\t\tInsert_Datetime,\n\t\tSource_File = Work_Book,\n\t\tSource_Sub_File = Work_Sheet,\n\t\tProcess_Name,\n\t\tError_Desc = ConcatenatedMessage\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectedOutputColumnsError\nDateTypeTransform keyGenerate(output(RowNumber as long),\n\tstartAt: 1L,\n\tpartitionBy('hash', 1)) ~> GenerateRowNumber\nGenerateRowNumber filter(RowNumber > 1 &&\r\nnot(isNull(Asset_ID)) && not(isNull(Fund_ID)) && not(isNull(Reporting_Period)) &&\r\n(not(isNull(Incident_Id)) || not(isNull(Incident_Type)) || not(isNull(Incident_Severity)) ||\r\nnot(isNull(Incident_Description)) || not(isNull(Incident_Findings)) || not(isNull(Incident_Date))\r\n)) ~> ExcludeFirstRow\nSelectWorksheetAsset aggregate(groupBy(Asset_ID,\n\t\tFund_ID,\n\t\tWork_Book,\n\t\tWork_Sheet),\n\tAggCount = count()) ~> AggregateSetUniqueWorksheetAsset\nExcludeFirstRow select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tWork_Book,\n\t\tWork_Sheet\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectWorksheetAsset\nFilterBlankAssetAndFund select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tWork_Book,\n\t\tWork_Sheet\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectUniqueWorksheetAsset\nSourceDataTab derive(Incident_Id = toInteger(Incident_Id),\n\t\tReporting_Period = toDate(Reporting_Period),\n\t\tIncident_Date = toDate(Incident_Date),\n\t\tInsert_Datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tUpdate_Datetime = toTimestamp('9999-12-31 00:00:00'),\n\t\tWork_Book = $WorkbookName,\n\t\tWork_Sheet = $TabName,\n\t\tProcess_Name = concatWS('-',$MasterPipeline,$WorkbookName,$TabName),\n\t\tCurrentReportingPeriod = toDate($CurrentQuarterDate)) ~> DateTypeTransform\nRelationalOpsIncidentType select(mapColumn(\n\t\tIncident_Type_Code_Lkp = Incident_Type_Code,\n\t\tIncident_Type_Lkp = Incident_Type\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectIncidentTypeLkp\nLookupIncidents, SelectIncidentTypeLkp lookup(Incident_Type == Incident_Type_Lkp,\n\tmultiple: false,\n\tpickup: 'first',\n\tasc(Incident_Type_Code_Lkp, false),\n\tbroadcast: 'auto')~> LookupIncidentType\nSegregateValidInvalidRows@ValidRows split(equals(Reporting_Period, CurrentReportingPeriod),\n\tdisjoint: false) ~> SplitInsertAndUpdate@(Insert, Update)\nUpdateDatetimeValue select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tIncident_Id,\n\t\tIncident_Type_Code = Incident_Type_Code_Lkp,\n\t\tIncident_Severity,\n\t\tIncident_Description,\n\t\tInvestigation_Undertaken,\n\t\tIncident_Findings,\n\t\tIncident_Date,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tWork_Book,\n\t\tWork_Sheet,\n\t\tProcess_Name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectColumnsOutputUpdate\nSplitInsertAndUpdate@Update derive(Update_Datetime = fromUTC(currentUTC(), 'Australia/Sydney')) ~> UpdateDatetimeValue\nRelationalIncident select(mapColumn(\n\t\tAsset_ID_Lkp = Asset_ID,\n\t\tFund_ID_Lkp = Fund_ID,\n\t\tReporting_Period_Lkp = Reporting_Period,\n\t\tIncident_ID_Lkp = Incident_ID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectIncidentLkp\nExcludeFirstRow, SelectIncidentLkp lookup(Incident_Id == Incident_ID_Lkp,\n\tmultiple: false,\n\tpickup: 'any',\n\tbroadcast: 'auto')~> LookupIncidents\nAggregateSetUniqueWorksheetAsset filter(not(isNull(Asset_ID)) && not(isNull(Fund_ID))) ~> FilterBlankAssetAndFund\nSelectedColumnsOutputInsert sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tformat: 'parquet',\n\tpartitionFileNames:[(concatWS(\"_\", $WorkbookName, $TabName,$CurrentQuarterDate,'LoadReady'))],\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tIncident_Id,\n\t\tIncident_Type_Code,\n\t\tIncident_Severity,\n\t\tIncident_Description,\n\t\tInvestigation_Undertaken,\n\t\tIncident_Findings,\n\t\tIncident_Date,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tWork_Book,\n\t\tWork_Sheet,\n\t\tProcess_Name\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetPersistentParquetInsert\nSelectedOutputColumnsError sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tIncident_Id,\n\t\tIncident_Type,\n\t\tIncident_Severity,\n\t\tIncident_Description,\n\t\tInvestigation_Undertaken,\n\t\tIncident_Findings,\n\t\tIncident_Date,\n\t\tInsert_Datetime,\n\t\tSource_File,\n\t\tSource_Sub_File,\n\t\tProcess_Name,\n\t\tError_Desc\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> ErrorTable\nSelectUniqueWorksheetAsset sink(input(\n\t\tWork_Book as string,\n\t\tWork_Sheet as string,\n\t\tAsset_Id as string,\n\t\tFund_Id as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tWork_Book,\n\t\tWork_Sheet,\n\t\tAsset_Id = Asset_ID,\n\t\tFund_Id = Fund_ID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> OpsWorkbookWorksheetList\nSelectColumnsOutputUpdate sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tformat: 'parquet',\n\tpartitionFileNames:[(concatWS(\"_\", $WorkbookName, $TabName,$CurrentQuarterDate,'Update'))],\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tIncident_Id,\n\t\tIncident_Type_Code,\n\t\tIncident_Severity,\n\t\tIncident_Description,\n\t\tInvestigation_Undertaken,\n\t\tIncident_Findings,\n\t\tIncident_Date,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tWork_Book,\n\t\tWork_Sheet,\n\t\tProcess_Name\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetPersistenParquetUpdate"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadXlsxMajorSevereIncidents_Step3_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "ParquetPersistentOpsWithTabParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "SourceReadyLoad"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLtableGenericWithParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "TargetRelational"
+						}
+					],
+					"transformations": [
+						{
+							"name": "MapColumns"
+						}
+					],
+					"script": "parameters{\n\tWorkbookName as string,\n\tTabName as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as date,\n\t\tIncident_Id as integer,\n\t\tIncident_Type_Code as string,\n\t\tIncident_Severity as string,\n\t\tIncident_Description as string,\n\t\tInvestigation_Undertaken as string,\n\t\tIncident_Findings as string,\n\t\tIncident_Date as date,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tWork_Book as string,\n\t\tWork_Sheet as string,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tformat: 'parquet',\n\tpartitionBy('hash', 1)) ~> SourceReadyLoad\nSourceReadyLoad select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tIncident_Id,\n\t\tIncident_Type_Code,\n\t\tIncident_Severity,\n\t\tIncident_Description,\n\t\tInvestigation_Undertaken,\n\t\tIncident_Findings,\n\t\tIncident_Date,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tWork_Book,\n\t\tWork_Sheet,\n\t\tProcess_Name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> MapColumns\nMapColumns sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tIncident_Type_Code,\n\t\tIncident_Severity,\n\t\tIncident_Description,\n\t\tInvestigation_Undertaken,\n\t\tIncident_Findings,\n\t\tIncident_Date,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tWork_Book,\n\t\tWork_Sheet,\n\t\tProcess_Name\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetRelational"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadXlsxMajorSevereIncidents_Step4_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "ParquetPersistentOpsWithTabParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "SourceUpdate"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLtableGenericWithParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "TargetRelational"
+						}
+					],
+					"transformations": [
+						{
+							"name": "MapColumns"
+						},
+						{
+							"name": "AlterRowUpdate"
+						}
+					],
+					"script": "parameters{\n\tWorkbookName as string,\n\tTabName as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as date,\n\t\tIncident_Id as integer,\n\t\tIncident_Type_Code as string,\n\t\tIncident_Severity as string,\n\t\tIncident_Description as string,\n\t\tInvestigation_Undertaken as string,\n\t\tIncident_Findings as string,\n\t\tIncident_Date as date,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tWork_Book as string,\n\t\tWork_Sheet as string,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tformat: 'parquet',\n\tpartitionBy('hash', 1)) ~> SourceUpdate\nSourceUpdate select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tIncident_Id,\n\t\tIncident_Type_Code,\n\t\tIncident_Severity,\n\t\tIncident_Description,\n\t\tInvestigation_Undertaken,\n\t\tIncident_Findings,\n\t\tIncident_Date,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tWork_Book,\n\t\tWork_Sheet,\n\t\tProcess_Name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> MapColumns\nMapColumns alterRow(updateIf(not(isNull(Incident_Id)))) ~> AlterRowUpdate\nAlterRowUpdate sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:false,\n\tupdateable:true,\n\tupsertable:false,\n\tkeys:['Incident_Id'],\n\tskipKeyWrites:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tIncident_Id,\n\t\tIncident_Type_Code,\n\t\tIncident_Severity,\n\t\tIncident_Description,\n\t\tInvestigation_Undertaken,\n\t\tIncident_Findings,\n\t\tIncident_Date,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tProcess_Name\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetRelational"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadXlsxOtherSales_Step1_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "ParquetPersistentOpsWithTabParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "SourceDataTab"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "ParquetPersistentOps_ds",
+								"type": "DatasetReference"
+							},
+							"name": "TargetPersistentParquetInsert"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLtableGenericWithParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "ErrorTable"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLauditopsworkbookworksheetlist_ds",
+								"type": "DatasetReference"
+							},
+							"name": "OpsWorkbookWorksheetList"
+						}
+					],
+					"transformations": [
+						{
+							"name": "ValidateMandatoryColumns",
+							"description": "ReportingDateCertificationIDValidateMsg is a test and should be considered as part of the conditional split Insert/Update activity"
+						},
+						{
+							"name": "SegregateValidInvalidRows"
+						},
+						{
+							"name": "SelectedColumnsOutputInsert"
+						},
+						{
+							"name": "ConcatenateInvalidColumnsMessage"
+						},
+						{
+							"name": "SelectedOutputColumnsError"
+						},
+						{
+							"name": "GenerateRowNumber"
+						},
+						{
+							"name": "ExcludeFirstRowandEmpty"
+						},
+						{
+							"name": "AggregateSetUniqueWorksheetAsset"
+						},
+						{
+							"name": "SelectWorksheetAsset"
+						},
+						{
+							"name": "SelectUniqueWorksheetAsset"
+						},
+						{
+							"name": "DataTypeTransformations"
+						},
+						{
+							"name": "FilterBlankAssetFund"
+						}
+					],
+					"script": "parameters{\n\tMasterUtcTag as string,\n\tCurrentRunDateTime as string,\n\tWorkbookName as string,\n\tTabName as string,\n\tCurrentQuarterDate as string,\n\tMasterPipeline as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as string,\n\t\tValidation_Flag as string,\n\t\tSales_Type as string,\n\t\tSales_UOM as string,\n\t\tSales_Point as string,\n\t\tTotal_Units_Sold as string,\n\t\tTotal_Revenue as string,\n\t\tTotal_Sales_Costs as string,\n\t\tTotal_Net_Revenue as string,\n\t\tSales_Net_Revenue_Per_Unit as string,\n\t\tCurrency_Code as string,\n\t\tBudget_Units_Sold as string,\n\t\tBudget_Sales_Revenue as string,\n\t\tBudget_Sales_Costs as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tformat: 'parquet',\n\tpartitionBy('hash', 1)) ~> SourceDataTab\nExcludeFirstRowandEmpty derive(Sales_Type_Validate_Msg = iif(isNull(Sales_Type),'/Sales Type',''),\n\t\tTotal_Revenue_Validate_Msg = iif(isNull(Total_Revenue),'/Total_Revenue','')) ~> ValidateMandatoryColumns\nValidateMandatoryColumns split(length(concatWS('',Sales_Type_Validate_Msg,Total_Revenue_Validate_Msg)) == 0,\n\tdisjoint: false) ~> SegregateValidInvalidRows@(ValidRows, InvalidRows)\nSegregateValidInvalidRows@ValidRows select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tSales_Type,\n\t\tSales_UOM,\n\t\tSales_Point,\n\t\tTotal_Units_Sold,\n\t\tSales_revenue = Total_Revenue,\n\t\tSales_Cost = Total_Sales_Costs,\n\t\tSales_Net_Revenue = Total_Net_Revenue,\n\t\tSales_Net_Revenue_Per_Unit,\n\t\tCurrency_Code,\n\t\tBudget_Sales_Quantity = Budget_Units_Sold,\n\t\tBudget_Sales_Revenue,\n\t\tBudget_Sales_Costs,\n\t\tInsert_Datetime,\n\t\tProcess_Name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectedColumnsOutputInsert\nSegregateValidInvalidRows@InvalidRows derive(ConcatenatedMessage = concat(Sales_Type_Validate_Msg,Total_Revenue_Validate_Msg)) ~> ConcatenateInvalidColumnsMessage\nConcatenateInvalidColumnsMessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tSales_Type,\n\t\tSales_UOM,\n\t\tSales_Point,\n\t\tTotal_Units_Sold,\n\t\tSales_revenue = Total_Revenue,\n\t\tSales_Cost = Total_Sales_Costs,\n\t\tSales_Net_Revenue = Total_Net_Revenue,\n\t\tSales_Net_Revenue_Per_Unit,\n\t\tCurrency_Code,\n\t\tBudget_Sales_Quantity = Budget_Units_Sold,\n\t\tBudget_Sales_Revenue,\n\t\tBudget_Sales_Costs,\n\t\tInsert_Datetime,\n\t\tSource_File = Work_Book,\n\t\tSource_Sub_File = Work_Sheet,\n\t\tProcess_Name,\n\t\tError_Desc = ConcatenatedMessage\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectedOutputColumnsError\nDataTypeTransformations keyGenerate(output(RowNumber as long),\n\tstartAt: 1L,\n\tpartitionBy('hash', 1)) ~> GenerateRowNumber\nGenerateRowNumber filter(RowNumber > 1 && \r\nnot(isNull(Asset_ID)) && not(isNull(Fund_ID)) && not(isNull(Reporting_Period)) && \r\n(not(isNull(Sales_Type)) || not(isNull(Sales_UOM)) || not(isNull(Sales_Point)) || \r\nnot(isNull(Total_Units_Sold)) || not(isNull(Total_Revenue)) || not(isNull(Total_Sales_Costs)) || \r\nnot(isNull(Total_Net_Revenue)) || not(isNull(Sales_Net_Revenue_Per_Unit)) || not(isNull(Currency_Code)) || not(isNull(Budget_Units_Sold)) || \r\nnot(isNull(Budget_Sales_Revenue)) || not(isNull(Budget_Sales_Costs))\r\n)) ~> ExcludeFirstRowandEmpty\nSelectWorksheetAsset aggregate(groupBy(Asset_ID,\n\t\tFund_ID,\n\t\tWork_Book,\n\t\tWork_Sheet),\n\tAggCount = count()) ~> AggregateSetUniqueWorksheetAsset\nExcludeFirstRowandEmpty select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tWork_Book,\n\t\tWork_Sheet\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectWorksheetAsset\nFilterBlankAssetFund select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tWork_Book,\n\t\tWork_Sheet\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectUniqueWorksheetAsset\nSourceDataTab derive(Reporting_Period = toDate(Reporting_Period),\n\t\tInsert_Datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tWork_Book = $WorkbookName,\n\t\tWork_Sheet = $TabName,\n\t\tProcess_Name = concatWS('-',$MasterPipeline,$WorkbookName,$TabName),\n\t\tCurrentReportingPeriod = toDate($CurrentQuarterDate),\n\t\tTotal_Units_Sold = toDecimal(Total_Units_Sold,19,4),\n\t\tTotal_Revenue = toDecimal(Total_Revenue,19,4),\n\t\tTotal_Sales_Costs = toDecimal(Total_Sales_Costs,19,4),\n\t\tTotal_Net_Revenue = toDecimal(Total_Net_Revenue,19,4),\n\t\tSales_Net_Revenue_Per_Unit = toDecimal(Sales_Net_Revenue_Per_Unit,19,4),\n\t\tBudget_Units_Sold = toDecimal(Budget_Units_Sold,19,4),\n\t\tBudget_Sales_Revenue = toDecimal(Budget_Sales_Revenue,19,4),\n\t\tBudget_Sales_Costs = toDecimal(Budget_Sales_Costs,19,4)) ~> DataTypeTransformations\nAggregateSetUniqueWorksheetAsset filter(not(isNull(Asset_ID)) && not(isNull(Fund_ID))) ~> FilterBlankAssetFund\nSelectedColumnsOutputInsert sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tformat: 'parquet',\n\tpartitionFileNames:[(concatWS(\"_\", $WorkbookName, $TabName,$CurrentQuarterDate,'LoadReady'))],\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tSales_Type,\n\t\tSales_UOM,\n\t\tSales_Point,\n\t\tTotal_Units_Sold,\n\t\tSales_revenue,\n\t\tSales_Cost,\n\t\tSales_Net_Revenue,\n\t\tSales_Net_Revenue_Per_Unit,\n\t\tCurrency_Code,\n\t\tBudget_Sales_Quantity,\n\t\tBudget_Sales_Revenue,\n\t\tBudget_Sales_Costs,\n\t\tInsert_Datetime,\n\t\tProcess_Name\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetPersistentParquetInsert\nSelectedOutputColumnsError sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tSales_Type,\n\t\tSales_UOM,\n\t\tSales_Point,\n\t\tTotal_Units_Sold,\n\t\tSales_revenue,\n\t\tSales_Cost,\n\t\tSales_Net_Revenue,\n\t\tSales_Net_Revenue_Per_Unit,\n\t\tCurrency_Code,\n\t\tBudget_Sales_Quantity,\n\t\tBudget_Sales_Revenue,\n\t\tBudget_Sales_Costs,\n\t\tInsert_Datetime,\n\t\tSource_File,\n\t\tSource_Sub_File,\n\t\tProcess_Name,\n\t\tError_Desc\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> ErrorTable\nSelectUniqueWorksheetAsset sink(input(\n\t\tWork_Book as string,\n\t\tWork_Sheet as string,\n\t\tAsset_Id as string,\n\t\tFund_Id as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tWork_Book,\n\t\tWork_Sheet,\n\t\tAsset_Id = Asset_ID,\n\t\tFund_Id = Fund_ID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> OpsWorkbookWorksheetList"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadXlsxOtherSales_Step2_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "ParquetPersistentOpsWithTabParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "SourceReadyLoad"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLtableGenericWithParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "TargetRelational"
+						}
+					],
+					"transformations": [
+						{
+							"name": "SelectKeyColumnsForDelete"
+						},
+						{
+							"name": "AggregateAssetFundReportingPeriod"
+						},
+						{
+							"name": "AlterRowDelete"
+						}
+					],
+					"script": "parameters{\n\tWorkbookName as string,\n\tTabName as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as date,\n\t\tSales_Type as string,\n\t\tSales_UOM as string,\n\t\tSales_Point as string,\n\t\tTotal_Units_Sold as decimal(19,4),\n\t\tSales_revenue as decimal(19,4),\n\t\tSales_Cost as decimal(19,4),\n\t\tSales_Net_Revenue as decimal(19,4),\n\t\tSales_Net_Revenue_Per_Unit as decimal(19,4),\n\t\tCurrency_Code as string,\n\t\tBudget_Sales_Quantity as decimal(19,4),\n\t\tBudget_Sales_Revenue as decimal(19,4),\n\t\tBudget_Sales_Costs as decimal(19,4),\n\t\tInsert_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tformat: 'parquet',\n\tpartitionBy('hash', 1)) ~> SourceReadyLoad\nSourceReadyLoad select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectKeyColumnsForDelete\nSelectKeyColumnsForDelete aggregate(groupBy(Asset_ID,\n\t\tFund_ID,\n\t\tReporting_Period),\n\tUniqueCount = count()) ~> AggregateAssetFundReportingPeriod\nAggregateAssetFundReportingPeriod alterRow(deleteIf(UniqueCount>0)) ~> AlterRowDelete\nAlterRowDelete sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:true,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:false,\n\tkeys:['Asset_ID','Fund_ID','Reporting_Period'],\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetRelational"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadXlsxOtherSales_Step3_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "ParquetPersistentOpsWithTabParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "SourceReadyLoad"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLtableGenericWithParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "TargetRelational"
+						}
+					],
+					"transformations": [
+						{
+							"name": "MapColumns"
+						}
+					],
+					"script": "parameters{\n\tWorkbookName as string,\n\tTabName as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as date,\n\t\tSales_Type as string,\n\t\tSales_UOM as string,\n\t\tSales_Point as string,\n\t\tTotal_Units_Sold as decimal(19,4),\n\t\tSales_revenue as decimal(19,4),\n\t\tSales_Cost as decimal(19,4),\n\t\tSales_Net_Revenue as decimal(19,4),\n\t\tSales_Net_Revenue_Per_Unit as decimal(19,4),\n\t\tCurrency_Code as string,\n\t\tBudget_Sales_Quantity as decimal(19,4),\n\t\tBudget_Sales_Revenue as decimal(19,4),\n\t\tBudget_Sales_Costs as decimal(19,4),\n\t\tInsert_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tformat: 'parquet',\n\tpartitionBy('hash', 1)) ~> SourceReadyLoad\nSourceReadyLoad select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tSales_Type,\n\t\tSales_UOM,\n\t\tSales_Point,\n\t\tTotal_Units_Sold,\n\t\tSales_revenue,\n\t\tSales_Cost,\n\t\tSales_Net_Revenue,\n\t\tSales_Net_Revenue_Per_Unit,\n\t\tCurrency_Code,\n\t\tBudget_Sales_Quantity,\n\t\tBudget_Sales_Revenue,\n\t\tBudget_Sales_Costs,\n\t\tInsert_Datetime,\n\t\tProcess_Name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> MapColumns\nMapColumns sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tSales_Type,\n\t\tSales_UOM,\n\t\tSales_Point,\n\t\tTotal_Units_Sold,\n\t\tSales_revenue,\n\t\tSales_Cost,\n\t\tSales_Net_Revenue,\n\t\tSales_Net_Revenue_Per_Unit,\n\t\tCurrency_Code,\n\t\tBudget_Sales_Quantity,\n\t\tBudget_Sales_Revenue,\n\t\tBudget_Sales_Costs,\n\t\tInsert_Datetime,\n\t\tProcess_Name\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetRelational"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadXlsxRelatedPartyTrans_Step1_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "ParquetPersistentOpsWithTabParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "SourceDataTab"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "ParquetPersistentOps_ds",
+								"type": "DatasetReference"
+							},
+							"name": "TargetPersistentParquetInsert"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLauditopserror_RelatedPartyTrans_ds",
+								"type": "DatasetReference"
+							},
+							"name": "ErrorTable"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLauditopsworkbookworksheetlist_ds",
+								"type": "DatasetReference"
+							},
+							"name": "OpsWorkbookWorksheetList"
+						}
+					],
+					"transformations": [
+						{
+							"name": "ValidateMandatoryColumns",
+							"description": "ReportingDateCertificationIDValidateMsg is a test and should be considered as part of the conditional split Insert/Update activity"
+						},
+						{
+							"name": "SegregateValidInvalidRows"
+						},
+						{
+							"name": "SelectedColumnsOutputInsert"
+						},
+						{
+							"name": "ConcatenateInvalidColumnsMessage"
+						},
+						{
+							"name": "SelectedOutputColumnsError"
+						},
+						{
+							"name": "GenerateRowNumber"
+						},
+						{
+							"name": "ExcludeFirstRow"
+						},
+						{
+							"name": "AggregateSetUniqueWorksheetAsset"
+						},
+						{
+							"name": "SelectWorksheetAsset"
+						},
+						{
+							"name": "SelectUniqueWorksheetAsset"
+						},
+						{
+							"name": "DateTypeTransform"
+						}
+					],
+					"script": "parameters{\n\tMasterUtcTag as string,\n\tCurrentRunDateTime as string,\n\tWorkbookName as string,\n\tTabName as string,\n\tCurrentQuarterDate as string,\n\tMasterPipeline as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as string,\n\t\tValidation_Flag as string,\n\t\tReporting_Period2 as string,\n\t\tTransaction_Date as string,\n\t\tRelated_Parties_Involved as string,\n\t\tTransaction_Description as string,\n\t\tTransaction_Size_Value as string,\n\t\tHow_Managed as string,\n\t\tHow_does_the_transaction_benefit_both_parties as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tformat: 'parquet',\n\tpartitionBy('hash', 1)) ~> SourceDataTab\nExcludeFirstRow derive(AssetReportingDateValidateMsg = iif(isNull(Asset_ID) || isNull(Fund_ID) || isNull(Reporting_Period), \"Invalid Asset or Reporting Period/\", \"\")) ~> ValidateMandatoryColumns\nValidateMandatoryColumns split(length(concatWS('',AssetReportingDateValidateMsg)) == 0,\n\tdisjoint: false) ~> SegregateValidInvalidRows@(ValidRows, InvalidRows)\nSegregateValidInvalidRows@ValidRows select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tValidation_Flag,\n\t\tTransaction_Date,\n\t\tRelated_Parties_Involved,\n\t\tTransaction_Description,\n\t\tTransaction_Size_Value,\n\t\tHow_Managed,\n\t\tHow_does_the_transaction_benefit_both_parties,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tWork_Book,\n\t\tWork_Sheet,\n\t\tProcess_Name,\n\t\tCurrentReportingPeriod,\n\t\tRowNumber,\n\t\tAssetReportingDateValidateMsg\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectedColumnsOutputInsert\nSegregateValidInvalidRows@InvalidRows derive(ConcatenatedMessage = concat(AssetReportingDateValidateMsg)) ~> ConcatenateInvalidColumnsMessage\nConcatenateInvalidColumnsMessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tTransaction_Date,\n\t\tRelated_Parties_Involved,\n\t\tTransaction_Description,\n\t\tTransaction_Size_Value,\n\t\tHow_Managed,\n\t\tHow_does_the_transaction_benefit_both_parties,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tWork_Book,\n\t\tWork_Sheet,\n\t\tProcess_Name,\n\t\tCurrentReportingPeriod,\n\t\tRowNumber,\n\t\tAssetReportingDateValidateMsg,\n\t\tConcatenatedMessage\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectedOutputColumnsError\nDateTypeTransform keyGenerate(output(RowNumber as long),\n\tstartAt: 1L,\n\tpartitionBy('hash', 1)) ~> GenerateRowNumber\nGenerateRowNumber filter(RowNumber > 1 &&\r\nnot(isNull(Asset_ID)) && not(isNull(Fund_ID)) && not(isNull(Reporting_Period)) &&\r\n(not(isNull(Transaction_Date)) || not(isNull(Related_Parties_Involved)) || not(isNull(Transaction_Description)) ||\r\nnot(isNull(Transaction_Size_Value)) || not(isNull(How_Managed)) || not(isNull(How_does_the_transaction_benefit_both_parties))\r\n)) ~> ExcludeFirstRow\nSelectWorksheetAsset aggregate(groupBy(Asset_ID,\n\t\tFund_ID,\n\t\tWork_Book,\n\t\tWork_Sheet),\n\tAggCount = count()) ~> AggregateSetUniqueWorksheetAsset\nExcludeFirstRow select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tWork_Book,\n\t\tWork_Sheet\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectWorksheetAsset\nAggregateSetUniqueWorksheetAsset select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tWork_Book,\n\t\tWork_Sheet\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectUniqueWorksheetAsset\nSourceDataTab derive(Insert_Datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tUpdate_Datetime = toTimestamp('9999-12-31 00:00:00'),\n\t\tWork_Book = $WorkbookName,\n\t\tWork_Sheet = $TabName,\n\t\tProcess_Name = concatWS('-',$MasterPipeline,$WorkbookName,$TabName),\n\t\tCurrentReportingPeriod = toDate($CurrentQuarterDate),\n\t\tReporting_Period = toDate(Reporting_Period),\n\t\tTransaction_Date = toDate(Transaction_Date),\n\t\tRelated_Parties_Involved = Related_Parties_Involved,\n\t\tTransaction_Description = Transaction_Description,\n\t\tTransaction_Size_Value = toDecimal(Transaction_Size_Value, 19, 4),\n\t\tHow_Managed = How_Managed,\n\t\tHow_does_the_transaction_benefit_both_parties = How_does_the_transaction_benefit_both_parties) ~> DateTypeTransform\nSelectedColumnsOutputInsert sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tformat: 'parquet',\n\tpartitionFileNames:[(concatWS(\"_\", $WorkbookName, $TabName,$CurrentQuarterDate,'LoadReady'))],\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tValidation_Flag,\n\t\tTransaction_Date,\n\t\tRelated_Parties_Involved,\n\t\tTransaction_Description,\n\t\tTransaction_Size_Value,\n\t\tHow_Managed,\n\t\tHow_does_the_transaction_benefit_both_parties,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tWork_Book,\n\t\tWork_Sheet,\n\t\tProcess_Name,\n\t\tCurrentReportingPeriod,\n\t\tRowNumber,\n\t\tAssetReportingDateValidateMsg\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetPersistentParquetInsert\nSelectedOutputColumnsError sink(input(\n\t\tError_ID as long,\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tTransaction_ID as integer,\n\t\tReporting_Period as date,\n\t\tTransaction_Date as date,\n\t\tRelated_Parties_Involved as string,\n\t\tTransaction_Description as string,\n\t\tTransaction_Size as decimal(19,4),\n\t\tHow_Managed as string,\n\t\tMutual_Benefit as string,\n\t\tInsert_Datetime as timestamp,\n\t\tProcess_Name as string,\n\t\tSource_File as string,\n\t\tSource_Sub_File as string,\n\t\tError_Desc as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tTransaction_Date,\n\t\tRelated_Parties_Involved,\n\t\tTransaction_Description,\n\t\tTransaction_Size = Transaction_Size_Value,\n\t\tHow_Managed,\n\t\tMutual_Benefit = How_does_the_transaction_benefit_both_parties,\n\t\tInsert_Datetime,\n\t\tProcess_Name,\n\t\tSource_File = Work_Book,\n\t\tSource_Sub_File = Work_Sheet,\n\t\tError_Desc = AssetReportingDateValidateMsg\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> ErrorTable\nSelectUniqueWorksheetAsset sink(input(\n\t\tWork_Book as string,\n\t\tWork_Sheet as string,\n\t\tAsset_Id as string,\n\t\tFund_Id as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tWork_Book,\n\t\tWork_Sheet,\n\t\tAsset_Id = Asset_ID,\n\t\tFund_Id = Fund_ID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> OpsWorkbookWorksheetList"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadXlsxRiskOps_Step1_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "ParquetPersistentOpsWithTabParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "SourceDataTab"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLtableGeneric_ds",
+								"type": "DatasetReference"
+							},
+							"name": "RelationalRiskOpsRegister"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "ParquetPersistentOps_ds",
+								"type": "DatasetReference"
+							},
+							"name": "TargetPersistentParquetInsert"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLtableGenericWithParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "ErrorTable"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLauditopsworkbookworksheetlist_ds",
+								"type": "DatasetReference"
+							},
+							"name": "OpsWorkbookWorksheetList"
+						},
+						{
+							"dataset": {
+								"referenceName": "ParquetPersistentOps_ds",
+								"type": "DatasetReference"
+							},
+							"name": "TargetPersistenParquetUpdate"
+						}
+					],
+					"transformations": [
+						{
+							"name": "ValidateMandatoryColumns",
+							"description": "ReportingDateCertificationIDValidateMsg is a test and should be considered as part of the conditional split Insert/Update activity"
+						},
+						{
+							"name": "SegregateValidInvalidRows"
+						},
+						{
+							"name": "SelectedColumnsOutputInsert"
+						},
+						{
+							"name": "ConcatenateInvalidColumnsMessage"
+						},
+						{
+							"name": "SelectedOutputColumnsError"
+						},
+						{
+							"name": "GenerateRowNumber"
+						},
+						{
+							"name": "ExcludeFirstRowandEmpty"
+						},
+						{
+							"name": "AggregateSetUniqueWorksheetAsset"
+						},
+						{
+							"name": "SelectWorksheetAsset"
+						},
+						{
+							"name": "SelectUniqueWorksheetAsset"
+						},
+						{
+							"name": "DateTypeTransform"
+						},
+						{
+							"name": "SplitInsertAndUpdate",
+							"description": "1. The condition assume that the records from the current reporting period are deleted first if any (asset id, fund id, current reporting period)\n2. Records where reporting period equal current reporting period (disregard certification id) are inserted/reinserted after delete in 1\n3. Remaining records are not from current reporting period and the certification ids must not be null. These are updated"
+						},
+						{
+							"name": "SelectColumnsOutputUpdate"
+						},
+						{
+							"name": "UpdateDatetimeValue"
+						},
+						{
+							"name": "LookupRiskOp"
+						},
+						{
+							"name": "SelectRiskOpsLookup"
+						},
+						{
+							"name": "FilterBlankAssetFund"
+						}
+					],
+					"script": "parameters{\n\tMasterUtcTag as string,\n\tCurrentRunDateTime as string,\n\tWorkbookName as string,\n\tTabName as string,\n\tCurrentQuarterDate as string,\n\tMasterPipeline as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as string,\n\t\tRisk_Opp_ID as string,\n\t\tValidation_Flag as string,\n\t\tRisk_Sub_Class as string,\n\t\tRisk_Class as string,\n\t\tRisk_Description as string,\n\t\tActions_and_Controls as string,\n\t\tDate_Lodged as string,\n\t\tLikelihood as string,\n\t\tSeverity as string,\n\t\tInherent_Risk_Rating as string,\n\t\tEliminate_or_Mitigate as string,\n\t\tResidual_Likelihood as string,\n\t\tResidual_Severity as string,\n\t\tResidual_Risk_Rating as string,\n\t\tFuture_Controls as string,\n\t\tPerson_Responsible as string,\n\t\tDate_Closed as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tformat: 'parquet',\n\tpartitionBy('hash', 1)) ~> SourceDataTab\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as date,\n\t\tRisk_Ops_Sub_Class_Code as string,\n\t\tRisk_Ops_Descripton as string,\n\t\tActions_Controls as string,\n\t\tDate_Lodged as date,\n\t\tLikelihood as short,\n\t\tSeverity as short,\n\t\tInherent_Risk_Rating as short,\n\t\tEliminate_Mitigate as string,\n\t\tResidual_Likelihood as short,\n\t\tResidual_Severity as short,\n\t\tResidual_Risk_Rating as short,\n\t\tFuture_Controls as string,\n\t\tPerson_Responsible as string,\n\t\tDate_Closed as date,\n\t\tQuarterly_Incidents as integer,\n\t\tRisk_Opps_Flag as string,\n\t\tInsert_Datetime as timestamp,\n\t\tRisk_Opp_ID as integer,\n\t\tRisk_Opp_Class as string,\n\t\tRisk_Opp_Sub_Class as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT [Asset_ID]\\n      ,[Fund_ID]\\n      ,[Reporting_Period]\\n      ,[Risk_Ops_Sub_Class_Code]\\n      ,[Risk_Ops_Descripton]\\n      ,[Actions_Controls]\\n      ,[Date_Lodged]\\n      ,[Likelihood]\\n      ,[Severity]\\n      ,[Inherent_Risk_Rating]\\n      ,[Eliminate_Mitigate]\\n      ,[Residual_Likelihood]\\n      ,[Residual_Severity]\\n      ,[Residual_Risk_Rating]\\n      ,[Future_Controls]\\n      ,[Person_Responsible]\\n      ,[Date_Closed]\\n      ,[Quarterly_Incidents]\\n      ,[Risk_Opps_Flag]\\n      ,[Insert_Datetime]\\n      ,[Risk_Opp_ID]\\n      ,[Risk_Opp_Class]\\n      ,[Risk_Opp_Sub_Class]\\n  FROM [relational].[OPS_Risk_Opportunity_Register]',\n\tformat: 'query') ~> RelationalRiskOpsRegister\nLookupRiskOp derive(Risk_Class_Validate_Msg = iif(isNull(Risk_Class),'Risk Class/',''),\n\t\tDate_Lodged_Validate_Msg = iif(isNull(Date_Lodged),'Date Lodged/',''),\n\t\tAssetReportingDateValidateMsg = iif(isNull(Asset_ID) || isNull(Fund_ID) || isNull(Reporting_Period), \"Invalid Asset or Reporting Period/\", \"\"),\n\t\tReportingDateContractIDValidateMsg = iif(iif(CurrentReportingPeriod != Reporting_Period, true(), false()) && isNull(Risk_Opp_ID),\"Null Contract ID for non-current Reporting Period/\",\"\"),\n\t\tLkpRelationalContractIDValidateMsg = iif(not(isNull(Risk_Opp_ID_Lkp)),\r\niif(equals(concat(Asset_ID_Lkp,Fund_ID_Lkp), concat(Asset_ID,Fund_ID)),\"\",\"Contract ID not belong to Asset/\"),\"\")) ~> ValidateMandatoryColumns\nValidateMandatoryColumns split(length(concatWS('',Risk_Class_Validate_Msg,Date_Lodged_Validate_Msg,AssetReportingDateValidateMsg,ReportingDateContractIDValidateMsg,LkpRelationalContractIDValidateMsg)) == 0,\n\tdisjoint: false) ~> SegregateValidInvalidRows@(ValidRows, InvalidRows)\nSplitInsertAndUpdate@Insert select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tRisk_Opp_Sub_Class = Risk_Sub_Class,\n\t\tRisk_Opp_Class = Risk_Class,\n\t\tRisk_Ops_Descripton = Risk_Description,\n\t\tActions_Controls = Actions_and_Controls,\n\t\tDate_Lodged,\n\t\tLikelihood,\n\t\tSeverity,\n\t\tInherent_Risk_Rating,\n\t\tEliminate_Mitigate = Eliminate_or_Mitigate,\n\t\tResidual_Likelihood,\n\t\tResidual_Severity,\n\t\tResidual_Risk_Rating,\n\t\tFuture_Controls,\n\t\tPerson_Responsible,\n\t\tDate_Closed,\n\t\tInsert_Datetime,\n\t\tProcess_Name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectedColumnsOutputInsert\nSegregateValidInvalidRows@InvalidRows derive(ConcatenatedMessage = concat(Risk_Class_Validate_Msg,Date_Lodged_Validate_Msg,AssetReportingDateValidateMsg,ReportingDateContractIDValidateMsg,LkpRelationalContractIDValidateMsg)) ~> ConcatenateInvalidColumnsMessage\nConcatenateInvalidColumnsMessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tRisk_Opp_ID,\n\t\tRisk_Ops_Sub_Class = Risk_Sub_Class,\n\t\tRisk_Opp_Class = Risk_Class,\n\t\tRisk_Ops_Descripton = Risk_Description,\n\t\tActions_Controls = Actions_and_Controls,\n\t\tDate_Lodged,\n\t\tLikelihood,\n\t\tSeverity,\n\t\tInherent_Risk_Rating,\n\t\tEliminate_Mitigate = Eliminate_or_Mitigate,\n\t\tResidual_Likelihood,\n\t\tResidual_Severity,\n\t\tResidual_Risk_Rating,\n\t\tFuture_Controls,\n\t\tPerson_Responsible,\n\t\tDate_Closed,\n\t\tInsert_Datetime,\n\t\tSource_File = Work_Book,\n\t\tSource_Sub_File = Work_Sheet,\n\t\tProcess_Name,\n\t\tError_Desc = ConcatenatedMessage\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectedOutputColumnsError\nDateTypeTransform keyGenerate(output(RowNumber as long),\n\tstartAt: 1L,\n\tpartitionBy('hash', 1)) ~> GenerateRowNumber\nGenerateRowNumber filter(RowNumber > 1 && \r\nnot(isNull(Asset_ID)) && not(isNull(Fund_ID)) && not(isNull(Reporting_Period)) && \r\n(not(isNull(Risk_Opp_ID)) || not(isNull(Risk_Sub_Class)) || not(isNull(Risk_Class)) || \r\nnot(isNull(Risk_Description)) || not(isNull(Actions_and_Controls)) || not(isNull(Date_Lodged)) || \r\nnot(isNull(Likelihood)) || not(isNull(Severity)) || not(isNull(Inherent_Risk_Rating)) || not(isNull(Eliminate_or_Mitigate)) || \r\nnot(isNull(Residual_Likelihood)) || not(isNull(Residual_Severity)) || not(isNull(Residual_Risk_Rating)) || \r\nnot(isNull(Future_Controls)) || not(isNull(Person_Responsible)) || not(isNull(Date_Closed))\r\n)) ~> ExcludeFirstRowandEmpty\nSelectWorksheetAsset aggregate(groupBy(Asset_ID,\n\t\tFund_ID,\n\t\tWork_Book,\n\t\tWork_Sheet),\n\tAggCount = count()) ~> AggregateSetUniqueWorksheetAsset\nExcludeFirstRowandEmpty select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tWork_Book,\n\t\tWork_Sheet\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectWorksheetAsset\nFilterBlankAssetFund select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tWork_Book,\n\t\tWork_Sheet\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectUniqueWorksheetAsset\nSourceDataTab derive(Risk_Opp_ID = toInteger(Risk_Opp_ID),\n\t\tReporting_Period = toDate(Reporting_Period),\n\t\tLikelihood = toShort(Likelihood),\n\t\tSeverity = toShort(Severity),\n\t\tInherent_Risk_Rating = toShort(Inherent_Risk_Rating),\n\t\tResidual_Likelihood = toShort(Residual_Likelihood),\n\t\tResidual_Severity = toShort(Residual_Severity),\n\t\tResidual_Risk_Rating = toShort(Residual_Risk_Rating),\n\t\tDate_Closed = toDate(Date_Closed),\n\t\tDate_Lodged = toDate(Date_Lodged),\n\t\tInsert_Datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tUpdate_Datetime = toTimestamp('9999-12-31 00:00:00'),\n\t\tWork_Book = $WorkbookName,\n\t\tWork_Sheet = $TabName,\n\t\tProcess_Name = concatWS('-',$MasterPipeline,$WorkbookName,$TabName),\n\t\tCurrentReportingPeriod = toDate($CurrentQuarterDate)) ~> DateTypeTransform\nSegregateValidInvalidRows@ValidRows split(equals(Reporting_Period, CurrentReportingPeriod),\n\tdisjoint: false) ~> SplitInsertAndUpdate@(Insert, Update)\nUpdateDatetimeValue select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tRisk_Opp_ID,\n\t\tRisk_Opp_Sub_Class = Risk_Sub_Class,\n\t\tRisk_Opp_Class = Risk_Class,\n\t\tRisk_Ops_Descripton = Risk_Description,\n\t\tActions_Controls = Actions_and_Controls,\n\t\tDate_Lodged,\n\t\tLikelihood,\n\t\tSeverity,\n\t\tInherent_Risk_Rating,\n\t\tEliminate_Mitigate = Eliminate_or_Mitigate,\n\t\tResidual_Likelihood,\n\t\tResidual_Severity,\n\t\tResidual_Risk_Rating,\n\t\tFuture_Controls,\n\t\tPerson_Responsible,\n\t\tDate_Closed,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tProcess_Name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectColumnsOutputUpdate\nSplitInsertAndUpdate@Update derive(Update_Datetime = fromUTC(currentUTC(), 'Australia/Sydney')) ~> UpdateDatetimeValue\nExcludeFirstRowandEmpty, SelectRiskOpsLookup lookup(Risk_Opp_ID == Risk_Opp_ID_Lkp,\n\tmultiple: false,\n\tpickup: 'any',\n\tbroadcast: 'auto')~> LookupRiskOp\nRelationalRiskOpsRegister select(mapColumn(\n\t\tAsset_ID_Lkp = Asset_ID,\n\t\tFund_ID_Lkp = Fund_ID,\n\t\tReporting_Period_Lkp = Reporting_Period,\n\t\tRisk_Ops_Sub_Class_Code_Lkp = Risk_Ops_Sub_Class_Code,\n\t\tRisk_Ops_Descripton_Lkp = Risk_Ops_Descripton,\n\t\tActions_Controls_Lkp = Actions_Controls,\n\t\tDate_Lodged_Lkp = Date_Lodged,\n\t\tLikelihood_Lkp = Likelihood,\n\t\tSeverity_Lkp = Severity,\n\t\tInherent_Risk_Rating_Lkp = Inherent_Risk_Rating,\n\t\tEliminate_Mitigate_Lkp = Eliminate_Mitigate,\n\t\tResidual_Likelihood_Lkp = Residual_Likelihood,\n\t\tResidual_Severity_Lkp = Residual_Severity,\n\t\tResidual_Risk_Rating_Lkp = Residual_Risk_Rating,\n\t\tFuture_Controls_Lkp = Future_Controls,\n\t\tPerson_Responsible_Lkp = Person_Responsible,\n\t\tDate_Closed_Lkp = Date_Closed,\n\t\tQuarterly_Incidents_Lkp = Quarterly_Incidents,\n\t\tRisk_Opps_Flag_Lkp = Risk_Opps_Flag,\n\t\tInsert_Datetime_Lkp = Insert_Datetime,\n\t\tRisk_Opp_ID_Lkp = Risk_Opp_ID,\n\t\tRisk_Opp_Class_Lkp = Risk_Opp_Class,\n\t\tRisk_Opp_Sub_Class_Lkp = Risk_Opp_Sub_Class\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectRiskOpsLookup\nAggregateSetUniqueWorksheetAsset filter(not(isNull(Asset_ID)) && not(isNull(Fund_ID))) ~> FilterBlankAssetFund\nSelectedColumnsOutputInsert sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tformat: 'parquet',\n\tpartitionFileNames:[(concatWS(\"_\", $WorkbookName, $TabName,$CurrentQuarterDate,'LoadReady'))],\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tRisk_Opp_Sub_Class,\n\t\tRisk_Opp_Class,\n\t\tRisk_Ops_Descripton,\n\t\tActions_Controls,\n\t\tDate_Lodged,\n\t\tLikelihood,\n\t\tSeverity,\n\t\tInherent_Risk_Rating,\n\t\tEliminate_Mitigate,\n\t\tResidual_Likelihood,\n\t\tResidual_Severity,\n\t\tResidual_Risk_Rating,\n\t\tFuture_Controls,\n\t\tPerson_Responsible,\n\t\tDate_Closed,\n\t\tInsert_Datetime,\n\t\tProcess_Name\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetPersistentParquetInsert\nSelectedOutputColumnsError sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tRisk_Opp_ID,\n\t\tRisk_Ops_Sub_Class,\n\t\tRisk_Opp_Class,\n\t\tRisk_Ops_Descripton,\n\t\tActions_Controls,\n\t\tDate_Lodged,\n\t\tLikelihood,\n\t\tSeverity,\n\t\tInherent_Risk_Rating,\n\t\tEliminate_Mitigate,\n\t\tResidual_Likelihood,\n\t\tResidual_Severity,\n\t\tResidual_Risk_Rating,\n\t\tFuture_Controls,\n\t\tPerson_Responsible,\n\t\tDate_Closed,\n\t\tInsert_Datetime,\n\t\tSource_File,\n\t\tSource_Sub_File,\n\t\tProcess_Name,\n\t\tError_Desc\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> ErrorTable\nSelectUniqueWorksheetAsset sink(input(\n\t\tWork_Book as string,\n\t\tWork_Sheet as string,\n\t\tAsset_Id as string,\n\t\tFund_Id as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tWork_Book,\n\t\tWork_Sheet,\n\t\tAsset_Id = Asset_ID,\n\t\tFund_Id = Fund_ID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> OpsWorkbookWorksheetList\nSelectColumnsOutputUpdate sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tformat: 'parquet',\n\tpartitionFileNames:[(concatWS(\"_\", $WorkbookName, $TabName,$CurrentQuarterDate,'Update'))],\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tRisk_Opp_ID,\n\t\tRisk_Opp_Sub_Class,\n\t\tRisk_Opp_Class,\n\t\tRisk_Ops_Descripton,\n\t\tActions_Controls,\n\t\tDate_Lodged,\n\t\tLikelihood,\n\t\tSeverity,\n\t\tInherent_Risk_Rating,\n\t\tEliminate_Mitigate,\n\t\tResidual_Likelihood,\n\t\tResidual_Severity,\n\t\tResidual_Risk_Rating,\n\t\tFuture_Controls,\n\t\tPerson_Responsible,\n\t\tDate_Closed,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tProcess_Name\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetPersistenParquetUpdate"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadXlsxRiskOps_Step1_df_old')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "ParquetPersistentOpsWithTabParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "SourceDataTab"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLtableGeneric_ds",
+								"type": "DatasetReference"
+							},
+							"name": "RelationalOpsCertificationType"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLtableGeneric_ds",
+								"type": "DatasetReference"
+							},
+							"name": "RelationalCertification"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "ParquetPersistentOps_ds",
+								"type": "DatasetReference"
+							},
+							"name": "TargetPersistentParquetInsert"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLauditopserror_Certifications_ds",
+								"type": "DatasetReference"
+							},
+							"name": "ErrorTable"
+						},
+						{
+							"dataset": {
+								"referenceName": "SQLauditopsworkbookworksheetlist_ds",
+								"type": "DatasetReference"
+							},
+							"name": "OpsWorkbookWorksheetList"
+						},
+						{
+							"dataset": {
+								"referenceName": "ParquetPersistentOps_ds",
+								"type": "DatasetReference"
+							},
+							"name": "TargetPersistenParquetUpdate"
+						}
+					],
+					"transformations": [
+						{
+							"name": "ValidateMandatoryColumns",
+							"description": "ReportingDateCertificationIDValidateMsg is a test and should be considered as part of the conditional split Insert/Update activity"
+						},
+						{
+							"name": "SegregateValidInvalidRows"
+						},
+						{
+							"name": "SelectedColumnsOutputInsert"
+						},
+						{
+							"name": "ConcatenateInvalidColumnsMessage"
+						},
+						{
+							"name": "SelectedOutputColumnsError"
+						},
+						{
+							"name": "GenerateRowNumber"
+						},
+						{
+							"name": "ExcludeFirstRow"
+						},
+						{
+							"name": "AggregateSetUniqueWorksheetAsset"
+						},
+						{
+							"name": "SelectWorksheetAsset"
+						},
+						{
+							"name": "SelectUniqueWorksheetAsset"
+						},
+						{
+							"name": "DateTypeTransform"
+						},
+						{
+							"name": "SelectCertificationTypeLkp"
+						},
+						{
+							"name": "LookupCertificationType"
+						},
+						{
+							"name": "SplitInsertAndUpdate",
+							"description": "1. The condition assume that the records from the current reporting period are deleted first if any (asset id, fund id, current reporting period)\n2. Records where reporting period equal current reporting period (disregard certification id) are inserted/reinserted after delete in 1\n3. Remaining records are not from current reporting period and the certification ids must not be null. These are updated"
+						},
+						{
+							"name": "SelectColumnsOutputUpdate"
+						},
+						{
+							"name": "UpdateDatetimeValue"
+						},
+						{
+							"name": "SelectCertificationLkp"
+						},
+						{
+							"name": "LookupCertification"
+						}
+					],
+					"script": "parameters{\n\tMasterUtcTag as string,\n\tCurrentRunDateTime as string,\n\tWorkbookName as string,\n\tTabName as string,\n\tCurrentQuarterDate as string,\n\tMasterPipeline as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as string,\n\t\tCertification_ID as string,\n\t\tValidation_Flag as string,\n\t\tCertification_Type as string,\n\t\tCertification_Number as string,\n\t\tNext_Audit_Date as string,\n\t\tCertifying_Body as string,\n\t\tCertification_Date as string,\n\t\tCertification_End_Date as string,\n\t\tCertified_Entity as string,\n\t\tNumber_of_Open_Minor_CARS as string,\n\t\tNumber_of_Open_Major_CARS as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tformat: 'parquet',\n\tpartitionBy('hash', 1)) ~> SourceDataTab\nsource(output(\n\t\tCertification_Type_Code as string,\n\t\tCertification_Type as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT Certification_Type_Code\\n      ,Certification_Type\\n  FROM relational.OPS_Certification_Type\\n  WHERE Active_YN = \\'Y\\'',\n\tformat: 'query',\n\tpartitionBy('hash', 1)) ~> RelationalOpsCertificationType\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as date,\n\t\tCertification_ID as integer\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT Asset_ID\\n      ,Fund_ID\\n      ,Reporting_Period\\n      ,Certification_ID\\n  FROM relational.OPS_Certification',\n\tformat: 'query') ~> RelationalCertification\nLookupCertificationType derive(CertificationTypeValidateMsg = iif(isNull(Certification_Type_Code_Lkp), \"Certification Type/\", \"\"),\n\t\tAssetReportingDateValidateMsg = iif(isNull(Asset_ID) || isNull(Fund_ID) || isNull(Reporting_Period), \"Invalid Asset or Reporting Period/\", \"\"),\n\t\tCertificationEndDateValidateMsg = iif(isNull(Certification_End_Date), \"Certification End Date/\", \"\"),\n\t\tReportingDateCertificationIDValidateMsg = iif(iif(CurrentReportingPeriod != Reporting_Period, true(), false()) && isNull(Certification_ID),\"Null Certification ID for non-current Reporting Period/\",\"\"),\n\t\tLkpRelationalCertificationIDValidateMsg = iif(not(isNull(Certification_Certification_ID_Lkp)),\r\niif(equals(concat(Certification_Asset_ID_Lkp,Certification_Fund_ID_Lkp), concat(Asset_ID,Fund_ID)),\"\",\"Certitication ID not belong to Asset/\"),\"\")) ~> ValidateMandatoryColumns\nValidateMandatoryColumns split(length(concatWS('',AssetReportingDateValidateMsg,\r\nLkpRelationalCertificationIDValidateMsg,\r\nCertificationTypeValidateMsg,\r\nCertificationEndDateValidateMsg,\r\nReportingDateCertificationIDValidateMsg)) == 0,\n\tdisjoint: false) ~> SegregateValidInvalidRows@(ValidRows, InvalidRows)\nSplitInsertAndUpdate@Insert select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tCertification_ID,\n\t\tCertification_Number,\n\t\tNext_Audit_Date,\n\t\tCertifying_Body,\n\t\tCertification_Date,\n\t\tCertification_End_Date,\n\t\tCertified_Entity,\n\t\tNumber_of_Open_Minor_CARS,\n\t\tNumber_of_Open_Major_CARS,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tProcess_Name,\n\t\tCertification_Type_Code = Certification_Type_Code_Lkp\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectedColumnsOutputInsert\nSegregateValidInvalidRows@InvalidRows derive(ConcatenatedMessage = concat(CertificationTypeValidateMsg, \r\nCertificationEndDateValidateMsg,\r\nAssetReportingDateValidateMsg,\r\nReportingDateCertificationIDValidateMsg,\r\nLkpRelationalCertificationIDValidateMsg)) ~> ConcatenateInvalidColumnsMessage\nConcatenateInvalidColumnsMessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tCertification_ID,\n\t\tValidation_Flag,\n\t\tCertification_Type,\n\t\tCertification_Number,\n\t\tNext_Audit_Date,\n\t\tCertifying_Body,\n\t\tCertification_Date,\n\t\tCertification_End_Date,\n\t\tCertified_Entity,\n\t\tNumber_of_Open_Minor_CARS,\n\t\tNumber_of_Open_Major_CARS,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tWork_Book,\n\t\tWork_Sheet,\n\t\tProcess_Name,\n\t\tRowNumber,\n\t\tCertification_Type_Code_Lkp,\n\t\tCertification_Type_Lkp,\n\t\tCertificationTypeValidateMsg,\n\t\tCertificationEndDateValidateMsg,\n\t\tConcatenatedMessage\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectedOutputColumnsError\nDateTypeTransform keyGenerate(output(RowNumber as long),\n\tstartAt: 1L,\n\tpartitionBy('hash', 1)) ~> GenerateRowNumber\nGenerateRowNumber filter(RowNumber > 1) ~> ExcludeFirstRow\nSelectWorksheetAsset aggregate(groupBy(Asset_ID,\n\t\tFund_ID,\n\t\tWork_Book,\n\t\tWork_Sheet),\n\tAggCount = count()) ~> AggregateSetUniqueWorksheetAsset\nExcludeFirstRow select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tWork_Book,\n\t\tWork_Sheet\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectWorksheetAsset\nAggregateSetUniqueWorksheetAsset select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tWork_Book,\n\t\tWork_Sheet\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectUniqueWorksheetAsset\nSourceDataTab derive(Certification_ID = toInteger(Certification_ID),\n\t\tReporting_Period = toDate(Reporting_Period),\n\t\tNext_Audit_Date = toDate(Next_Audit_Date),\n\t\tCertification_Date = toDate(Certification_Date),\n\t\tCertification_End_Date = toDate(Certification_End_Date),\n\t\tNumber_of_Open_Minor_CARS = toInteger(Number_of_Open_Minor_CARS),\n\t\tNumber_of_Open_Major_CARS = toInteger(Number_of_Open_Major_CARS),\n\t\tInsert_Datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tUpdate_Datetime = toTimestamp('9999-12-31 00:00:00'),\n\t\tWork_Book = $WorkbookName,\n\t\tWork_Sheet = $TabName,\n\t\tProcess_Name = concatWS('-',$MasterPipeline,$WorkbookName,$TabName),\n\t\tCurrentReportingPeriod = toDate($CurrentQuarterDate)) ~> DateTypeTransform\nRelationalOpsCertificationType select(mapColumn(\n\t\tCertification_Type_Code_Lkp = Certification_Type_Code,\n\t\tCertification_Type_Lkp = Certification_Type\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectCertificationTypeLkp\nLookupCertification, SelectCertificationTypeLkp lookup(Certification_Type == Certification_Type_Lkp,\n\tmultiple: false,\n\tpickup: 'first',\n\tasc(Certification_Type_Code_Lkp, false),\n\tbroadcast: 'auto')~> LookupCertificationType\nSegregateValidInvalidRows@ValidRows split(equals(Reporting_Period, CurrentReportingPeriod),\n\tdisjoint: false) ~> SplitInsertAndUpdate@(Insert, Update)\nUpdateDatetimeValue select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tCertification_ID,\n\t\tCertification_Number,\n\t\tNext_Audit_Date,\n\t\tCertifying_Body,\n\t\tCertification_Date,\n\t\tCertification_End_Date,\n\t\tCertified_Entity,\n\t\tNumber_of_Open_Minor_CARS,\n\t\tNumber_of_Open_Major_CARS,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tProcess_Name,\n\t\tCertification_Type_Code = Certification_Type_Code_Lkp\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectColumnsOutputUpdate\nSplitInsertAndUpdate@Update derive(Update_Datetime = fromUTC(currentUTC(), 'Australia/Sydney')) ~> UpdateDatetimeValue\nRelationalCertification select(mapColumn(\n\t\tCertification_Asset_ID_Lkp = Asset_ID,\n\t\tCertification_Fund_ID_Lkp = Fund_ID,\n\t\tCertification_Reporting_Period_Lkp = Reporting_Period,\n\t\tCertification_Certification_ID_Lkp = Certification_ID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectCertificationLkp\nExcludeFirstRow, SelectCertificationLkp lookup(Certification_ID == Certification_Certification_ID_Lkp,\n\tmultiple: false,\n\tpickup: 'any',\n\tbroadcast: 'auto')~> LookupCertification\nSelectedColumnsOutputInsert sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tformat: 'parquet',\n\tpartitionFileNames:[(concatWS(\"_\", $WorkbookName, $TabName,$CurrentQuarterDate,'LoadReady'))],\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tCertification_ID,\n\t\tCertification_Number,\n\t\tNext_Audit_Date,\n\t\tCertifying_Body,\n\t\tCertification_Date,\n\t\tCertification_End_Date,\n\t\tCertified_Entity,\n\t\tNumber_of_Open_Minor_CARS,\n\t\tNumber_of_Open_Major_CARS,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tProcess_Name,\n\t\tCertification_Type_Code\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetPersistentParquetInsert\nSelectedOutputColumnsError sink(input(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tCertification_ID as integer,\n\t\tReporting_Period as date,\n\t\tCertification_Type_Code as string,\n\t\tCertification_Number as string,\n\t\tNext_Audit_Date as date,\n\t\tCertifying_Body as string,\n\t\tCertification_Date as date,\n\t\tCertification_End_Date as date,\n\t\tCertified_Entity as string,\n\t\tInsert_Datetime as timestamp,\n\t\tProcess_Name as string,\n\t\tMinor_CARS as integer,\n\t\tMajor_CARS as integer,\n\t\tSource_File as string,\n\t\tSource_Sub_File as string,\n\t\tError_Desc as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tCertification_ID,\n\t\tReporting_Period,\n\t\tCertification_Type_Code = Certification_Type_Code_Lkp,\n\t\tCertification_Number,\n\t\tNext_Audit_Date,\n\t\tCertifying_Body,\n\t\tCertification_Date,\n\t\tCertification_End_Date,\n\t\tCertified_Entity,\n\t\tInsert_Datetime,\n\t\tProcess_Name,\n\t\tMinor_CARS = Number_of_Open_Minor_CARS,\n\t\tMajor_CARS = Number_of_Open_Major_CARS,\n\t\tSource_File = Work_Book,\n\t\tSource_Sub_File = Work_Sheet,\n\t\tError_Desc = ConcatenatedMessage\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> ErrorTable\nSelectUniqueWorksheetAsset sink(input(\n\t\tWork_Book as string,\n\t\tWork_Sheet as string,\n\t\tAsset_Id as string,\n\t\tFund_Id as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tWork_Book,\n\t\tWork_Sheet,\n\t\tAsset_Id = Asset_ID,\n\t\tFund_Id = Fund_ID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> OpsWorkbookWorksheetList\nSelectColumnsOutputUpdate sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tformat: 'parquet',\n\tpartitionFileNames:[(concatWS(\"_\", $WorkbookName, $TabName,$CurrentQuarterDate,'Update'))],\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tCertification_ID,\n\t\tCertification_Number,\n\t\tNext_Audit_Date,\n\t\tCertifying_Body,\n\t\tCertification_Date,\n\t\tCertification_End_Date,\n\t\tCertified_Entity,\n\t\tNumber_of_Open_Minor_CARS,\n\t\tNumber_of_Open_Major_CARS,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tProcess_Name,\n\t\tCertification_Type_Code\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetPersistenParquetUpdate"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadXlsxRiskOps_Step2_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "ParquetPersistentOpsWithTabParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "SourceReadyLoad"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLtableGenericWithParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "TargetRelationalDelete"
+						}
+					],
+					"transformations": [
+						{
+							"name": "SelectColumnsForDelete"
+						},
+						{
+							"name": "AggregateAssetFundReportingPeriod"
+						},
+						{
+							"name": "AlterRowDelete"
+						}
+					],
+					"script": "parameters{\n\tWorkbookName as string,\n\tTabName as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as date,\n\t\tRisk_Opp_Sub_Class as string,\n\t\tRisk_Opp_Class as string,\n\t\tRisk_Ops_Descripton as string,\n\t\tActions_Controls as string,\n\t\tDate_Lodged as date,\n\t\tLikelihood as short,\n\t\tSeverity as short,\n\t\tInherent_Risk_Rating as short,\n\t\tEliminate_Mitigate as string,\n\t\tResidual_Likelihood as short,\n\t\tResidual_Severity as short,\n\t\tResidual_Risk_Rating as short,\n\t\tFuture_Controls as string,\n\t\tPerson_Responsible as string,\n\t\tDate_Closed as date,\n\t\tInsert_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tformat: 'parquet',\n\tpartitionBy('hash', 1)) ~> SourceReadyLoad\nSourceReadyLoad select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectColumnsForDelete\nSelectColumnsForDelete aggregate(groupBy(Asset_ID,\n\t\tFund_ID,\n\t\tReporting_Period),\n\tUniqueCount = count()) ~> AggregateAssetFundReportingPeriod\nAggregateAssetFundReportingPeriod alterRow(deleteIf(UniqueCount>0)) ~> AlterRowDelete\nAlterRowDelete sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:true,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:false,\n\tkeys:['Asset_ID','Fund_ID','Reporting_Period'],\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetRelationalDelete"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadXlsxRiskOps_Step3_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "ParquetPersistentOpsWithTabParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "SourceReadyLoad"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLtableGenericWithParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "TargetRelational"
+						}
+					],
+					"transformations": [
+						{
+							"name": "MapColumns"
+						}
+					],
+					"script": "parameters{\n\tWorkbookName as string,\n\tTabName as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as date,\n\t\tRisk_Opp_Sub_Class as string,\n\t\tRisk_Opp_Class as string,\n\t\tRisk_Ops_Descripton as string,\n\t\tActions_Controls as string,\n\t\tDate_Lodged as date,\n\t\tLikelihood as short,\n\t\tSeverity as short,\n\t\tInherent_Risk_Rating as short,\n\t\tEliminate_Mitigate as string,\n\t\tResidual_Likelihood as short,\n\t\tResidual_Severity as short,\n\t\tResidual_Risk_Rating as short,\n\t\tFuture_Controls as string,\n\t\tPerson_Responsible as string,\n\t\tDate_Closed as date,\n\t\tInsert_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tformat: 'parquet',\n\tpartitionBy('hash', 1)) ~> SourceReadyLoad\nSourceReadyLoad select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tRisk_Opp_Sub_Class,\n\t\tRisk_Opp_Class,\n\t\tRisk_Ops_Descripton,\n\t\tActions_Controls,\n\t\tDate_Lodged,\n\t\tLikelihood,\n\t\tSeverity,\n\t\tInherent_Risk_Rating,\n\t\tEliminate_Mitigate,\n\t\tResidual_Likelihood,\n\t\tResidual_Severity,\n\t\tResidual_Risk_Rating,\n\t\tFuture_Controls,\n\t\tPerson_Responsible,\n\t\tDate_Closed,\n\t\tInsert_Datetime,\n\t\tProcess_Name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> MapColumns\nMapColumns sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tRisk_Opp_Sub_Class,\n\t\tRisk_Opp_Class,\n\t\tRisk_Ops_Descripton,\n\t\tActions_Controls,\n\t\tDate_Lodged,\n\t\tLikelihood,\n\t\tSeverity,\n\t\tInherent_Risk_Rating,\n\t\tEliminate_Mitigate,\n\t\tResidual_Likelihood,\n\t\tResidual_Severity,\n\t\tResidual_Risk_Rating,\n\t\tFuture_Controls,\n\t\tPerson_Responsible,\n\t\tDate_Closed,\n\t\tInsert_Datetime,\n\t\tProcess_Name\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetRelational"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadXlsxRiskOps_Step4_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "ParquetPersistentOpsWithTabParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "SourceUpdate"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLtableGenericWithParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "TargetRelational"
+						}
+					],
+					"transformations": [
+						{
+							"name": "MapColumns"
+						},
+						{
+							"name": "AlterRowUpdate"
+						}
+					],
+					"script": "parameters{\n\tWorkbookName as string,\n\tTabName as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as date,\n\t\tRisk_Opp_ID as integer,\n\t\tRisk_Opp_Sub_Class as string,\n\t\tRisk_Opp_Class as string,\n\t\tRisk_Ops_Descripton as string,\n\t\tActions_Controls as string,\n\t\tDate_Lodged as date,\n\t\tLikelihood as short,\n\t\tSeverity as short,\n\t\tInherent_Risk_Rating as short,\n\t\tEliminate_Mitigate as string,\n\t\tResidual_Likelihood as short,\n\t\tResidual_Severity as short,\n\t\tResidual_Risk_Rating as short,\n\t\tFuture_Controls as string,\n\t\tPerson_Responsible as string,\n\t\tDate_Closed as date,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tformat: 'parquet',\n\tpartitionBy('hash', 1)) ~> SourceUpdate\nSourceUpdate select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tRisk_Opp_ID,\n\t\tRisk_Opp_Sub_Class,\n\t\tRisk_Opp_Class,\n\t\tRisk_Ops_Descripton,\n\t\tActions_Controls,\n\t\tDate_Lodged,\n\t\tLikelihood,\n\t\tSeverity,\n\t\tInherent_Risk_Rating,\n\t\tEliminate_Mitigate,\n\t\tResidual_Likelihood,\n\t\tResidual_Severity,\n\t\tResidual_Risk_Rating,\n\t\tFuture_Controls,\n\t\tPerson_Responsible,\n\t\tDate_Closed,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tProcess_Name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> MapColumns\nMapColumns alterRow(updateIf(not(isNull(Risk_Opp_ID)))) ~> AlterRowUpdate\nAlterRowUpdate sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:false,\n\tupdateable:true,\n\tupsertable:false,\n\tkeys:['Risk_Opp_ID'],\n\tskipKeyWrites:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tRisk_Opp_ID,\n\t\tRisk_Opp_Sub_Class,\n\t\tRisk_Opp_Class,\n\t\tRisk_Ops_Descripton,\n\t\tActions_Controls,\n\t\tDate_Lodged,\n\t\tLikelihood,\n\t\tSeverity,\n\t\tInherent_Risk_Rating,\n\t\tEliminate_Mitigate,\n\t\tResidual_Likelihood,\n\t\tResidual_Severity,\n\t\tResidual_Risk_Rating,\n\t\tFuture_Controls,\n\t\tPerson_Responsible,\n\t\tDate_Closed,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tProcess_Name\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetRelational"
+				}
+			},
+			"dependsOn": []
+		}
+	]
+}

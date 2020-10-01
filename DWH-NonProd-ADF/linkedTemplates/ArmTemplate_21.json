@@ -13,6 +13,48 @@
 	},
 	"resources": [
 		{
+			"name": "[concat(parameters('factoryName'), '/dataflow1')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "Geo_sourcelandingscrubbed_geojsonmodified_ds",
+								"type": "DatasetReference"
+							},
+							"name": "geojsonmodified"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "testJson",
+								"type": "DatasetReference"
+							},
+							"name": "sink1"
+						}
+					],
+					"transformations": [
+						{
+							"name": "Select1"
+						},
+						{
+							"name": "MapDrifted2",
+							"description": "Creates an explicit mapping for each drifted column"
+						},
+						{
+							"name": "Filter1"
+						}
+					],
+					"script": "source(output(\n\t\ttype as string,\n\t\tproperties as (Asset_Id as string, Fund_Id as string, OBJECTID as string, Property as string, Crop_Type as string, Plant_Year as string, State as string, Area_Ha as double, SHAPE_Leng as double, SHAPE_Area as double),\n\t\tgeometry as (type as string, coordinates as string)\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tbackslashEscape: true) ~> geojsonmodified\nFilter1 select(mapColumn(\n\t\tAsset_ID = asset_id,\n\t\tFund_ID = fund_id,\n\t\tLoc_Json = loc_json\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> Select1\ngeojsonmodified derive({_corrupt_record} = toString(byName('_corrupt_record')),\n\t\tasset_id = properties.Asset_Id,\n\t\tfund_id = properties.Fund_Id,\n\t\tloc_json = geometry.coordinates) ~> MapDrifted2\nMapDrifted2 filter(not(isNull(asset_id))) ~> Filter1\nSelect1 sink(input(\n\t\tasset_id as string,\n\t\tfund_id as string,\n\t\tloc_geometry as binary,\n\t\tloc_json as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tasset_id = Asset_ID,\n\t\tfund_id = Fund_ID,\n\t\tloc_json = Loc_Json\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> sink1"
+				}
+			},
+			"dependsOn": []
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/dataflow2')]",
 			"type": "Microsoft.DataFactory/factories/dataflows",
 			"apiVersion": "2018-06-01",
@@ -2530,260 +2572,6 @@
 					"MasterPipeline": {
 						"type": "string",
 						"defaultValue": "Wenita Forestry Products Q4 FY20 V2.xlsx-Certifications"
-					}
-				},
-				"annotations": []
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/ProcessOpsWorkbookTabMajorSevereIncidents_spl')]",
-			"type": "Microsoft.DataFactory/factories/pipelines",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"description": "Major Severe Incidents tab",
-				"activities": [
-					{
-						"name": "GetTableErrorCount",
-						"type": "Lookup",
-						"dependsOn": [],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"source": {
-								"type": "AzureSqlSource",
-								"sqlReaderQuery": {
-									"value": "SELECT COUNT(*) AS ERROR_COUNT FROM (\n SELECT DISTINCT LIS.Work_Book, LIS.Work_Sheet FROM \n audit.OPS_Workbook_Worksheet_Asset_List LIS\n JOIN audit.OPS_Incident_Error ERR\n ON LIS.Work_Book = ERR.Source_File  \n AND LIS.Work_Sheet = ERR.Source_Sub_File\n WHERE LIS.Work_Book = '@{pipeline().parameters.WorkbookName}'\n AND LIS.Work_Sheet = '@{pipeline().parameters.MajorSevereIncidents}'\n)x",
-									"type": "Expression"
-								},
-								"queryTimeout": "02:00:00",
-								"partitionOption": "None"
-							},
-							"dataset": {
-								"referenceName": "SQLtableGeneric_ds",
-								"type": "DatasetReference",
-								"parameters": {}
-							}
-						}
-					},
-					{
-						"name": "CheckConditionIfErrorExist",
-						"type": "IfCondition",
-						"dependsOn": [
-							{
-								"activity": "GetTableErrorCount",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"expression": {
-								"value": "@greaterOrEquals(activity('GetTableErrorCount').output.firstRow.ERROR_COUNT, 0)",
-								"type": "Expression"
-							},
-							"ifTrueActivities": [
-								{
-									"name": "LoadValidatedDataset",
-									"type": "ExecuteDataFlow",
-									"dependsOn": [
-										{
-											"activity": "DeleteExistingRowsForCurrentPeriod",
-											"dependencyConditions": [
-												"Succeeded"
-											]
-										}
-									],
-									"policy": {
-										"timeout": "7.00:00:00",
-										"retry": 0,
-										"retryIntervalInSeconds": 30,
-										"secureOutput": false,
-										"secureInput": false
-									},
-									"userProperties": [],
-									"typeProperties": {
-										"dataflow": {
-											"referenceName": "LoadXlsxMajorSevereIncidents_Step3_df",
-											"type": "DataFlowReference",
-											"parameters": {
-												"WorkbookName": {
-													"value": "'@{pipeline().parameters.WorkbookName}'",
-													"type": "Expression"
-												},
-												"TabName": {
-													"value": "'@{pipeline().parameters.MajorSevereIncidents}'",
-													"type": "Expression"
-												}
-											},
-											"datasetParameters": {
-												"SourceReadyLoad": {
-													"ParquetFile": {
-														"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.MajorSevereIncidents,'_',pipeline().parameters.CurrentQuarterDate,'_LoadReady')",
-														"type": "Expression"
-													}
-												},
-												"TargetRelational": {
-													"Schema": {
-														"value": "relational",
-														"type": "Expression"
-													},
-													"TableName": {
-														"value": "OPS_Incident",
-														"type": "Expression"
-													}
-												}
-											}
-										},
-										"staging": {},
-										"compute": {
-											"coreCount": 8,
-											"computeType": "General"
-										}
-									}
-								},
-								{
-									"name": "UpdateValidatedDataset",
-									"type": "ExecuteDataFlow",
-									"dependsOn": [
-										{
-											"activity": "LoadValidatedDataset",
-											"dependencyConditions": [
-												"Succeeded"
-											]
-										}
-									],
-									"policy": {
-										"timeout": "7.00:00:00",
-										"retry": 0,
-										"retryIntervalInSeconds": 30,
-										"secureOutput": false,
-										"secureInput": false
-									},
-									"userProperties": [],
-									"typeProperties": {
-										"dataflow": {
-											"referenceName": "LoadXlsxMajorSevereIncidents_Step4_df",
-											"type": "DataFlowReference",
-											"parameters": {
-												"WorkbookName": {
-													"value": "'@{pipeline().parameters.WorkbookName}'",
-													"type": "Expression"
-												},
-												"TabName": {
-													"value": "'@{pipeline().parameters.MajorSevereIncidents}'",
-													"type": "Expression"
-												}
-											},
-											"datasetParameters": {
-												"SourceUpdate": {
-													"ParquetFile": {
-														"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.MajorSevereIncidents,'_',pipeline().parameters.CurrentQuarterDate,'_Update')",
-														"type": "Expression"
-													}
-												},
-												"TargetRelational": {
-													"Schema": {
-														"value": "relational",
-														"type": "Expression"
-													},
-													"TableName": {
-														"value": "OPS_Incident",
-														"type": "Expression"
-													}
-												}
-											}
-										},
-										"staging": {},
-										"compute": {
-											"coreCount": 8,
-											"computeType": "General"
-										}
-									}
-								},
-								{
-									"name": "DeleteExistingRowsForCurrentPeriod",
-									"type": "ExecuteDataFlow",
-									"dependsOn": [],
-									"policy": {
-										"timeout": "7.00:00:00",
-										"retry": 0,
-										"retryIntervalInSeconds": 30,
-										"secureOutput": false,
-										"secureInput": false
-									},
-									"userProperties": [],
-									"typeProperties": {
-										"dataflow": {
-											"referenceName": "LoadXlsxMajorSevereIncidents_Step2_df",
-											"type": "DataFlowReference",
-											"parameters": {
-												"WorkbookName": {
-													"value": "'@{pipeline().parameters.WorkbookName}'",
-													"type": "Expression"
-												},
-												"TabName": {
-													"value": "'@{pipeline().parameters.MajorSevereIncidents}'",
-													"type": "Expression"
-												}
-											},
-											"datasetParameters": {
-												"SourceReadyLoad": {
-													"ParquetFile": {
-														"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.MajorSevereIncidents,'_',pipeline().parameters.CurrentQuarterDate,'_LoadReady')",
-														"type": "Expression"
-													}
-												},
-												"TargetRelationalDelete": {
-													"Schema": {
-														"value": "relational",
-														"type": "Expression"
-													},
-													"TableName": {
-														"value": "OPS_Incident",
-														"type": "Expression"
-													}
-												}
-											}
-										},
-										"staging": {},
-										"compute": {
-											"coreCount": 8,
-											"computeType": "General"
-										}
-									}
-								}
-							]
-						}
-					}
-				],
-				"parameters": {
-					"WorkbookName": {
-						"type": "string",
-						"defaultValue": "Wenita Forestry Products Q4 FY20 V2.xlsx"
-					},
-					"CurrentQuarterDate": {
-						"type": "string",
-						"defaultValue": "30/09/2020"
-					},
-					"MajorSevereIncidents": {
-						"type": "string",
-						"defaultValue": "Major Severe Incidents"
-					},
-					"CurrentRunDateTime": {
-						"type": "string",
-						"defaultValue": "2020-08-01"
-					},
-					"MasterUtcTag": {
-						"type": "string",
-						"defaultValue": "2020-08-28T06:05:53.4181322Z"
 					}
 				},
 				"annotations": []
