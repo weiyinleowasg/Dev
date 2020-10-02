@@ -20721,6 +20721,14 @@
 								"WorkbookName": {
 									"value": "@pipeline().parameters.WorkbookName",
 									"type": "Expression"
+								},
+								"Asset_ID": {
+									"value": "@pipeline().parameters.Asset_ID",
+									"type": "Expression"
+								},
+								"Fund_ID": {
+									"value": "@pipeline().parameters.Fund_ID",
+									"type": "Expression"
 								}
 							}
 						}
@@ -21065,7 +21073,7 @@
 							"source": {
 								"type": "AzureSqlSource",
 								"sqlReaderQuery": {
-									"value": "SELECT CONCAT(CASE WHEN Error_Count = 0 THEN '!!! ERROR SOME EXCEL SHEETS MAY NOT BE LOADED: SUCCESSFUL LOAD : ' ELSE '!!! ERROR SOME EXCEL SHEETS MAY NOT BE LOADED: FAILED LOAD : ' END,Work_Sheet, ' - ', Work_Book) AS Message_Header,\nOps_Representative_Email, Ops_Representative_Last_Name, Ops_Representative_First_Name, Error_Table, Error_Count \nFROM (\nSELECT Work_Book, Work_Sheet, Ops_Representative_Email, Ops_Representative_Last_Name, Ops_Representative_First_Name,\nCASE WHEN Work_Sheet = 'Certifications' THEN 'audit.OPS_Certification_Error'\n     WHEN Work_Sheet = 'Timber Sales' THEN 'audit.OPS_Timber_Sales_Error'\nELSE NULL END AS Error_Table,\nCASE WHEN Work_Sheet = 'Certifications' THEN (SELECT COUNT(*) FROM audit.OPS_Certification_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}')\n     WHEN Work_Sheet = 'Timber Sales' THEN (SELECT COUNT(*) FROM audit.OPS_Timber_Sales_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}')\nELSE NULL END AS Error_Count\nFROM (\nSELECT Work_Book, Work_Sheet, wb.Asset_ID, wb.Fund_ID,\nra.Ops_Representative_First_Name, ra.Ops_Representative_Last_Name, ra.Ops_Representative_Email\nFROM [audit].[OPS_Workbook_Worksheet_Asset_List] wb\nJOIN [relational].[Asset] ra \nON wb.Asset_Id = ra.Asset_ID AND wb.Fund_Id = ra.Fund_ID  AND ra.record_deleted_flag = 0 AND wb.Work_Book = '@{pipeline().parameters.WorkbookName}') x\n)z;",
+									"value": "SELECT DISTINCT\n CONCAT(CASE WHEN x.Error_Count > 0 OR (x.Error_Count = 0 AND x.Asset_Id IS NULL) THEN 'FAILED LOAD : ' ELSE 'SUCCESSFUL LOAD : ' END, x.Work_Sheet, ' - ', x.Work_Book) AS Message_Header,\n ass.Ops_Representative_Email, ass.Ops_Representative_Last_Name, ass.Ops_Representative_First_Name, x.Error_Table,\n CASE WHEN x.Error_Count > 0 THEN CAST(x.Error_Count AS VARCHAR) WHEN x.Error_Count = 0 AND x.Asset_Id IS NULL THEN 'UNKNOWN' ELSE '0' END AS Error_Count \nFROM (\nSELECT err.Error_Table, err.Work_Book, err.Work_Sheet, err.Error_Count, wb.Asset_Id, wb.Fund_Id\nFROM audit.OPS_Workbook_Worksheet_Asset_List wb\nRIGHT JOIN (\nSELECT 'audit.OPS_Certification_Error' AS Error_Table, 'Certifications' AS Work_Sheet, '@{pipeline().parameters.WorkbookName}' AS Work_Book, COUNT(*) AS Error_Count\nFROM audit.OPS_Certification_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}'\nUNION\nSELECT 'audit.OPS_Timber_Sales_Error' AS Error_Table, 'Timber Sales' AS Work_Sheet, '@{pipeline().parameters.WorkbookName}' AS Work_book, COUNT(*) AS Error_Count\nFROM audit.OPS_Timber_Sales_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}'\nUNION\nSELECT 'audit.OPS_Answers_Error' AS Error_Table, 'Answers_DWH_Export' AS Work_Sheet, '@{pipeline().parameters.WorkbookName}' AS Work_book, COUNT(*) AS Error_Count\nFROM audit.OPS_Answers_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}'\nUNION\nSELECT 'audit.OPS_Contract_Error' AS Error_Table, 'Contracts' AS Work_Sheet, '@{pipeline().parameters.WorkbookName}' AS Work_book, COUNT(*) AS Error_Count\nFROM audit.OPS_Contract_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}'\nUNION\nSELECT 'audit.OPS_Harvest_Reconciliation_Error' AS Error_Table, 'Harvest Reconcilliation' AS Work_Sheet, '@{pipeline().parameters.WorkbookName}' AS Work_book, COUNT(*) AS Error_Count\nFROM audit.OPS_Harvest_Reconciliation_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}'\nUNION\nSELECT 'audit.OPS_Incident_Error' AS Error_Table, 'Major Severe Incidents' AS Work_Sheet, '@{pipeline().parameters.WorkbookName}' AS Work_book, COUNT(*) AS Error_Count\nFROM audit.OPS_Incident_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}'\nUNION\nSELECT 'audit.OPS_Operation_Error' AS Error_Table, 'Operations' AS Work_Sheet, '@{pipeline().parameters.WorkbookName}' AS Work_book, COUNT(*) AS Error_Count\nFROM audit.OPS_Operation_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}'\nUNION\nSELECT 'audit.OPS_Sales_Other_Error' AS Error_Table, 'Other Sales' AS Work_Sheet, '@{pipeline().parameters.WorkbookName}' AS Work_book, COUNT(*) AS Error_Count\nFROM audit.OPS_Sales_Other_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}'\nUNION\nSELECT 'audit.OPS_Related_Party_Transaction_Error' AS Error_Table, 'Related Party Transactions' AS Work_Sheet, '@{pipeline().parameters.WorkbookName}' AS Work_book, COUNT(*) AS Error_Count\nFROM audit.OPS_Related_Party_Transaction_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}'\nUNION\nSELECT 'audit.OPS_Risk_Opportunity_Register_Error' AS Error_Table, 'Risk Opportunity Register' AS Work_Sheet, '@{pipeline().parameters.WorkbookName}' AS Work_book, COUNT(*) AS Error_Count\nFROM audit.OPS_Risk_Opportunity_Register_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}'\nUNION\nSELECT 'audit.OPS_Strategic_Project_Error' AS Error_Table, 'Strategic Projects' AS Work_Sheet, '@{pipeline().parameters.WorkbookName}' AS Work_book, COUNT(*) AS Error_Count\nFROM audit.OPS_Strategic_Project_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}'\n) err\nON wb.Work_Book = err.Work_Book and wb.Work_Sheet = err.Work_Sheet\n)x\nJOIN relational.Asset ass\nON 1=1\nWHERE ass.Asset_ID = '@{pipeline().parameters.Asset_ID}' AND ass.Fund_ID = '@{pipeline().parameters.Fund_ID}' AND ass.record_deleted_flag = 0;",
 									"type": "Expression"
 								},
 								"queryTimeout": "02:00:00",
@@ -21138,6 +21146,14 @@
 					"WorkbookName": {
 						"type": "string",
 						"defaultValue": "Wenita Forestry Products Q4 FY20 V2.xlsx"
+					},
+					"Asset_ID": {
+						"type": "string",
+						"defaultValue": "WFP"
+					},
+					"Fund_ID": {
+						"type": "string",
+						"defaultValue": "ANZFOF2"
 					}
 				},
 				"annotations": []
@@ -21168,7 +21184,7 @@
 							"source": {
 								"type": "AzureSqlSource",
 								"sqlReaderQuery": {
-									"value": "SELECT '!!! PIPELINE ERROR : SOME OR ALL EXCEL SHEETS MAY NOT BE LOADED' AS Message_Header,\nOps_Representative_Email, Ops_Representative_Last_Name, Ops_Representative_First_Name, Error_Table, Error_Count \nFROM (\nSELECT Ops_Representative_Email, Ops_Representative_Last_Name, Ops_Representative_First_Name,\n'None' AS Error_Table,\n'None'AS Error_Count\nFROM (\nSELECT ra.Ops_Representative_First_Name, ra.Ops_Representative_Last_Name, ra.Ops_Representative_Email\nFROM relational.Asset ra \nWHERE record_deleted_flag = 0 \nAND ra.Asset_ID = '@{pipeline().parameters.Asset_ID}' \nAND ra.Fund_ID = '@{pipeline().parameters.Fund_ID}') x\n)z;",
+									"value": "SELECT '!!! PIPELINE ERROR : SOME OR ALL EXCEL SHEETS MAY NOT BE LOADED' AS Message_Header,\nOps_Representative_Email, Ops_Representative_Last_Name, Ops_Representative_First_Name, Error_Table, Error_Count \nFROM (\nSELECT Ops_Representative_Email, Ops_Representative_Last_Name, Ops_Representative_First_Name,\n'None' AS Error_Table,\n'None'AS Error_Count\nFROM (\nSELECT DISTINCT ra.Ops_Representative_First_Name, ra.Ops_Representative_Last_Name, ra.Ops_Representative_Email\nFROM relational.Asset ra \nWHERE record_deleted_flag = 0 \nAND ra.Asset_ID = '@{pipeline().parameters.Asset_ID}' \nAND ra.Fund_ID = '@{pipeline().parameters.Fund_ID}') x\n)z;",
 									"type": "Expression"
 								},
 								"queryTimeout": "02:00:00",
@@ -21279,7 +21295,7 @@
 							"source": {
 								"type": "AzureSqlSource",
 								"sqlReaderQuery": {
-									"value": "SELECT CONCAT(CASE WHEN Error_Count = 0 THEN 'SUCCESSFUL LOAD : ' ELSE 'FAILED LOAD : ' END,Work_Sheet, ' - ', Work_Book) AS Message_Header,\nOps_Representative_Email, Ops_Representative_Last_Name, Ops_Representative_First_Name, Error_Table, Error_Count \nFROM (\nSELECT Work_Book, Work_Sheet, Ops_Representative_Email, Ops_Representative_Last_Name, Ops_Representative_First_Name,\nCASE WHEN Work_Sheet = 'Certifications' THEN 'audit.OPS_Certification_Error'\n     WHEN Work_Sheet = 'Timber Sales' THEN 'audit.OPS_Timber_Sales_Error'\nELSE NULL END AS Error_Table,\nCASE WHEN Work_Sheet = 'Certifications' THEN (SELECT COUNT(*) FROM audit.OPS_Certification_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}')\n     WHEN Work_Sheet = 'Timber Sales' THEN (SELECT COUNT(*) FROM audit.OPS_Timber_Sales_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}')\nELSE NULL END AS Error_Count\nFROM (\nSELECT Work_Book, Work_Sheet, wb.Asset_ID, wb.Fund_ID,\nra.Ops_Representative_First_Name, ra.Ops_Representative_Last_Name, ra.Ops_Representative_Email\nFROM [audit].[OPS_Workbook_Worksheet_Asset_List] wb\nJOIN [relational].[Asset] ra \nON wb.Asset_Id = ra.Asset_ID AND wb.Fund_Id = ra.Fund_ID  AND ra.record_deleted_flag = 0 AND wb.Work_Book = '@{pipeline().parameters.WorkbookName}') x\n)z;",
+									"value": "SELECT CONCAT(CASE WHEN Error_Count = 0 THEN 'SUCCESSFUL LOAD : ' ELSE 'FAILED LOAD : ' END,Work_Sheet, ' - ', Work_Book) AS Message_Header,\nOps_Representative_Email, Ops_Representative_Last_Name, Ops_Representative_First_Name, Error_Table, Error_Count \nFROM (\nSELECT Work_Book, Work_Sheet, Ops_Representative_Email, Ops_Representative_Last_Name, Ops_Representative_First_Name,\nCASE WHEN Work_Sheet = 'Certifications' THEN 'audit.OPS_Certification_Error'\n     WHEN Work_Sheet = 'Timber Sales' THEN 'audit.OPS_Timber_Sales_Error'\n     WHEN Work_Sheet = 'Answers_DWH_Export' THEN 'audit.OPS_Answers_Error'\n\t WHEN Work_Sheet = 'Contracts' THEN 'audit.OPS_Contract_Error'\n\t WHEN Work_Sheet = 'Harvest Reconcilliation' THEN 'audit.OPS_Harvest_Reconciliation_Error'\n\t WHEN Work_Sheet = 'Major Severe Incidents' THEN 'audit.OPS_Incident_Error'\n\t WHEN Work_Sheet = 'Operations' THEN 'audit.OPS_Operation_Error'\n\t WHEN Work_Sheet = 'Other Sales' THEN 'audit.OPS_Sales_Other_Error'\n\t WHEN Work_Sheet = 'Related Party Transactions' THEN 'audit.OPS_Related_Party_Transaction_Error'\n\t WHEN Work_Sheet = 'Risk Opportunity Register' THEN 'audit.OPS_Risk_Opportunity_Register_Error'\n\t WHEN Work_Sheet = 'Strategic Projects' THEN 'audit.OPS_Strategic_Project_Error'\nELSE NULL END AS Error_Table,\nCASE WHEN Work_Sheet = 'Certifications' THEN (SELECT COUNT(*) FROM audit.OPS_Certification_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}')\n     WHEN Work_Sheet = 'Timber Sales' THEN (SELECT COUNT(*) FROM audit.OPS_Timber_Sales_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}')\n\t WHEN Work_Sheet = 'Answers_DWH_Export' THEN (SELECT COUNT(*) FROM audit.OPS_Answers_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}')\n\t WHEN Work_Sheet = 'Contracts' THEN (SELECT COUNT(*) FROM audit.OPS_Contract_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}')\n\t WHEN Work_Sheet = 'Harvest Reconcilliation' THEN (SELECT COUNT(*) FROM audit.OPS_Harvest_Reconciliation_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}')\n\t WHEN Work_Sheet = 'Major Severe Incidents' THEN (SELECT COUNT(*) FROM audit.OPS_Incident_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}')\n\t WHEN Work_Sheet = 'Operations' THEN (SELECT COUNT(*) FROM audit.OPS_Operation_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}')\n\t WHEN Work_Sheet = 'Other Sales' THEN (SELECT COUNT(*) FROM audit.OPS_Sales_Other_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}')\n\t WHEN Work_Sheet = 'Related Party Transactions' THEN (SELECT COUNT(*) FROM audit.OPS_Related_Party_Transaction_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}')\n\t WHEN Work_Sheet = 'Risk Opportunity Register' THEN (SELECT COUNT(*) FROM audit.OPS_Risk_Opportunity_Register_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}')\n\t WHEN Work_Sheet = 'Strategic Projects' THEN (SELECT COUNT(*) FROM audit.OPS_Strategic_Project_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}')\nELSE NULL END AS Error_Count\nFROM (\nSELECT DISTINCT Work_Book, Work_Sheet, wb.Asset_ID, wb.Fund_ID,\nra.Ops_Representative_First_Name, ra.Ops_Representative_Last_Name, ra.Ops_Representative_Email\nFROM [audit].[OPS_Workbook_Worksheet_Asset_List] wb\nJOIN [relational].[Asset] ra \nON wb.Asset_Id = ra.Asset_ID AND wb.Fund_Id = ra.Fund_ID  AND ra.record_deleted_flag = 0 AND wb.Work_Book = '@{pipeline().parameters.WorkbookName}') x\n)z;",
 									"type": "Expression"
 								},
 								"queryTimeout": "02:00:00",
@@ -88573,135 +88589,6 @@
 				"[concat(variables('factoryId'), '/datasets/SQLtableGeneric_ds')]",
 				"[concat(variables('factoryId'), '/datasets/ParquetPersistentOps_ds')]",
 				"[concat(variables('factoryId'), '/datasets/SQLtableGenericWithParam_ds')]",
-				"[concat(variables('factoryId'), '/datasets/SQLauditopsworkbookworksheetlist_ds')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/LoadXlsxRiskOps_Step1_df_old')]",
-			"type": "Microsoft.DataFactory/factories/dataflows",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"type": "MappingDataFlow",
-				"typeProperties": {
-					"sources": [
-						{
-							"dataset": {
-								"referenceName": "ParquetPersistentOpsWithTabParam_ds",
-								"type": "DatasetReference"
-							},
-							"name": "SourceDataTab"
-						},
-						{
-							"dataset": {
-								"referenceName": "SQLtableGeneric_ds",
-								"type": "DatasetReference"
-							},
-							"name": "RelationalOpsCertificationType"
-						},
-						{
-							"dataset": {
-								"referenceName": "SQLtableGeneric_ds",
-								"type": "DatasetReference"
-							},
-							"name": "RelationalCertification"
-						}
-					],
-					"sinks": [
-						{
-							"dataset": {
-								"referenceName": "ParquetPersistentOps_ds",
-								"type": "DatasetReference"
-							},
-							"name": "TargetPersistentParquetInsert"
-						},
-						{
-							"dataset": {
-								"referenceName": "SQLauditopserror_Certifications_ds",
-								"type": "DatasetReference"
-							},
-							"name": "ErrorTable"
-						},
-						{
-							"dataset": {
-								"referenceName": "SQLauditopsworkbookworksheetlist_ds",
-								"type": "DatasetReference"
-							},
-							"name": "OpsWorkbookWorksheetList"
-						},
-						{
-							"dataset": {
-								"referenceName": "ParquetPersistentOps_ds",
-								"type": "DatasetReference"
-							},
-							"name": "TargetPersistenParquetUpdate"
-						}
-					],
-					"transformations": [
-						{
-							"name": "ValidateMandatoryColumns",
-							"description": "ReportingDateCertificationIDValidateMsg is a test and should be considered as part of the conditional split Insert/Update activity"
-						},
-						{
-							"name": "SegregateValidInvalidRows"
-						},
-						{
-							"name": "SelectedColumnsOutputInsert"
-						},
-						{
-							"name": "ConcatenateInvalidColumnsMessage"
-						},
-						{
-							"name": "SelectedOutputColumnsError"
-						},
-						{
-							"name": "GenerateRowNumber"
-						},
-						{
-							"name": "ExcludeFirstRow"
-						},
-						{
-							"name": "AggregateSetUniqueWorksheetAsset"
-						},
-						{
-							"name": "SelectWorksheetAsset"
-						},
-						{
-							"name": "SelectUniqueWorksheetAsset"
-						},
-						{
-							"name": "DateTypeTransform"
-						},
-						{
-							"name": "SelectCertificationTypeLkp"
-						},
-						{
-							"name": "LookupCertificationType"
-						},
-						{
-							"name": "SplitInsertAndUpdate",
-							"description": "1. The condition assume that the records from the current reporting period are deleted first if any (asset id, fund id, current reporting period)\n2. Records where reporting period equal current reporting period (disregard certification id) are inserted/reinserted after delete in 1\n3. Remaining records are not from current reporting period and the certification ids must not be null. These are updated"
-						},
-						{
-							"name": "SelectColumnsOutputUpdate"
-						},
-						{
-							"name": "UpdateDatetimeValue"
-						},
-						{
-							"name": "SelectCertificationLkp"
-						},
-						{
-							"name": "LookupCertification"
-						}
-					],
-					"script": "parameters{\n\tMasterUtcTag as string,\n\tCurrentRunDateTime as string,\n\tWorkbookName as string,\n\tTabName as string,\n\tCurrentQuarterDate as string,\n\tMasterPipeline as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as string,\n\t\tCertification_ID as string,\n\t\tValidation_Flag as string,\n\t\tCertification_Type as string,\n\t\tCertification_Number as string,\n\t\tNext_Audit_Date as string,\n\t\tCertifying_Body as string,\n\t\tCertification_Date as string,\n\t\tCertification_End_Date as string,\n\t\tCertified_Entity as string,\n\t\tNumber_of_Open_Minor_CARS as string,\n\t\tNumber_of_Open_Major_CARS as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tformat: 'parquet',\n\tpartitionBy('hash', 1)) ~> SourceDataTab\nsource(output(\n\t\tCertification_Type_Code as string,\n\t\tCertification_Type as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT Certification_Type_Code\\n      ,Certification_Type\\n  FROM relational.OPS_Certification_Type\\n  WHERE Active_YN = \\'Y\\'',\n\tformat: 'query',\n\tpartitionBy('hash', 1)) ~> RelationalOpsCertificationType\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as date,\n\t\tCertification_ID as integer\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT Asset_ID\\n      ,Fund_ID\\n      ,Reporting_Period\\n      ,Certification_ID\\n  FROM relational.OPS_Certification',\n\tformat: 'query') ~> RelationalCertification\nLookupCertificationType derive(CertificationTypeValidateMsg = iif(isNull(Certification_Type_Code_Lkp), \"Certification Type/\", \"\"),\n\t\tAssetReportingDateValidateMsg = iif(isNull(Asset_ID) || isNull(Fund_ID) || isNull(Reporting_Period), \"Invalid Asset or Reporting Period/\", \"\"),\n\t\tCertificationEndDateValidateMsg = iif(isNull(Certification_End_Date), \"Certification End Date/\", \"\"),\n\t\tReportingDateCertificationIDValidateMsg = iif(iif(CurrentReportingPeriod != Reporting_Period, true(), false()) && isNull(Certification_ID),\"Null Certification ID for non-current Reporting Period/\",\"\"),\n\t\tLkpRelationalCertificationIDValidateMsg = iif(not(isNull(Certification_Certification_ID_Lkp)),\r\niif(equals(concat(Certification_Asset_ID_Lkp,Certification_Fund_ID_Lkp), concat(Asset_ID,Fund_ID)),\"\",\"Certitication ID not belong to Asset/\"),\"\")) ~> ValidateMandatoryColumns\nValidateMandatoryColumns split(length(concatWS('',AssetReportingDateValidateMsg,\r\nLkpRelationalCertificationIDValidateMsg,\r\nCertificationTypeValidateMsg,\r\nCertificationEndDateValidateMsg,\r\nReportingDateCertificationIDValidateMsg)) == 0,\n\tdisjoint: false) ~> SegregateValidInvalidRows@(ValidRows, InvalidRows)\nSplitInsertAndUpdate@Insert select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tCertification_ID,\n\t\tCertification_Number,\n\t\tNext_Audit_Date,\n\t\tCertifying_Body,\n\t\tCertification_Date,\n\t\tCertification_End_Date,\n\t\tCertified_Entity,\n\t\tNumber_of_Open_Minor_CARS,\n\t\tNumber_of_Open_Major_CARS,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tProcess_Name,\n\t\tCertification_Type_Code = Certification_Type_Code_Lkp\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectedColumnsOutputInsert\nSegregateValidInvalidRows@InvalidRows derive(ConcatenatedMessage = concat(CertificationTypeValidateMsg, \r\nCertificationEndDateValidateMsg,\r\nAssetReportingDateValidateMsg,\r\nReportingDateCertificationIDValidateMsg,\r\nLkpRelationalCertificationIDValidateMsg)) ~> ConcatenateInvalidColumnsMessage\nConcatenateInvalidColumnsMessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tCertification_ID,\n\t\tValidation_Flag,\n\t\tCertification_Type,\n\t\tCertification_Number,\n\t\tNext_Audit_Date,\n\t\tCertifying_Body,\n\t\tCertification_Date,\n\t\tCertification_End_Date,\n\t\tCertified_Entity,\n\t\tNumber_of_Open_Minor_CARS,\n\t\tNumber_of_Open_Major_CARS,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tWork_Book,\n\t\tWork_Sheet,\n\t\tProcess_Name,\n\t\tRowNumber,\n\t\tCertification_Type_Code_Lkp,\n\t\tCertification_Type_Lkp,\n\t\tCertificationTypeValidateMsg,\n\t\tCertificationEndDateValidateMsg,\n\t\tConcatenatedMessage\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectedOutputColumnsError\nDateTypeTransform keyGenerate(output(RowNumber as long),\n\tstartAt: 1L,\n\tpartitionBy('hash', 1)) ~> GenerateRowNumber\nGenerateRowNumber filter(RowNumber > 1) ~> ExcludeFirstRow\nSelectWorksheetAsset aggregate(groupBy(Asset_ID,\n\t\tFund_ID,\n\t\tWork_Book,\n\t\tWork_Sheet),\n\tAggCount = count()) ~> AggregateSetUniqueWorksheetAsset\nExcludeFirstRow select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tWork_Book,\n\t\tWork_Sheet\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectWorksheetAsset\nAggregateSetUniqueWorksheetAsset select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tWork_Book,\n\t\tWork_Sheet\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectUniqueWorksheetAsset\nSourceDataTab derive(Certification_ID = toInteger(Certification_ID),\n\t\tReporting_Period = toDate(Reporting_Period),\n\t\tNext_Audit_Date = toDate(Next_Audit_Date),\n\t\tCertification_Date = toDate(Certification_Date),\n\t\tCertification_End_Date = toDate(Certification_End_Date),\n\t\tNumber_of_Open_Minor_CARS = toInteger(Number_of_Open_Minor_CARS),\n\t\tNumber_of_Open_Major_CARS = toInteger(Number_of_Open_Major_CARS),\n\t\tInsert_Datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tUpdate_Datetime = toTimestamp('9999-12-31 00:00:00'),\n\t\tWork_Book = $WorkbookName,\n\t\tWork_Sheet = $TabName,\n\t\tProcess_Name = concatWS('-',$MasterPipeline,$WorkbookName,$TabName),\n\t\tCurrentReportingPeriod = toDate($CurrentQuarterDate)) ~> DateTypeTransform\nRelationalOpsCertificationType select(mapColumn(\n\t\tCertification_Type_Code_Lkp = Certification_Type_Code,\n\t\tCertification_Type_Lkp = Certification_Type\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectCertificationTypeLkp\nLookupCertification, SelectCertificationTypeLkp lookup(Certification_Type == Certification_Type_Lkp,\n\tmultiple: false,\n\tpickup: 'first',\n\tasc(Certification_Type_Code_Lkp, false),\n\tbroadcast: 'auto')~> LookupCertificationType\nSegregateValidInvalidRows@ValidRows split(equals(Reporting_Period, CurrentReportingPeriod),\n\tdisjoint: false) ~> SplitInsertAndUpdate@(Insert, Update)\nUpdateDatetimeValue select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tCertification_ID,\n\t\tCertification_Number,\n\t\tNext_Audit_Date,\n\t\tCertifying_Body,\n\t\tCertification_Date,\n\t\tCertification_End_Date,\n\t\tCertified_Entity,\n\t\tNumber_of_Open_Minor_CARS,\n\t\tNumber_of_Open_Major_CARS,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tProcess_Name,\n\t\tCertification_Type_Code = Certification_Type_Code_Lkp\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectColumnsOutputUpdate\nSplitInsertAndUpdate@Update derive(Update_Datetime = fromUTC(currentUTC(), 'Australia/Sydney')) ~> UpdateDatetimeValue\nRelationalCertification select(mapColumn(\n\t\tCertification_Asset_ID_Lkp = Asset_ID,\n\t\tCertification_Fund_ID_Lkp = Fund_ID,\n\t\tCertification_Reporting_Period_Lkp = Reporting_Period,\n\t\tCertification_Certification_ID_Lkp = Certification_ID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectCertificationLkp\nExcludeFirstRow, SelectCertificationLkp lookup(Certification_ID == Certification_Certification_ID_Lkp,\n\tmultiple: false,\n\tpickup: 'any',\n\tbroadcast: 'auto')~> LookupCertification\nSelectedColumnsOutputInsert sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tformat: 'parquet',\n\tpartitionFileNames:[(concatWS(\"_\", $WorkbookName, $TabName,$CurrentQuarterDate,'LoadReady'))],\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tCertification_ID,\n\t\tCertification_Number,\n\t\tNext_Audit_Date,\n\t\tCertifying_Body,\n\t\tCertification_Date,\n\t\tCertification_End_Date,\n\t\tCertified_Entity,\n\t\tNumber_of_Open_Minor_CARS,\n\t\tNumber_of_Open_Major_CARS,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tProcess_Name,\n\t\tCertification_Type_Code\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetPersistentParquetInsert\nSelectedOutputColumnsError sink(input(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tCertification_ID as integer,\n\t\tReporting_Period as date,\n\t\tCertification_Type_Code as string,\n\t\tCertification_Number as string,\n\t\tNext_Audit_Date as date,\n\t\tCertifying_Body as string,\n\t\tCertification_Date as date,\n\t\tCertification_End_Date as date,\n\t\tCertified_Entity as string,\n\t\tInsert_Datetime as timestamp,\n\t\tProcess_Name as string,\n\t\tMinor_CARS as integer,\n\t\tMajor_CARS as integer,\n\t\tSource_File as string,\n\t\tSource_Sub_File as string,\n\t\tError_Desc as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tCertification_ID,\n\t\tReporting_Period,\n\t\tCertification_Type_Code = Certification_Type_Code_Lkp,\n\t\tCertification_Number,\n\t\tNext_Audit_Date,\n\t\tCertifying_Body,\n\t\tCertification_Date,\n\t\tCertification_End_Date,\n\t\tCertified_Entity,\n\t\tInsert_Datetime,\n\t\tProcess_Name,\n\t\tMinor_CARS = Number_of_Open_Minor_CARS,\n\t\tMajor_CARS = Number_of_Open_Major_CARS,\n\t\tSource_File = Work_Book,\n\t\tSource_Sub_File = Work_Sheet,\n\t\tError_Desc = ConcatenatedMessage\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> ErrorTable\nSelectUniqueWorksheetAsset sink(input(\n\t\tWork_Book as string,\n\t\tWork_Sheet as string,\n\t\tAsset_Id as string,\n\t\tFund_Id as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tWork_Book,\n\t\tWork_Sheet,\n\t\tAsset_Id = Asset_ID,\n\t\tFund_Id = Fund_ID\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> OpsWorkbookWorksheetList\nSelectColumnsOutputUpdate sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tformat: 'parquet',\n\tpartitionFileNames:[(concatWS(\"_\", $WorkbookName, $TabName,$CurrentQuarterDate,'Update'))],\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tCertification_ID,\n\t\tCertification_Number,\n\t\tNext_Audit_Date,\n\t\tCertifying_Body,\n\t\tCertification_Date,\n\t\tCertification_End_Date,\n\t\tCertified_Entity,\n\t\tNumber_of_Open_Minor_CARS,\n\t\tNumber_of_Open_Major_CARS,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tProcess_Name,\n\t\tCertification_Type_Code\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetPersistenParquetUpdate"
-				}
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/datasets/ParquetPersistentOpsWithTabParam_ds')]",
-				"[concat(variables('factoryId'), '/datasets/SQLtableGeneric_ds')]",
-				"[concat(variables('factoryId'), '/datasets/ParquetPersistentOps_ds')]",
-				"[concat(variables('factoryId'), '/datasets/SQLauditopserror_Certifications_ds')]",
 				"[concat(variables('factoryId'), '/datasets/SQLauditopsworkbookworksheetlist_ds')]"
 			]
 		},
