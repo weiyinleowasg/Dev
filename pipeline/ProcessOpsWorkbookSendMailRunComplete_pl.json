@@ -1,0 +1,105 @@
+{
+	"name": "ProcessOpsWorkbookSendMailRunComplete_pl",
+	"properties": {
+		"activities": [
+			{
+				"name": "GetEmailDetails",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "SELECT Message_Header, Ops_Representative_Email, Ops_Representative_First_Name, Ops_Representative_Last_Name,\nCONCAT_WS('<br>',[Certifications],[Timber Sales],[Answers_DWH_Export],[Contracts],[Harvest Reconcilliation],[Major Severe Incidents],\n[Operations],[Other Sales],[Related Party Transactions],[Risk Opportunity Register],[Strategic Projects]) AS Error_Msg\nFROM (\nSELECT DISTINCT\n CONCAT('Operations - Load Report for Workbook ',x.Work_Book) AS Message_Header,\n ass.Ops_Representative_Email, ass.Ops_Representative_First_Name, ass.Ops_Representative_Last_Name, x.Work_Sheet, \n CONCAT(x.Work_Sheet,' >>> Error Count : ',CASE WHEN x.Error_Count > 0 THEN CONCAT(CAST(x.Error_Count AS VARCHAR),' >>> Not Complete') WHEN x.Error_Count = 0 AND x.Asset_Id IS NULL THEN 'Unknown >>> Failed Load' ELSE CONCAT(CAST(x.Error_Count AS VARCHAR),' >>> Successfully Loaded') END) AS Error_Count\nFROM (\nSELECT err.Work_Book, err.Work_Sheet, err.Error_Count, wb.Asset_Id, wb.Fund_Id\nFROM audit.OPS_Workbook_Worksheet_Asset_List wb\nRIGHT JOIN (\nSELECT 'Certifications' AS Work_Sheet, '@{pipeline().parameters.WorkbookName}' AS Work_Book, COUNT(*) AS Error_Count\nFROM audit.OPS_Certification_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}'\nUNION\nSELECT 'Timber Sales' AS Work_Sheet, '@{pipeline().parameters.WorkbookName}' AS Work_book, COUNT(*) AS Error_Count\nFROM audit.OPS_Timber_Sales_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}'\nUNION\nSELECT 'Answers_DWH_Export' AS Work_Sheet, '@{pipeline().parameters.WorkbookName}' AS Work_book, COUNT(*) AS Error_Count\nFROM audit.OPS_Answers_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}'\nUNION\nSELECT 'Contracts' AS Work_Sheet, '@{pipeline().parameters.WorkbookName}' AS Work_book, COUNT(*) AS Error_Count\nFROM audit.OPS_Contract_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}'\nUNION\nSELECT 'Harvest Reconcilliation' AS Work_Sheet, '@{pipeline().parameters.WorkbookName}' AS Work_book, COUNT(*) AS Error_Count\nFROM audit.OPS_Harvest_Reconciliation_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}'\nUNION\nSELECT 'Major Severe Incidents' AS Work_Sheet, '@{pipeline().parameters.WorkbookName}' AS Work_book, COUNT(*) AS Error_Count\nFROM audit.OPS_Incident_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}'\nUNION\nSELECT 'Operations' AS Work_Sheet, '@{pipeline().parameters.WorkbookName}' AS Work_book, COUNT(*) AS Error_Count\nFROM audit.OPS_Operation_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}'\nUNION\nSELECT 'Other Sales' AS Work_Sheet, '@{pipeline().parameters.WorkbookName}' AS Work_book, COUNT(*) AS Error_Count\nFROM audit.OPS_Sales_Other_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}'\nUNION\nSELECT 'Related Party Transactions' AS Work_Sheet, '@{pipeline().parameters.WorkbookName}' AS Work_book, COUNT(*) AS Error_Count\nFROM audit.OPS_Related_Party_Transaction_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}'\nUNION\nSELECT 'Risk Opportunity Register' AS Work_Sheet, '@{pipeline().parameters.WorkbookName}' AS Work_book, COUNT(*) AS Error_Count\nFROM audit.OPS_Risk_Opportunity_Register_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}'\nUNION\nSELECT 'Strategic Projects' AS Work_Sheet, '@{pipeline().parameters.WorkbookName}' AS Work_book, COUNT(*) AS Error_Count\nFROM audit.OPS_Strategic_Project_Error WHERE Source_File = '@{pipeline().parameters.WorkbookName}'\n) err\nON wb.Work_Book = err.Work_Book and wb.Work_Sheet = err.Work_Sheet\n)x\nJOIN relational.Asset ass\nON 1=1\nWHERE ass.Asset_ID = '@{pipeline().parameters.Asset_ID}' AND ass.Fund_ID = '@{pipeline().parameters.Fund_ID}' AND ass.record_deleted_flag = 0\n) t\nPIVOT(\n    MAX(Error_Count)\n    FOR Work_Sheet IN (\n        [Certifications], \n        [Timber Sales], \n        [Answers_DWH_Export], \n        [Contracts], \n        [Harvest Reconcilliation], \n        [Major Severe Incidents],\n        [Operations], \n        [Other Sales], \n        [Related Party Transactions], \n        [Risk Opportunity Register], \n        [Strategic Projects])\n) AS pivot_table;",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "SQLauditopsworkbookworksheetlist_ds",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "ForEachWorkbookWorksheetEmail",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "GetEmailDetails",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('GetEmailDetails').output.value",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "SendEmail",
+							"type": "WebActivity",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"url": "https://prod-19.australiaeast.logic.azure.com:443/workflows/7139728b716a4500b96a2fa094f691fa/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=I30JtkHJ6p4mNeMF6USxTdCCjTwTvY1dmmNC2Mvte7o",
+								"method": "POST",
+								"headers": {
+									"Content-Type": "application/json"
+								},
+								"body": {
+									"value": "{\n\"messageHeader\":\"@{item().Message_Header}\",\n\"message1\":\"Below are the load status for each worksheet :\",\n\"message2\":\"@{item().Error_Msg}\",\n\"message3\":\"If there is error, please check in the Error Log Table\",\n\"message4\":\"Thank you.\",\n\"message5\":\"Datafactory Name: @{pipeline().parameters.DataFactoryName}\",\n\"message6\":\"Pipeline Name: @{pipeline().parameters.PipelineName}\",\n\"emailAddress\":\"@{item().Ops_Representative_Email}\",\n\"lastName\":\"@{item().Ops_Representative_Last_Name}\",\n\"firstName\":\"@{item().Ops_Representative_First_Name}\"\n}",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"DataFactoryName": {
+				"type": "string",
+				"defaultValue": "myFactory"
+			},
+			"PipelineName": {
+				"type": "string",
+				"defaultValue": "myPipeline"
+			},
+			"WorkbookName": {
+				"type": "string",
+				"defaultValue": "Wenita Forestry Products Q4 FY20 test.xlsx"
+			},
+			"Asset_ID": {
+				"type": "string",
+				"defaultValue": "WFP"
+			},
+			"Fund_ID": {
+				"type": "string",
+				"defaultValue": "ANZFOF2"
+			}
+		},
+		"annotations": []
+	}
+}
