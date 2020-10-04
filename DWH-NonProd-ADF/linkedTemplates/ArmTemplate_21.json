@@ -13,41 +13,6 @@
 	},
 	"resources": [
 		{
-			"name": "[concat(parameters('factoryName'), '/dataflow2')]",
-			"type": "Microsoft.DataFactory/factories/dataflows",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"type": "MappingDataFlow",
-				"typeProperties": {
-					"sources": [
-						{
-							"dataset": {
-								"referenceName": "Certifications_Test",
-								"type": "DatasetReference"
-							},
-							"name": "source1"
-						}
-					],
-					"sinks": [
-						{
-							"dataset": {
-								"referenceName": "certstest",
-								"type": "DatasetReference"
-							},
-							"name": "testparcerts"
-						}
-					],
-					"transformations": [
-						{
-							"name": "Select1"
-						}
-					],
-					"script": "source(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as string,\n\t\tCertification_ID as string,\n\t\t{Validation Flag} as string,\n\t\t{Certification Type} as string,\n\t\t{Certification Number} as string,\n\t\t{Next Audit Date} as string,\n\t\t{Certifying Body} as string,\n\t\t{Certification Date} as string,\n\t\t{Certification End Date} as string,\n\t\t{Certified Entity} as string,\n\t\t{Number of Open Minor CARS} as string,\n\t\t{Number of Open Major CARS} as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false) ~> source1\nsource1 select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tCertification_ID,\n\t\t{Validation Flag},\n\t\t{Certification Type},\n\t\t{Certification Number},\n\t\t{Next Audit Date},\n\t\t{Certifying Body},\n\t\t{Certification Date},\n\t\t{Certification End Date},\n\t\t{Certified Entity},\n\t\t{Number of Open Minor CARS},\n\t\t{Number of Open Major CARS}\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> Select1\nSelect1 sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> testparcerts"
-				}
-			},
-			"dependsOn": []
-		},
-		{
 			"name": "[concat(parameters('factoryName'), '/dataflow2testunique')]",
 			"type": "Microsoft.DataFactory/factories/dataflows",
 			"apiVersion": "2018-06-01",
@@ -2784,6 +2749,115 @@
 					"MasterUtcTag": {
 						"type": "string",
 						"defaultValue": "2020-08-28T06:05:53.4181322Z"
+					}
+				},
+				"annotations": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ProcessOpsWorkbookTabOperations_pl')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "Operations tab",
+				"activities": [
+					{
+						"name": "ProcessExcelWorkbookTab",
+						"type": "ExecuteDataFlow",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "LoadXlsxOperations_Step1_df",
+								"type": "DataFlowReference",
+								"parameters": {
+									"MasterUtcTag": {
+										"value": "'@{pipeline().parameters.MasterUtcTag}'",
+										"type": "Expression"
+									},
+									"CurrentRunDateTime": {
+										"value": "'@{pipeline().parameters.CurrentRunDateTime}'",
+										"type": "Expression"
+									},
+									"WorkbookName": {
+										"value": "'@{pipeline().parameters.WorkbookName}'",
+										"type": "Expression"
+									},
+									"TabName": {
+										"value": "'@{pipeline().parameters.Operations}'",
+										"type": "Expression"
+									},
+									"CurrentQuarterDate": {
+										"value": "'@{pipeline().parameters.CurrentQuarterDate}'",
+										"type": "Expression"
+									},
+									"MasterPipeline": {
+										"value": "'@{pipeline().parameters.MasterPipeline}'",
+										"type": "Expression"
+									}
+								},
+								"datasetParameters": {
+									"SourceDataTab": {
+										"ParquetFile": {
+											"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.Operations,'_',pipeline().parameters.CurrentQuarterDate,'_Extract')",
+											"type": "Expression"
+										}
+									},
+									"RelationalOperationType": {},
+									"TargetPersistentParquetInsert": {},
+									"OpsWorkbookWorksheetList": {},
+									"ErrorTable": {
+										"Schema": {
+											"value": "audit",
+											"type": "Expression"
+										},
+										"TableName": {
+											"value": "OPS_Operation_Error",
+											"type": "Expression"
+										}
+									}
+								}
+							},
+							"staging": {},
+							"compute": {
+								"coreCount": 8,
+								"computeType": "General"
+							}
+						}
+					}
+				],
+				"parameters": {
+					"WorkbookName": {
+						"type": "string",
+						"defaultValue": "Wenita Forestry Products Q4 FY20 V2.xlsx"
+					},
+					"CurrentQuarterDate": {
+						"type": "string",
+						"defaultValue": "2020-06-30"
+					},
+					"Operations": {
+						"type": "string",
+						"defaultValue": "Operations"
+					},
+					"CurrentRunDateTime": {
+						"type": "string",
+						"defaultValue": "2020-08-01"
+					},
+					"MasterUtcTag": {
+						"type": "string",
+						"defaultValue": "2020-08-28T06:05:53.4181322Z"
+					},
+					"MasterPipeline": {
+						"type": "string",
+						"defaultValue": "pipeline"
 					}
 				},
 				"annotations": []

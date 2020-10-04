@@ -13,47 +13,6 @@
 	},
 	"resources": [
 		{
-			"name": "[concat(parameters('factoryName'), '/LoadXlsxOtherSales_Step2_df')]",
-			"type": "Microsoft.DataFactory/factories/dataflows",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"type": "MappingDataFlow",
-				"typeProperties": {
-					"sources": [
-						{
-							"dataset": {
-								"referenceName": "ParquetPersistentOpsWithTabParam_ds",
-								"type": "DatasetReference"
-							},
-							"name": "SourceReadyLoad"
-						}
-					],
-					"sinks": [
-						{
-							"dataset": {
-								"referenceName": "SQLtableGenericWithParam_ds",
-								"type": "DatasetReference"
-							},
-							"name": "TargetRelational"
-						}
-					],
-					"transformations": [
-						{
-							"name": "SelectKeyColumnsForDelete"
-						},
-						{
-							"name": "AggregateAssetFundReportingPeriod"
-						},
-						{
-							"name": "AlterRowDelete"
-						}
-					],
-					"script": "parameters{\n\tWorkbookName as string,\n\tTabName as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as date,\n\t\tSales_Type as string,\n\t\tSales_UOM as string,\n\t\tSales_Point as string,\n\t\tTotal_Units_Sold as decimal(19,4),\n\t\tSales_revenue as decimal(19,4),\n\t\tSales_Cost as decimal(19,4),\n\t\tSales_Net_Revenue as decimal(19,4),\n\t\tSales_Net_Revenue_Per_Unit as decimal(19,4),\n\t\tCurrency_Code as string,\n\t\tBudget_Sales_Quantity as decimal(19,4),\n\t\tBudget_Sales_Revenue as decimal(19,4),\n\t\tBudget_Sales_Costs as decimal(19,4),\n\t\tInsert_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tformat: 'parquet',\n\tpartitionBy('hash', 1)) ~> SourceReadyLoad\nSourceReadyLoad select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectKeyColumnsForDelete\nSelectKeyColumnsForDelete aggregate(groupBy(Asset_ID,\n\t\tFund_ID,\n\t\tReporting_Period),\n\tUniqueCount = count()) ~> AggregateAssetFundReportingPeriod\nAggregateAssetFundReportingPeriod alterRow(deleteIf(UniqueCount>0)) ~> AlterRowDelete\nAlterRowDelete sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:true,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:false,\n\tkeys:['Asset_ID','Fund_ID','Reporting_Period'],\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetRelational"
-				}
-			},
-			"dependsOn": []
-		},
-		{
 			"name": "[concat(parameters('factoryName'), '/LoadXlsxOtherSales_Step3_df')]",
 			"type": "Microsoft.DataFactory/factories/dataflows",
 			"apiVersion": "2018-06-01",
@@ -1129,6 +1088,41 @@
 						}
 					],
 					"script": "source(output(\n\t\ttype as string,\n\t\tproperties as (Asset_Id as string, Fund_Id as string, OBJECTID as string, Property as string, Crop_Type as string, Plant_Year as string, State as string, Area_Ha as double, SHAPE_Leng as double, SHAPE_Area as double),\n\t\tgeometry as (type as string, coordinates as string)\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tbackslashEscape: true) ~> geojsonmodified\nFilter1 select(mapColumn(\n\t\tAsset_ID = asset_id,\n\t\tFund_ID = fund_id,\n\t\tLoc_Json = loc_json\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> Select1\ngeojsonmodified derive({_corrupt_record} = toString(byName('_corrupt_record')),\n\t\tasset_id = properties.Asset_Id,\n\t\tfund_id = properties.Fund_Id,\n\t\tloc_json = geometry.coordinates) ~> MapDrifted2\nMapDrifted2 filter(not(isNull(asset_id))) ~> Filter1\nSelect1 sink(input(\n\t\tasset_id as string,\n\t\tfund_id as string,\n\t\tloc_geometry as binary,\n\t\tloc_json as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tasset_id = Asset_ID,\n\t\tfund_id = Fund_ID,\n\t\tloc_json = Loc_Json\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> sink1"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/dataflow2')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "Certifications_Test",
+								"type": "DatasetReference"
+							},
+							"name": "source1"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "certstest",
+								"type": "DatasetReference"
+							},
+							"name": "testparcerts"
+						}
+					],
+					"transformations": [
+						{
+							"name": "Select1"
+						}
+					],
+					"script": "source(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as string,\n\t\tCertification_ID as string,\n\t\t{Validation Flag} as string,\n\t\t{Certification Type} as string,\n\t\t{Certification Number} as string,\n\t\t{Next Audit Date} as string,\n\t\t{Certifying Body} as string,\n\t\t{Certification Date} as string,\n\t\t{Certification End Date} as string,\n\t\t{Certified Entity} as string,\n\t\t{Number of Open Minor CARS} as string,\n\t\t{Number of Open Major CARS} as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false) ~> source1\nsource1 select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tCertification_ID,\n\t\t{Validation Flag},\n\t\t{Certification Type},\n\t\t{Certification Number},\n\t\t{Next Audit Date},\n\t\t{Certifying Body},\n\t\t{Certification Date},\n\t\t{Certification End Date},\n\t\t{Certified Entity},\n\t\t{Number of Open Minor CARS},\n\t\t{Number of Open Major CARS}\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> Select1\nSelect1 sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> testparcerts"
 				}
 			},
 			"dependsOn": []

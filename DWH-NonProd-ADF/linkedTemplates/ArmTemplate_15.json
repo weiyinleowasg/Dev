@@ -13,98 +13,6 @@
 	},
 	"resources": [
 		{
-			"name": "[concat(parameters('factoryName'), '/LoadMktFactMarket_Pass1_InsertNewSpeciesProductDims_df')]",
-			"type": "Microsoft.DataFactory/factories/dataflows",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"type": "MappingDataFlow",
-				"typeProperties": {
-					"sources": [
-						{
-							"dataset": {
-								"referenceName": "CSVgenericWithParameter_ds",
-								"type": "DatasetReference"
-							},
-							"name": "ReadSource"
-						},
-						{
-							"dataset": {
-								"referenceName": "SQLtableGeneric_ds",
-								"type": "DatasetReference"
-							},
-							"name": "DatamartDimProductLkp"
-						},
-						{
-							"dataset": {
-								"referenceName": "SQLtableGeneric_ds",
-								"type": "DatasetReference"
-							},
-							"name": "DatamartDimSpeciesLkp"
-						}
-					],
-					"sinks": [
-						{
-							"dataset": {
-								"referenceName": "SQLtableGenericWithParam_ds",
-								"type": "DatasetReference"
-							},
-							"name": "InsertNewSpeciesDim"
-						},
-						{
-							"dataset": {
-								"referenceName": "SQLtableGenericWithParam_ds",
-								"type": "DatasetReference"
-							},
-							"name": "InsertNewProductDim"
-						}
-					],
-					"transformations": [
-						{
-							"name": "SelectDimProductLkp"
-						},
-						{
-							"name": "DataTransformation"
-						},
-						{
-							"name": "SelectDimSpeciesLkp"
-						},
-						{
-							"name": "LookupDimSpecies"
-						},
-						{
-							"name": "LookupDimProduct"
-						},
-						{
-							"name": "FilterProcessGroup"
-						},
-						{
-							"name": "GetUniqueSpicesProductCombination"
-						},
-						{
-							"name": "SplitSpeciesProductDetails"
-						},
-						{
-							"name": "SelectSpeciesOutput"
-						},
-						{
-							"name": "SelectProductOutput"
-						},
-						{
-							"name": "AddPoductDetails"
-						},
-						{
-							"name": "RemoveBlankSpeciesProduct"
-						},
-						{
-							"name": "DerivedSpeciesDetails"
-						}
-					],
-					"script": "parameters{\n\tGeneratedBatchDate as string,\n\tWorkbookName as string,\n\tWorksheetName as string,\n\tMasterPipelineName as string,\n\tProduct_Group as string\n}\nsource(output(\n\t\t{Source Metric} as string,\n\t\t{Period Date} as string,\n\t\tCountry as string,\n\t\tRegion as string,\n\t\t{Species Common Name} as string,\n\t\t{Product Common Name} as string,\n\t\tCurrency as string,\n\t\tUOM as string,\n\t\tMarket as string,\n\t\t{Delivery Point} as string,\n\t\tIndicator as string,\n\t\tType as string,\n\t\tBasis as string,\n\t\t{Origin Port Country} as string,\n\t\t{Origin Port Region} as string,\n\t\t{Origin Port} as string,\n\t\t{Destination Port Country} as string,\n\t\t{Destination Port Region} as string,\n\t\t{Destination Port} as string,\n\t\t{Vessel Name} as string,\n\t\tLow as string,\n\t\tHigh as string,\n\t\tAverage as string,\n\t\tSpot as string,\n\t\tComment as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false) ~> ReadSource\nsource(output(\n\t\tProduct_Id as integer,\n\t\tProduct_Code as string,\n\t\tProduct_Type as string,\n\t\tProduct_Global_Grade as string,\n\t\tProduct_Common_Name as string,\n\t\tProduct_Desc as string,\n\t\tProduct_Group as string,\n\t\tGL_Code as string,\n\t\tSpecies_Common_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT [Product_Id]\\n      ,[Product_Code]\\n      ,[Product_Type]\\n      ,[Product_Global_Grade]\\n      ,[Product_Common_Name]\\n      ,[Product_Desc]\\n      ,[Product_Group]\\n      ,[GL_Code]\\n      ,[Species_Common_Name]\\nFROM [datamart].[Dim_Product]\\nWHERE [Product_Id] != -1',\n\tformat: 'query') ~> DatamartDimProductLkp\nsource(output(\n\t\tSpecies_ID as integer,\n\t\tSpecies_Code as string,\n\t\tGenus as string,\n\t\tSpecies as string,\n\t\tSpecies_Common_Name as string,\n\t\tSpecies_Group as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT [Species_ID]\\n      ,[Species_Code]\\n      ,[Genus]\\n      ,[Species]\\n      ,[Species_Common_Name]\\n      ,[Species_Group]\\n  FROM [datamart].[Dim_Species]\\nWHERE [Species_ID] != -1',\n\tformat: 'query') ~> DatamartDimSpeciesLkp\nFilterProcessGroup select(mapColumn(\n\t\tProduct_Id_Lkp = Product_Id,\n\t\tProduct_Code_Lkp = Product_Code,\n\t\tProduct_Type_Lkp = Product_Type,\n\t\tProduct_Global_Grade_Lkp = Product_Global_Grade,\n\t\tProduct_Common_Name_Lkp = Product_Common_Name,\n\t\tProduct_Desc_Lkp = Product_Desc,\n\t\tProduct_Group_Lkp = Product_Group,\n\t\tGL_Code_Lkp = GL_Code,\n\t\tProduct_Species_Common_Name_Lkp = Species_Common_Name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectDimProductLkp\nGetUniqueSpicesProductCombination derive(Source_File = concat($WorkbookName,'-', $WorksheetName),\n\t\tBatch_ID = replace(replace(replace($GeneratedBatchDate, \"-\", \"\"),\":\",\"\"),\" \",\"\"),\n\t\tProcess_Name = $MasterPipelineName,\n\t\tInsert_DateTime = fromUTC(currentUTC(), 'Australia/Sydney')) ~> DataTransformation\nDatamartDimSpeciesLkp select(mapColumn(\n\t\tSpecies_ID_Lkp = Species_ID,\n\t\tSpecies_Code_Lkp = Species_Code,\n\t\tGenus_Lkp = Genus,\n\t\tSpecies_Lkp = Species,\n\t\tSpecies_Common_Name_Lkp = Species_Common_Name,\n\t\tSpecies_Group_Lkp = Species_Group\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectDimSpeciesLkp\nDataTransformation, SelectDimSpeciesLkp lookup({Species Common Name} == Species_Common_Name_Lkp,\n\tmultiple: false,\n\tpickup: 'any',\n\tbroadcast: 'auto')~> LookupDimSpecies\nLookupDimSpecies, SelectDimProductLkp lookup({Product Common Name} == Product_Common_Name_Lkp\n\t&& {Species Common Name} == Product_Species_Common_Name_Lkp,\n\tmultiple: false,\n\tpickup: 'any',\n\tbroadcast: 'auto')~> LookupDimProduct\nDatamartDimProductLkp filter(Product_Group == $Product_Group) ~> FilterProcessGroup\nRemoveBlankSpeciesProduct aggregate(groupBy({Species Common Name},\n\t\t{Product Common Name}),\n\tUniqueCount = count()) ~> GetUniqueSpicesProductCombination\nLookupDimProduct split(isNull(Species_ID_Lkp),\n\tisNull(Product_Id_Lkp) || (not(isNull(Species_ID_Lkp)) && not(isNull(Product_Id_Lkp)) && notEquals(Species_Common_Name_Lkp, Product_Species_Common_Name_Lkp)),\n\tdisjoint: true) ~> SplitSpeciesProductDetails@(Species, Product)\nDerivedSpeciesDetails select(mapColumn(\n\t\tSpecies_Code,\n\t\tGenus,\n\t\tSpecies,\n\t\tSpecies_Common_Name = {Species Common Name},\n\t\tSpecies_Group,\n\t\tSource_File,\n\t\tBatch_ID,\n\t\tProcess_Name,\n\t\tInsert_DateTime\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectSpeciesOutput\nAddPoductDetails select(mapColumn(\n\t\tProduct_Code,\n\t\tProduct_Type,\n\t\tProduct_Global_Grade,\n\t\tProduct_Common_Name = {Product Common Name},\n\t\tProduct_Desc,\n\t\tProduct_Group,\n\t\tGL_Code,\n\t\tSpecies_Common_Name = {Species Common Name},\n\t\tSource_File,\n\t\tBatch_ID,\n\t\tProcess_Name,\n\t\tInsert_DateTime\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectProductOutput\nSplitSpeciesProductDetails@Product derive(Product_Group = $Product_Group,\n\t\tProduct_Code = 'Undefined',\n\t\tProduct_Type = 'Undefined',\n\t\tProduct_Global_Grade = 'Undefined',\n\t\tProduct_Desc = 'Undefined',\n\t\tGL_Code = 'Undefined') ~> AddPoductDetails\nReadSource filter(not(isNull({Species Common Name})) && not(isNull({Product Common Name}))) ~> RemoveBlankSpeciesProduct\nSplitSpeciesProductDetails@Species derive(Species_Code = 'Undefined',\n\t\tGenus = 'Undefined',\n\t\tSpecies = 'Undefined',\n\t\tSpecies_Group = 'Undefined') ~> DerivedSpeciesDetails\nSelectSpeciesOutput sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tSpecies_Code,\n\t\tGenus,\n\t\tSpecies,\n\t\tSpecies_Common_Name,\n\t\tSpecies_Group,\n\t\tSource_File,\n\t\tBatch_ID,\n\t\tProcess_Name,\n\t\tInsert_DateTime\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> InsertNewSpeciesDim\nSelectProductOutput sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tProduct_Code,\n\t\tProduct_Type,\n\t\tProduct_Global_Grade,\n\t\tProduct_Common_Name,\n\t\tProduct_Desc,\n\t\tProduct_Group,\n\t\tGL_Code,\n\t\tSpecies_Common_Name,\n\t\tSource_File,\n\t\tBatch_ID,\n\t\tProcess_Name,\n\t\tInsert_DateTime\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> InsertNewProductDim"
-				}
-			},
-			"dependsOn": []
-		},
-		{
 			"name": "[concat(parameters('factoryName'), '/LoadMktFactMarket_Pass2_ProcessAndPopulate_df')]",
 			"type": "Microsoft.DataFactory/factories/dataflows",
 			"apiVersion": "2018-06-01",
@@ -1616,6 +1524,44 @@
 						}
 					],
 					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tStatus as string,\n\t\tProduct as string,\n\t\tGL_Code as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT ASS.[Fund_ID]\\n      ,ASS.[Asset_ID]\\n      ,[Status]\\n      ,[Product]\\n      ,COA.[GL_Code]\\nFROM [staging].[Forecast_GL_Product_Map] STA\\nLEFT JOIN [relational].Asset ASS\\nON STA.Fund_ID = ASS.Fund_ID AND STA.Asset_ID = ASS.Asset_ID AND ASS.record_deleted_flag = 0\\nLEFT JOIN [relational].Chart_of_Account COA\\nON STA.GL_Code = COA.GL_Code AND COA.record_deleted_flag = 0',\n\tformat: 'query') ~> StagingDB\nsource(output(\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tStatus as string,\n\t\tProduct as string,\n\t\tGL_Code as string,\n\t\tstart_datetime as timestamp,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT [Fund_ID]\\n      ,[Asset_ID]\\n      ,[Status]\\n      ,[Product]\\n      ,[GL_Code]\\n\t  ,[start_datetime]\\n\t  ,[process_name]\\n  FROM [relational].[Forecast_GL_Product_Map]\\nWHERE [record_deleted_flag] = 0',\n\tformat: 'query') ~> RelationDB\nStagingDB derive(StagingChecksum = sha2(256, Fund_ID,Asset_ID,Status,Product,GL_Code)) ~> StatgingAddChecksum\nStatgingAddChecksum, RelationRenameColumns lookup(Asset_ID == Relation_Asset_ID\n\t&& Fund_ID == Relation_Fund_ID\n\t&& Status == Relation_Status\n\t&& Product == Relation_Product,\n\tmultiple: true,\n\tbroadcast: 'auto')~> LookupRelationalStream\nRelationDB derive(RelationalChecksum = sha2(256, Fund_ID,Asset_ID,Status,Product,GL_Code)) ~> RelationalAddChecksum\nLookupRelationalStream split(isNull(Relation_RelationalChecksum),\n\tStagingChecksum != Relation_RelationalChecksum,\n\tdisjoint: false) ~> ConditionalSplitNewOrExpire@(StagingNewRow, StagingChangedRow, IgnoreNoChange)\nRelationalAddChecksum select(mapColumn(\n\t\tRelation_Fund_ID = Fund_ID,\n\t\tRelation_Asset_ID = Asset_ID,\n\t\tRelation_Status = Status,\n\t\tRelation_Product = Product,\n\t\tRelation_GL_Code = GL_Code,\n\t\tRelation_start_datetime = start_datetime,\n\t\tRelation_process_name = process_name,\n\t\tRelation_RelationalChecksum = RelationalChecksum\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> RelationRenameColumns\nConditionalSplitNewOrExpire@StagingNewRow select(mapColumn(\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tStatus,\n\t\tProduct,\n\t\tGL_Code\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> SelectNewStagingRow\nSelectNewStagingRow derive(start_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tend_datetime = toTimestamp('9999-12-31 00:00:00'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> AddAuditColumns\nUnionForDB alterRow(insertIf(record_deleted_flag==toInteger(0)),\n\tupdateIf(record_deleted_flag==toInteger(1))) ~> AlterRowInsertUpdateExpire\nConditionalSplitNewOrExpire@StagingChangedRow derive(start_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tend_datetime = toTimestamp('9999-12-31 00:00:00'),\n\t\trecord_deleted_flag = toInteger(0),\n\t\tprocess_name = concatWS('_',$ProcessName,$FileName)) ~> UpdateAddAuditAttributes\nConditionalSplitNewOrExpire@StagingChangedRow derive(end_datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\trecord_deleted_flag = toInteger(1)) ~> AddExpiredAttributes\nUpdateAddAuditAttributes select(mapColumn(\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tStatus,\n\t\tProduct,\n\t\tGL_Code,\n\t\tstart_datetime,\n\t\tend_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> UpdateSelectForInsert\nAddAuditColumns, UpdateSelectForInsert, UpdateSelectForExpire union(byName: true)~> UnionForDB\nAddExpiredAttributes select(mapColumn(\n\t\tFund_ID = Relation_Fund_ID,\n\t\tAsset_ID = Relation_Asset_ID,\n\t\tStatus = Relation_Status,\n\t\tProduct = Relation_Product,\n\t\tGL_Code = Relation_GL_Code,\n\t\tstart_datetime = Relation_start_datetime,\n\t\tend_datetime,\n\t\tprocess_name = Relation_process_name,\n\t\trecord_deleted_flag\n\t),\n\tskipDuplicateMapInputs: false,\n\tskipDuplicateMapOutputs: false) ~> UpdateSelectForExpire\nAlterRowInsertUpdateExpire sink(input(\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tStatus as string,\n\t\tProduct as string,\n\t\tGL_Code as string,\n\t\tstart_datetime as timestamp,\n\t\tend_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:true,\n\tupsertable:false,\n\tkeys:['Asset_ID','Fund_ID','Status','Product','process_name'],\n\tformat: 'table',\n\tmapColumn(\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tStatus,\n\t\tProduct,\n\t\tGL_Code,\n\t\tstart_datetime,\n\t\tend_datetime,\n\t\trecord_deleted_flag,\n\t\tprocess_name\n\t)) ~> InsertUpdateRow"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LoadStagingDBtoRelationDB_myob_actuals_delete_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "SQLstagingmyobactuals_ds",
+								"type": "DatasetReference"
+							},
+							"name": "StagingDB"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLrelationcoatrxcommon_ds",
+								"type": "DatasetReference"
+							},
+							"name": "DeleteRecords"
+						}
+					],
+					"transformations": [
+						{
+							"name": "SelectOutput"
+						},
+						{
+							"name": "AlterRowDelete"
+						}
+					],
+					"script": "parameters{\n\tProcessName as string,\n\tFileName as string,\n\tEtl_Utc_Tag as string\n}\nsource(output(\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tTrx_Type as string,\n\t\tStart_Date_Tag as date,\n\t\tEnd_Date_Tag as date\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT [Fund_ID]\\n      ,[Asset_ID]\\n      ,[Trx_Type]\\n      ,[Start_Date_Tag]\\n      ,[End_Date_Tag]\\n  FROM [staging].[Myob_Actuals]',\n\tformat: 'query') ~> StagingDB\nStagingDB select(mapColumn(\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tStart_Date_Tag,\n\t\tEnd_Date_Tag\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectOutput\nSelectOutput alterRow(deleteIf(true())) ~> AlterRowDelete\nAlterRowDelete sink(input(\n\t\tTrx_ID as long,\n\t\tTrx_Code as string,\n\t\tFund_ID as string,\n\t\tAsset_ID as string,\n\t\tGL_Code as string,\n\t\tCash_Flow_Code as string,\n\t\tDebit_Credit as string,\n\t\tTrx_Type as string,\n\t\tTrx_Date as timestamp,\n\t\tTrx_Desc as string,\n\t\tTrx_Amount as decimal(18,2),\n\t\tUpdate_datetime as timestamp,\n\t\trecord_deleted_flag as integer,\n\t\tprocess_name as string,\n\t\tStart_Date_Tag as date,\n\t\tEnd_Date_Tag as date\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:true,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:false,\n\tkeys:['Fund_ID','Asset_ID','Trx_Type','Start_Date_Tag','End_Date_Tag'],\n\tformat: 'table',\n\tmapColumn(\n\t\tFund_ID,\n\t\tAsset_ID,\n\t\tTrx_Type,\n\t\tStart_Date_Tag,\n\t\tEnd_Date_Tag\n\t)) ~> DeleteRecords"
 				}
 			},
 			"dependsOn": []
