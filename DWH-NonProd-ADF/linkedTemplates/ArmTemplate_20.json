@@ -13,6 +13,41 @@
 	},
 	"resources": [
 		{
+			"name": "[concat(parameters('factoryName'), '/LoadXlsxOtherSales_Step3_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "ParquetPersistentOpsWithTabParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "SourceReadyLoad"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLtableGenericWithParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "TargetRelational"
+						}
+					],
+					"transformations": [
+						{
+							"name": "MapColumns"
+						}
+					],
+					"script": "parameters{\n\tWorkbookName as string,\n\tTabName as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as date,\n\t\tSales_Type as string,\n\t\tSales_UOM as string,\n\t\tSales_Point as string,\n\t\tTotal_Units_Sold as decimal(19,4),\n\t\tSales_revenue as decimal(19,4),\n\t\tSales_Cost as decimal(19,4),\n\t\tSales_Net_Revenue as decimal(19,4),\n\t\tSales_Net_Revenue_Per_Unit as decimal(19,4),\n\t\tCurrency_Code as string,\n\t\tBudget_Sales_Quantity as decimal(19,4),\n\t\tBudget_Sales_Revenue as decimal(19,4),\n\t\tBudget_Sales_Costs as decimal(19,4),\n\t\tInsert_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tformat: 'parquet',\n\tpartitionBy('hash', 1)) ~> SourceReadyLoad\nSourceReadyLoad select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tSales_Type,\n\t\tSales_UOM,\n\t\tSales_Point,\n\t\tTotal_Units_Sold,\n\t\tSales_revenue,\n\t\tSales_Cost,\n\t\tSales_Net_Revenue,\n\t\tSales_Net_Revenue_Per_Unit,\n\t\tCurrency_Code,\n\t\tBudget_Sales_Quantity,\n\t\tBudget_Sales_Revenue,\n\t\tBudget_Sales_Costs,\n\t\tInsert_Datetime,\n\t\tProcess_Name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> MapColumns\nMapColumns sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tSales_Type,\n\t\tSales_UOM,\n\t\tSales_Point,\n\t\tTotal_Units_Sold,\n\t\tSales_revenue,\n\t\tSales_Cost,\n\t\tSales_Net_Revenue,\n\t\tSales_Net_Revenue_Per_Unit,\n\t\tCurrency_Code,\n\t\tBudget_Sales_Quantity,\n\t\tBudget_Sales_Revenue,\n\t\tBudget_Sales_Costs,\n\t\tInsert_Datetime,\n\t\tProcess_Name\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetRelational"
+				}
+			},
+			"dependsOn": []
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/LoadXlsxRelatedPartyTrans_Step1_df')]",
 			"type": "Microsoft.DataFactory/factories/dataflows",
 			"apiVersion": "2018-06-01",
@@ -1015,37 +1050,6 @@
 						}
 					],
 					"script": "source(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as string,\n\t\tCertification_ID as string,\n\t\t{Validation Flag} as string,\n\t\t{Certification Type} as string,\n\t\t{Certification Number} as string,\n\t\t{Next Audit Date} as string,\n\t\t{Certifying Body} as string,\n\t\t{Certification Date} as string,\n\t\t{Certification End Date} as string,\n\t\t{Certified Entity} as string,\n\t\t{Number of Open Minor CARS} as string,\n\t\t{Number of Open Major CARS} as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false) ~> source1\nsource1 select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tCertification_ID,\n\t\t{Validation Flag},\n\t\t{Certification Type},\n\t\t{Certification Number},\n\t\t{Next Audit Date},\n\t\t{Certifying Body},\n\t\t{Certification Date},\n\t\t{Certification End Date},\n\t\t{Certified Entity},\n\t\t{Number of Open Minor CARS},\n\t\t{Number of Open Major CARS}\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> Select1\nSelect1 sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> testparcerts"
-				}
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/dataflow2testunique')]",
-			"type": "Microsoft.DataFactory/factories/dataflows",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"type": "MappingDataFlow",
-				"typeProperties": {
-					"sources": [
-						{
-							"dataset": {
-								"referenceName": "Excel1test",
-								"type": "DatasetReference"
-							},
-							"name": "source1"
-						}
-					],
-					"sinks": [
-						{
-							"dataset": {
-								"referenceName": "CSVgeneric_ds",
-								"type": "DatasetReference"
-							},
-							"name": "sink1"
-						}
-					],
-					"transformations": [],
-					"script": "source(output(\n\t\tasset_id as string,\n\t\tfund_id as string,\n\t\tname as string,\n\t\ttype as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false) ~> source1\nsource1 sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tpartitionFileNames:['testUnpivot.csv'],\n\tmapColumn(\n\t\tasset_id,\n\t\tfund_id,\n\t\tname,\n\t\ttype\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> sink1"
 				}
 			},
 			"dependsOn": []
