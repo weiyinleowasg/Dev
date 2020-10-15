@@ -13,6 +13,53 @@
 	},
 	"resources": [
 		{
+			"name": "[concat(parameters('factoryName'), '/LoadTxtToDBstaging_opspricepoint_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "DelimitedText_sourcelandingscrubbed_opspricepoint_ds",
+								"type": "DatasetReference"
+							},
+							"name": "LoadFromScrubbedToStagingDB"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLstagingopspricepoint_ds",
+								"type": "DatasetReference"
+							},
+							"name": "StagingDB"
+						}
+					],
+					"transformations": [
+						{
+							"name": "SelectValidRecord"
+						},
+						{
+							"name": "ValidatedPricePointCode"
+						},
+						{
+							"name": "SelectInvalidPricePointCode"
+						},
+						{
+							"name": "InvalidPricePointCodeerrormessage"
+						},
+						{
+							"name": "UnionAll"
+						}
+					],
+					"script": "source(output(\n\t\tPrice_Point_Code as string,\n\t\tPrice_Point as string,\n\t\tActive_YN as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false) ~> LoadFromScrubbedToStagingDB\nValidatedPricePointCode@ValidPricePointCode select(mapColumn(\n\t\tPrice_Point_Code,\n\t\tPrice_Point,\n\t\tActive_YN\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectValidRecord\nLoadFromScrubbedToStagingDB split(not(isNull(Price_Point_Code)) && trim(Price_Point_Code) != '',\n\tdisjoint: false) ~> ValidatedPricePointCode@(ValidPricePointCode, InvalidPricePointCode)\nInvalidPricePointCodeerrormessage select(mapColumn(\n\t\tPrice_Point_Code,\n\t\tPrice_Point,\n\t\tActive_YN,\n\t\tValidation_Error\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectInvalidPricePointCode\nValidatedPricePointCode@InvalidPricePointCode derive(Validation_Error = toString(\"Invalid Price Pint Code\")) ~> InvalidPricePointCodeerrormessage\nSelectValidRecord, SelectInvalidPricePointCode union(byName: true)~> UnionAll\nUnionAll sink(input(\n\t\tPrice_Point_Code as string,\n\t\tPrice_Point as string,\n\t\tActive_YN as string,\n\t\tValidation_Error as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\ttruncate:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tPrice_Point_Code,\n\t\tPrice_Point,\n\t\tActive_YN,\n\t\tValidation_Error\n\t)) ~> StagingDB"
+				}
+			},
+			"dependsOn": []
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/LoadTxtToDBstaging_opsquestions_df')]",
 			"type": "Microsoft.DataFactory/factories/dataflows",
 			"apiVersion": "2018-06-01",
@@ -1212,96 +1259,6 @@
 						}
 					],
 					"script": "parameters{\n\tWorkbookName as string,\n\tTabName as string\n}\nsource(output(\n\t\tContract_ID as integer,\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as date,\n\t\tExecution_Date as date,\n\t\tTermination_Date as date,\n\t\tCompany_Name as string,\n\t\tContract_Value as decimal(19,4),\n\t\tContract_Currency as string,\n\t\tContract_Type as string,\n\t\tExecuted_By_Entity1 as string,\n\t\tExecuted_By_Entity2 as string,\n\t\tExecuted_By_Entity3 as string,\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tformat: 'parquet',\n\tpartitionBy('hash', 1)) ~> SourceUpdate\nSourceUpdate select(mapColumn(\n\t\tContract_ID,\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tExecution_Date,\n\t\tTermination_Date,\n\t\tCompany_Name,\n\t\tContract_Value,\n\t\tContract_Currency,\n\t\tContract_Type,\n\t\tExecuted_By_Entity1,\n\t\tExecuted_By_Entity2,\n\t\tExecuted_By_Entity3,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tProcess_Name\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> MapColumns\nMapColumns alterRow(updateIf(not(isNull(Contract_ID)))) ~> AlterRowUpdate\nAlterRowUpdate sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:false,\n\tupdateable:true,\n\tupsertable:false,\n\tkeys:['Contract_ID'],\n\tskipKeyWrites:true,\n\tformat: 'table',\n\tmapColumn(\n\t\tContract_ID,\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tExecution_Date,\n\t\tTermination_Date,\n\t\tCompany_Name,\n\t\tContract_Value,\n\t\tContract_Currency,\n\t\tContract_Type,\n\t\tExecuted_By_Entity1,\n\t\tExecuted_By_Entity2,\n\t\tExecuted_By_Entity3,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tProcess_Name\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetRelational"
-				}
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/LoadXlsxHarvestReconcilliation_Step1_df')]",
-			"type": "Microsoft.DataFactory/factories/dataflows",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"type": "MappingDataFlow",
-				"typeProperties": {
-					"sources": [
-						{
-							"dataset": {
-								"referenceName": "ParquetPersistentOpsWithTabParam_ds",
-								"type": "DatasetReference"
-							},
-							"name": "SourceDataTab"
-						},
-						{
-							"dataset": {
-								"referenceName": "SQLtableGeneric_ds",
-								"type": "DatasetReference"
-							},
-							"name": "RelationalOperationType"
-						},
-						{
-							"dataset": {
-								"referenceName": "SQLtableGeneric_ds",
-								"type": "DatasetReference"
-							},
-							"name": "RelationalSpeciesType"
-						}
-					],
-					"sinks": [
-						{
-							"dataset": {
-								"referenceName": "ParquetPersistentOps_ds",
-								"type": "DatasetReference"
-							},
-							"name": "TargetPersistentParquetInsert"
-						},
-						{
-							"dataset": {
-								"referenceName": "SQLtableGenericWithParam_ds",
-								"type": "DatasetReference"
-							},
-							"name": "ErrorTable"
-						}
-					],
-					"transformations": [
-						{
-							"name": "ValidateMandatoryColumns",
-							"description": "ReportingDateCertificationIDValidateMsg is a test and should be considered as part of the conditional split Insert/Update activity"
-						},
-						{
-							"name": "SegregateValidInvalidRows"
-						},
-						{
-							"name": "SelectedColumnsOutputInsert"
-						},
-						{
-							"name": "ConcatenateInvalidColumnsMessage"
-						},
-						{
-							"name": "SelectedOutputColumnsError"
-						},
-						{
-							"name": "GenerateRowNumber"
-						},
-						{
-							"name": "ExcludeFirstRow"
-						},
-						{
-							"name": "DateTypeTransform"
-						},
-						{
-							"name": "SelectOperationTypeLkp"
-						},
-						{
-							"name": "LookupOperationType"
-						},
-						{
-							"name": "SelectSpeciesTypeLkp"
-						},
-						{
-							"name": "LookupSpeciesType"
-						}
-					],
-					"script": "parameters{\n\tMasterUtcTag as string,\n\tCurrentRunDateTime as string,\n\tWorkbookName as string,\n\tTabName as string,\n\tCurrentQuarterDate as string,\n\tMasterPipeline as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as string,\n\t\tValidation_Flag as string,\n\t\tHarvest_Unit as string,\n\t\tHarvest_Operation_Type as string,\n\t\tProduct as string,\n\t\tSpecies as string,\n\t\tTotal_Net_Stocked_Area_of_Harvest_Unit as string,\n\t\tActual_Harvest_Commencement as string,\n\t\tPredicted_Harvested_GMT as string,\n\t\tPredicted_Revenue as string,\n\t\tPredicted_Stumpage as string,\n\t\tPredicted_Sales_Expense_Fees_Levies_etc as string,\n\t\tPredicted_Sales_Expense_Cartage as string,\n\t\tPredicted_Sales_Expense_Harvesting as string,\n\t\tPredicted_Sales_Expense_Roading_Capex_Maintenance as string,\n\t\tPredicted_Sales_Expense_Other as string,\n\t\tActual_Date_of_Reconciliation as string,\n\t\tActual_Revenue as string,\n\t\tActual_Harvested_GMT as string,\n\t\tActual_Harvested_Net_Stocked_Area as string,\n\t\tActual_Sales_Expense_Managers_Fees_Levies as string,\n\t\tActual_Sales_Expense_Cartage as string,\n\t\tActual_Sales_Expense_Harvesting as string,\n\t\tActual_Sales_Expense_Roading_Capex_Maintenance as string,\n\t\tActual_Sales_Expense_Other as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tformat: 'parquet',\n\tpartitionBy('hash', 1)) ~> SourceDataTab\nsource(output(\n\t\tOperation_Type_Code as string,\n\t\tOperation_Type as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT [Operation_Type_Code]\\n      ,[Operation_Type]\\n  FROM [relational].[OPS_Operation_Type]\\nWHERE [Active_YN] = \\'Y\\'',\n\tformat: 'query',\n\tpartitionBy('hash', 1)) ~> RelationalOperationType\nsource(output(\n\t\tSpecies_Code as string,\n\t\tSpecies as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tisolationLevel: 'READ_UNCOMMITTED',\n\tquery: 'SELECT DISTINCT [Species_Code]\\n      ,[Species]\\n FROM [relational].[OPS_Species_Type]\\n WHERE [Active_YN] = \\'Y\\'',\n\tformat: 'query') ~> RelationalSpeciesType\nLookupSpeciesType derive(OperationTypeValidateMsg = iif(isNull(Operation_Type_Code_Lkp), \"Operation Type/\", \"\"),\n\t\tSpeciesTypeValidateMsg = iif(isNull(Species_Code_Lkp), \"Species Type/\", \"\"),\n\t\tPredictedHarvestedGmtValidateMssg = iif(not(isNull(Predicted_Harvested_GMT)),iif(not(isNull(Predicted_Harvested_GMT_toDecimal)),\"\",\"Predicted Harvested GMT/\"),\"Predicted Harvested GMT/\"),\n\t\tActualHarvestedGmtValidateMsg = iif(not(isNull(Actual_Harvested_GMT)),iif(not(isNull(Actual_Harvested_GMT_toDecimal)),\"\",\"Actual Harvested GMT/\"),\"Actual Harvested GMT/\"),\n\t\tActualHarvestCommencementValidateMsg = iif(not(isNull(Actual_Harvest_Commencement)),iif(not(isNull(Actual_Harvest_Commencement_toDate)),\"\",\"Actual Harvest Commencement/\"),\"Actual Harvest Commencement/\"),\n\t\tAssetReportingDateValidateMsg = iif(isNull(Asset_ID) || isNull(Fund_ID) || isNull(Reporting_Period), \"Invalid Asset or Reporting Period/\", \"\")) ~> ValidateMandatoryColumns\nValidateMandatoryColumns split(length(concatWS('',OperationTypeValidateMsg, SpeciesTypeValidateMsg, PredictedHarvestedGmtValidateMssg, ActualHarvestedGmtValidateMsg, ActualHarvestCommencementValidateMsg,AssetReportingDateValidateMsg)) == 0,\n\tdisjoint: false) ~> SegregateValidInvalidRows@(ValidRows, InvalidRows)\nSegregateValidInvalidRows@ValidRows select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tHarvest_Unit,\n\t\tOperation_Type_Code = Operation_Type_Code_Lkp,\n\t\tProduct_Code = Product,\n\t\tSpecies_Code = Species_Code_Lkp,\n\t\tTotal_Net_Stocked_Area_of_Harvest_Unit,\n\t\tPredicted_Harvested_GMT = Predicted_Harvested_GMT_toDecimal,\n\t\tPredicted_Revenue,\n\t\tPredicted_Stumpage,\n\t\tActual_Harvest_Commencement = Actual_Harvest_Commencement_toDate,\n\t\tActual_Date_of_Reconcilation = Actual_Date_of_Reconciliation,\n\t\tActual_Harvested_Net_Stocked_Area,\n\t\tActual_Harvested_GMT = Actual_Harvested_GMT_toDecimal,\n\t\tActual_Revenue,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tProcess_Name,\n\t\tPredicted_SE_Ex_Managers_Fees_Levys,\n\t\tPredicted_SE_Cartage,\n\t\tPredicted_SE_Harvesting,\n\t\tPredicted_SE_Roading_Capex_Maintanence,\n\t\tPredicted_SE_Other,\n\t\tActual_SE_Managers_Fees_Levys,\n\t\tActual_SE_Cartage,\n\t\tActual_SE_Harvesting,\n\t\tActual_SE_Roading_Capex_Maintanence,\n\t\tActual_SE_Other\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectedColumnsOutputInsert\nSegregateValidInvalidRows@InvalidRows derive(ConcatenatedMessage = concat(OperationTypeValidateMsg,SpeciesTypeValidateMsg,PredictedHarvestedGmtValidateMssg,ActualHarvestedGmtValidateMsg,ActualHarvestCommencementValidateMsg,AssetReportingDateValidateMsg)) ~> ConcatenateInvalidColumnsMessage\nConcatenateInvalidColumnsMessage select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tHarvest_Unit,\n\t\tOperation_Type = Harvest_Operation_Type,\n\t\tProduct,\n\t\tSpecies,\n\t\tTotal_Net_Stocked_Area_of_Harvest_Unit,\n\t\tPredicted_Harvested_GMT,\n\t\tPredicted_Revenue,\n\t\tPredicted_Stumpage,\n\t\tActual_Harvest_Commencement,\n\t\tActual_Date_of_Reconciliation,\n\t\tActual_Harvested_Net_Stocked_Area,\n\t\tActual_Harvested_GMT,\n\t\tActual_Revenue,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tSource_File = Work_Book,\n\t\tSource_Sub_File = Work_Sheet,\n\t\tProcess_Name,\n\t\tPredicted_SE_Ex_Managers_Fees_Levys,\n\t\tPredicted_SE_Cartage,\n\t\tPredicted_SE_Harvesting,\n\t\tPredicted_SE_Roading_Capex_Maintanence,\n\t\tPredicted_SE_Other,\n\t\tActual_SE_Managers_Fees_Levys,\n\t\tActual_SE_Cartage,\n\t\tActual_SE_Harvesting,\n\t\tActual_SE_Roading_Capex_Maintanence,\n\t\tActual_SE_Other,\n\t\tError_Desc = ConcatenatedMessage\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectedOutputColumnsError\nDateTypeTransform keyGenerate(output(RowNumber as long),\n\tstartAt: 1L,\n\tpartitionBy('hash', 1)) ~> GenerateRowNumber\nGenerateRowNumber filter(RowNumber > 1 && \r\n(not(isNull(Harvest_Unit)) || not(isNull(Harvest_Operation_Type)) || not(isNull(Product)) || \r\nnot(isNull(Species)) || not(isNull(Total_Net_Stocked_Area_of_Harvest_Unit)) || not(isNull(Actual_Harvest_Commencement)) || \r\nnot(isNull(Predicted_Harvested_GMT)) || not(isNull(Predicted_Revenue)) || not(isNull(Predicted_Sales_Expense_Fees_Levies_etc)) || not(isNull(Predicted_Sales_Expense_Cartage)) || \r\nnot(isNull(Predicted_Sales_Expense_Harvesting)) || not(isNull(Predicted_Sales_Expense_Roading_Capex_Maintenance)) || not(isNull(Predicted_Sales_Expense_Other)) || \r\nnot(isNull(Actual_Date_of_Reconciliation)) || not(isNull(Actual_Revenue)) || not(isNull(Actual_Harvested_GMT)) || not(isNull(Actual_Harvested_Net_Stocked_Area)) || \r\nnot(isNull(Actual_Sales_Expense_Managers_Fees_Levies)) || not(isNull(Actual_Sales_Expense_Cartage)) || not(isNull(Actual_Sales_Expense_Harvesting)) || \r\nnot(isNull(Actual_Sales_Expense_Roading_Capex_Maintenance)) || not(isNull(Actual_Sales_Expense_Other))\r\n)) ~> ExcludeFirstRow\nSourceDataTab derive(Insert_Datetime = fromUTC(currentUTC(), 'Australia/Sydney'),\n\t\tUpdate_Datetime = toTimestamp('9999-12-31 00:00:00'),\n\t\tWork_Book = $WorkbookName,\n\t\tWork_Sheet = $TabName,\n\t\tProcess_Name = concatWS('-',$MasterPipeline,$WorkbookName,$TabName),\n\t\tCurrentReportingPeriod = toDate($CurrentQuarterDate),\n\t\tReporting_Period = toDate(Reporting_Period),\n\t\tTotal_Net_Stocked_Area_of_Harvest_Unit = toDecimal(Total_Net_Stocked_Area_of_Harvest_Unit, 19, 4),\n\t\tPredicted_Harvested_GMT_toDecimal = toDecimal(Predicted_Harvested_GMT, 19, 4),\n\t\tPredicted_Revenue = toDecimal(Predicted_Revenue, 19, 4),\n\t\tPredicted_Stumpage = toDecimal(Predicted_Stumpage, 19, 4),\n\t\tActual_Harvest_Commencement_toDate = toDate(Actual_Harvest_Commencement),\n\t\tActual_Date_of_Reconciliation = toDate(Actual_Date_of_Reconciliation),\n\t\tActual_Harvested_Net_Stocked_Area = toDecimal(Actual_Harvested_Net_Stocked_Area, 19, 4),\n\t\tActual_Harvested_GMT_toDecimal = toDecimal(Actual_Harvested_GMT, 19, 4),\n\t\tActual_Revenue = toDecimal(Actual_Revenue, 19, 4),\n\t\tPredicted_SE_Ex_Managers_Fees_Levys = toDecimal(Actual_Sales_Expense_Managers_Fees_Levies, 19, 4),\n\t\tPredicted_SE_Cartage = toDecimal(Predicted_Sales_Expense_Cartage, 19, 4),\n\t\tPredicted_SE_Harvesting = toDecimal(Predicted_Sales_Expense_Harvesting, 19, 4),\n\t\tPredicted_SE_Roading_Capex_Maintanence = toDecimal(Predicted_Sales_Expense_Roading_Capex_Maintenance, 19, 4),\n\t\tPredicted_SE_Other = toDecimal(Predicted_Sales_Expense_Other, 19, 4),\n\t\tActual_SE_Managers_Fees_Levys = toDecimal(Actual_Sales_Expense_Managers_Fees_Levies, 19, 4),\n\t\tActual_SE_Cartage = toDecimal(Actual_Sales_Expense_Cartage, 19, 4),\n\t\tActual_SE_Harvesting = toDecimal(Actual_Sales_Expense_Harvesting, 19, 4),\n\t\tActual_SE_Roading_Capex_Maintanence = toDecimal(Actual_Sales_Expense_Roading_Capex_Maintenance, 19, 4),\n\t\tActual_SE_Other = toDecimal(Actual_Sales_Expense_Other, 19, 4)) ~> DateTypeTransform\nRelationalOperationType select(mapColumn(\n\t\tOperation_Type_Code_Lkp = Operation_Type_Code,\n\t\tOperation_Type_Lkp = Operation_Type\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectOperationTypeLkp\nExcludeFirstRow, SelectOperationTypeLkp lookup(Harvest_Operation_Type == Operation_Type_Lkp,\n\tmultiple: false,\n\tpickup: 'any',\n\tbroadcast: 'auto')~> LookupOperationType\nRelationalSpeciesType select(mapColumn(\n\t\tSpecies_Code_Lkp = Species_Code,\n\t\tSpecies_Lkp = Species\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectSpeciesTypeLkp\nLookupOperationType, SelectSpeciesTypeLkp lookup(Species == Species_Lkp,\n\tmultiple: false,\n\tpickup: 'any',\n\tbroadcast: 'auto')~> LookupSpeciesType\nSelectedColumnsOutputInsert sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tformat: 'parquet',\n\tpartitionFileNames:[(concatWS(\"_\", $WorkbookName, $TabName,$CurrentQuarterDate,'LoadReady'))],\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tHarvest_Unit,\n\t\tOperation_Type_Code,\n\t\tProduct_Code,\n\t\tSpecies_Code,\n\t\tTotal_Net_Stocked_Area_of_Harvest_Unit,\n\t\tPredicted_Harvested_GMT,\n\t\tPredicted_Revenue,\n\t\tPredicted_Stumpage,\n\t\tActual_Harvest_Commencement,\n\t\tActual_Date_of_Reconcilation,\n\t\tActual_Harvested_Net_Stocked_Area,\n\t\tActual_Harvested_GMT,\n\t\tActual_Revenue,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tProcess_Name,\n\t\tPredicted_SE_Ex_Managers_Fees_Levys,\n\t\tPredicted_SE_Cartage,\n\t\tPredicted_SE_Harvesting,\n\t\tPredicted_SE_Roading_Capex_Maintanence,\n\t\tPredicted_SE_Other,\n\t\tActual_SE_Managers_Fees_Levys,\n\t\tActual_SE_Cartage,\n\t\tActual_SE_Harvesting,\n\t\tActual_SE_Roading_Capex_Maintanence,\n\t\tActual_SE_Other\n\t),\n\tpartitionBy('hash', 1),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> TargetPersistentParquetInsert\nSelectedOutputColumnsError sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:false,\n\tinsertable:true,\n\tupdateable:false,\n\tupsertable:false,\n\tformat: 'table',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period,\n\t\tHarvest_Unit,\n\t\tOperation_Type,\n\t\tProduct,\n\t\tSpecies,\n\t\tTotal_Net_Stocked_Area_of_Harvest_Unit,\n\t\tPredicted_Harvested_GMT,\n\t\tPredicted_Revenue,\n\t\tPredicted_Stumpage,\n\t\tActual_Harvest_Commencement,\n\t\tActual_Date_of_Reconciliation,\n\t\tActual_Harvested_Net_Stocked_Area,\n\t\tActual_Harvested_GMT,\n\t\tActual_Revenue,\n\t\tInsert_Datetime,\n\t\tUpdate_Datetime,\n\t\tSource_File,\n\t\tSource_Sub_File,\n\t\tProcess_Name,\n\t\tPredicted_SE_Ex_Managers_Fees_Levys,\n\t\tPredicted_SE_Cartage,\n\t\tPredicted_SE_Harvesting,\n\t\tPredicted_SE_Roading_Capex_Maintanence,\n\t\tPredicted_SE_Other,\n\t\tActual_SE_Managers_Fees_Levys,\n\t\tActual_SE_Cartage,\n\t\tActual_SE_Harvesting,\n\t\tActual_SE_Roading_Capex_Maintanence,\n\t\tActual_SE_Other,\n\t\tError_Desc\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> ErrorTable"
 				}
 			},
 			"dependsOn": []
