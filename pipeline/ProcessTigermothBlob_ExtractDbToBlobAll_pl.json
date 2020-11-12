@@ -9,7 +9,7 @@
 					{
 						"activity": "SetEtlUtcTag",
 						"dependencyConditions": [
-							"Succeeded"
+							"Skipped"
 						]
 					}
 				],
@@ -24,7 +24,8 @@
 				"typeProperties": {
 					"source": {
 						"type": "AzureSqlSource",
-						"sqlReaderQuery": "SELECT [Fund_ID]\n      ,[Asset_ID]\n      ,[DatabaseName]\n      ,[Group_ID]\n      ,[Attribute_id]\n      ,[Origin_id]\n      ,[Asset_Offset]\n      ,[Version_name]\n      ,[IsProcessed]\n\t  ,'sp_FSOPConsolidated' AS sp_FSOPConsolidated\n\t  ,'sp_FSOPEstate' AS sp_FSOPEstate\n\t  ,'sp_FSOPOther' AS sp_FSOPOther\n      ,CONCAT('TGR ', Fund_ID, ' ', Asset_ID, ' ', Version_name, ' spCon ', FORMAT(START_DATETIME,'yyyyMMdd hhmm'),'.csv') AS TargetFileName_spFSOPConsolidated\n      ,CONCAT('TGR ', Fund_ID, ' ', Asset_ID, ' ', Version_name, ' spEst ', FORMAT(START_DATETIME,'yyyyMMdd hhmm'),'.csv') AS TargetFileName_spFSOPEstate\n      ,CONCAT('TGR ', Fund_ID, ' ', Asset_ID, ' ', Version_name, ' spOth ', FORMAT(START_DATETIME,'yyyyMMdd hhmm'),'.csv') AS TargetFileName_spFSOPOther\n      ,CONCAT('TGR ', Fund_ID, ' ', Asset_ID, ' ', Version_name, ' param ', FORMAT(START_DATETIME,'yyyyMMdd hhmm'),'.csv') AS TargetFileName_param\nFROM [relational].[Forecast_Asset_reference]\nWHERE record_deleted_flag = 0 AND IsProcessed = 0"
+						"sqlReaderQuery": "SELECT [Fund_ID]\n      ,[Asset_ID]\n      ,[DatabaseName]\n      ,[Group_ID]\n      ,[Attribute_id]\n      ,[Origin_id]\n      ,[Asset_Offset]\n      ,[Version_name]\n      ,[IsProcessed]\n\t  ,'sp_FSOPConsolidated' AS sp_FSOPConsolidated\n\t  ,'sp_FSOPEstate' AS sp_FSOPEstate\n\t  ,'sp_FSOPOther' AS sp_FSOPOther\n      ,CONCAT('TGR ', Fund_ID, ' ', Asset_ID, ' ', Version_name, ' spCon ', FORMAT(START_DATETIME,'yyyyMMdd hhmm'),'.csv') AS TargetFileName_spFSOPConsolidated\n      ,CONCAT('TGR ', Fund_ID, ' ', Asset_ID, ' ', Version_name, ' spEst ', FORMAT(START_DATETIME,'yyyyMMdd hhmm'),'.csv') AS TargetFileName_spFSOPEstate\n      ,CONCAT('TGR ', Fund_ID, ' ', Asset_ID, ' ', Version_name, ' spOth ', FORMAT(START_DATETIME,'yyyyMMdd hhmm'),'.csv') AS TargetFileName_spFSOPOther\n      ,CONCAT('TGR ', Fund_ID, ' ', Asset_ID, ' ', Version_name, ' param ', FORMAT(START_DATETIME,'yyyyMMdd hhmm'),'.csv') AS TargetFileName_param\nFROM [relational].[Forecast_Asset_reference]\nWHERE record_deleted_flag = 0 AND IsProcessed = 0",
+						"partitionOption": "None"
 					},
 					"dataset": {
 						"referenceName": "SQLrelationfctrefasset_ds",
@@ -93,7 +94,8 @@
 												"type": "Expression"
 											}
 										}
-									}
+									},
+									"partitionOption": "None"
 								},
 								"sink": {
 									"type": "DelimitedTextSink",
@@ -203,7 +205,8 @@
 												"type": "Expression"
 											}
 										}
-									}
+									},
+									"partitionOption": "None"
 								},
 								"sink": {
 									"type": "DelimitedTextSink",
@@ -300,7 +303,8 @@
 												"type": "Expression"
 											}
 										}
-									}
+									},
+									"partitionOption": "None"
 								},
 								"sink": {
 									"type": "DelimitedTextSink",
@@ -371,7 +375,8 @@
 							"typeProperties": {
 								"source": {
 									"type": "SqlServerSource",
-									"sqlReaderQuery": "SELECT (SELECT Value FROM dbo.tbl_parameter WHERE Parameter = 'DescriptionYear') AS DescriptionYear ,  (SELECT Value FROM dbo.tbl_parameter WHERE Parameter = 'YearOffset') AS YearOffset"
+									"sqlReaderQuery": "SELECT (SELECT Value FROM dbo.tbl_parameter WHERE Parameter = 'DescriptionYear') AS DescriptionYear ,  (SELECT Value FROM dbo.tbl_parameter WHERE Parameter = 'YearOffset') AS YearOffset",
+									"partitionOption": "None"
 								},
 								"sink": {
 									"type": "DelimitedTextSink",
@@ -407,6 +412,82 @@
 						}
 					]
 				}
+			},
+			{
+				"name": "ExtractFromSPtoBlob_sp_FSOPConsolidated_copy1",
+				"type": "Copy",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlServerSource",
+						"sqlReaderStoredProcedureName": {
+							"value": "\"sp_FSOPConsolidated\"",
+							"type": "Expression"
+						},
+						"storedProcedureParameters": {
+							"AttributeID": {
+								"type": "Int16",
+								"value": {
+									"value": "1",
+									"type": "Expression"
+								}
+							},
+							"GroupID": {
+								"type": "Int16",
+								"value": {
+									"value": "18",
+									"type": "Expression"
+								}
+							},
+							"OriginID": {
+								"type": "Int16",
+								"value": {
+									"value": "5",
+									"type": "Expression"
+								}
+							}
+						},
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "DelimitedTextSink",
+						"storeSettings": {
+							"type": "AzureBlobStorageWriteSettings"
+						},
+						"formatSettings": {
+							"type": "DelimitedTextWriteSettings",
+							"quoteAllText": true,
+							"fileExtension": ".txt"
+						}
+					},
+					"enableStaging": false
+				},
+				"inputs": [
+					{
+						"referenceName": "Tigermoth_DB_jao_ds",
+						"type": "DatasetReference",
+						"parameters": {
+							"dbname": {
+								"value": "\"FS5_Penola 2020 Loader 100320 posthandover 020720 NFAM\"",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "Tigermoth_spFSOPConsolidated_sourcelandingraw_ds",
+						"type": "DatasetReference"
+					}
+				]
 			}
 		],
 		"variables": {
