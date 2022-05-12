@@ -13,6 +13,47 @@
 	},
 	"resources": [
 		{
+			"name": "[concat(parameters('factoryName'), '/LoadXlsxTimberSales_Step2_df')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "ParquetPersistentOpsWithTabParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "SourceReadyLoad"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "SQLtableGenericWithParam_ds",
+								"type": "DatasetReference"
+							},
+							"name": "TargetRelational"
+						}
+					],
+					"transformations": [
+						{
+							"name": "SelectKeyColumnsForDelete"
+						},
+						{
+							"name": "AggregateAssetFundReportingPeriod"
+						},
+						{
+							"name": "AlterRowDelete"
+						}
+					],
+					"script": "parameters{\n\tWorkbookName as string,\n\tTabName as string\n}\nsource(output(\n\t\tAsset_ID as string,\n\t\tFund_ID as string,\n\t\tReporting_Period as date,\n\t\tCustomer as string,\n\t\tDomestic_Export as string,\n\t\tProduct as string,\n\t\tDelivery_Point_Code as string,\n\t\tPrice_Point as decimal(19,4),\n\t\tSales_Quantity as decimal(19,4),\n\t\tAverage_Sales_Price as decimal(19,4),\n\t\tSales_Revenue as decimal(19,4),\n\t\tProduction_Cost as decimal(19,4),\n\t\tStumpage as decimal(19,4),\n\t\tUnit_Stumpage as decimal(19,4),\n\t\tCurrency_Code as string,\n\t\tSales_Month as date,\n\t\tBudget_Sales_Quantity as decimal(19,4),\n\t\tBudget_Sales_Revenue as decimal(19,4),\n\t\tBudget_Production_Cost as decimal(19,4),\n\t\tBudget_Stumpage as decimal(19,4),\n\t\tInsert_Datetime as timestamp,\n\t\tUpdate_Datetime as timestamp,\n\t\tProcess_Name as string,\n\t\tSales_Unit_Code as string,\n\t\tSpecies_Code as string\n\t),\n\tallowSchemaDrift: true,\n\tvalidateSchema: false,\n\tignoreNoFilesFound: false,\n\tformat: 'parquet',\n\tpartitionBy('hash', 1)) ~> SourceReadyLoad\nSourceReadyLoad select(mapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period\n\t),\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true) ~> SelectKeyColumnsForDelete\nSelectKeyColumnsForDelete aggregate(groupBy(Asset_ID,\n\t\tFund_ID,\n\t\tReporting_Period),\n\tUniqueCount = count()) ~> AggregateAssetFundReportingPeriod\nAggregateAssetFundReportingPeriod alterRow(deleteIf(UniqueCount>0)) ~> AlterRowDelete\nAlterRowDelete sink(allowSchemaDrift: true,\n\tvalidateSchema: false,\n\tdeletable:true,\n\tinsertable:false,\n\tupdateable:false,\n\tupsertable:false,\n\tkeys:['Asset_ID','Fund_ID','Reporting_Period'],\n\tformat: 'table',\n\tskipDuplicateMapInputs: true,\n\tskipDuplicateMapOutputs: true,\n\terrorHandlingOption: 'stopOnFirstError',\n\tmapColumn(\n\t\tAsset_ID,\n\t\tFund_ID,\n\t\tReporting_Period\n\t),\n\tpartitionBy('hash', 1)) ~> TargetRelational"
+				}
+			},
+			"dependsOn": []
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/LoadXlsxTimberSales_Step3_df')]",
 			"type": "Microsoft.DataFactory/factories/dataflows",
 			"apiVersion": "2018-06-01",
@@ -201,7 +242,8 @@
 						"type": "string"
 					}
 				},
-				"annotations": []
+				"annotations": [],
+				"lastPublishTime": "2020-09-16T12:08:20Z"
 			},
 			"dependsOn": []
 		},
@@ -317,7 +359,8 @@
 						"type": "string"
 					}
 				},
-				"annotations": []
+				"annotations": [],
+				"lastPublishTime": "2020-09-16T12:08:20Z"
 			},
 			"dependsOn": []
 		},
@@ -433,7 +476,8 @@
 						"type": "string"
 					}
 				},
-				"annotations": []
+				"annotations": [],
+				"lastPublishTime": "2020-09-16T12:08:20Z"
 			},
 			"dependsOn": []
 		},
@@ -551,7 +595,8 @@
 						"type": "string"
 					}
 				},
-				"annotations": []
+				"annotations": [],
+				"lastPublishTime": "2020-09-16T12:08:20Z"
 			},
 			"dependsOn": []
 		},
@@ -667,7 +712,8 @@
 						"type": "string"
 					}
 				},
-				"annotations": []
+				"annotations": [],
+				"lastPublishTime": "2020-09-16T12:08:19Z"
 			},
 			"dependsOn": []
 		},
@@ -783,7 +829,8 @@
 						"type": "string"
 					}
 				},
-				"annotations": []
+				"annotations": [],
+				"lastPublishTime": "2020-09-16T12:08:19Z"
 			},
 			"dependsOn": []
 		},
@@ -899,7 +946,8 @@
 						"type": "string"
 					}
 				},
-				"annotations": []
+				"annotations": [],
+				"lastPublishTime": "2020-09-16T12:08:20Z"
 			},
 			"dependsOn": []
 		},
@@ -1142,7 +1190,8 @@
 						"type": "string"
 					}
 				},
-				"annotations": []
+				"annotations": [],
+				"lastPublishTime": "2020-09-24T06:08:59Z"
 			},
 			"dependsOn": []
 		},
@@ -1254,7 +1303,8 @@
 						"defaultValue": "pipeline"
 					}
 				},
-				"annotations": []
+				"annotations": [],
+				"lastPublishTime": "2020-10-01T02:53:48Z"
 			},
 			"dependsOn": []
 		},
@@ -1455,7 +1505,8 @@
 						"defaultValue": "2020-08-28T06:05:53.4181322Z"
 					}
 				},
-				"annotations": []
+				"annotations": [],
+				"lastPublishTime": "2020-10-12T10:58:21Z"
 			},
 			"dependsOn": []
 		},
@@ -1570,7 +1621,8 @@
 						"defaultValue": "Wenita Forestry Products Q4 FY20 V2.xlsx-Certifications"
 					}
 				},
-				"annotations": []
+				"annotations": [],
+				"lastPublishTime": "2020-10-01T02:53:48Z"
 			},
 			"dependsOn": []
 		},
@@ -1831,7 +1883,8 @@
 						"defaultValue": "2020-08-28T06:05:53.4181322Z"
 					}
 				},
-				"annotations": []
+				"annotations": [],
+				"lastPublishTime": "2020-10-12T10:58:21Z"
 			},
 			"dependsOn": []
 		},
@@ -1945,7 +1998,8 @@
 						"defaultValue": "Wenita Forestry Products Q4 FY20 V2.xlsx-Certifications"
 					}
 				},
-				"annotations": []
+				"annotations": [],
+				"lastPublishTime": "2020-10-01T02:53:49Z"
 			},
 			"dependsOn": []
 		},
@@ -2206,7 +2260,8 @@
 						"defaultValue": "2020-08-28T06:05:53.4181322Z"
 					}
 				},
-				"annotations": []
+				"annotations": [],
+				"lastPublishTime": "2020-10-12T10:58:20Z"
 			},
 			"dependsOn": []
 		},
@@ -2320,7 +2375,8 @@
 						"defaultValue": "pipeline"
 					}
 				},
-				"annotations": []
+				"annotations": [],
+				"lastPublishTime": "2020-10-01T02:53:48Z"
 			},
 			"dependsOn": []
 		},
@@ -2521,7 +2577,8 @@
 						"defaultValue": "2020-08-28T06:05:53.4181322Z"
 					}
 				},
-				"annotations": []
+				"annotations": [],
+				"lastPublishTime": "2020-10-12T10:58:21Z"
 			},
 			"dependsOn": []
 		},
@@ -2630,268 +2687,8 @@
 						"defaultValue": "Wenita Forestry Products Q4 FY20 V2.xlsx-Certifications"
 					}
 				},
-				"annotations": []
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/ProcessOpsWorkbookTabMajorSevereIncidents_spl')]",
-			"type": "Microsoft.DataFactory/factories/pipelines",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"description": "Major Severe Incidents tab",
-				"activities": [
-					{
-						"name": "GetTableErrorCount",
-						"type": "Lookup",
-						"dependsOn": [],
-						"policy": {
-							"timeout": "7.00:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"source": {
-								"type": "AzureSqlSource",
-								"sqlReaderQuery": {
-									"value": "SELECT COUNT(*) AS ERROR_COUNT FROM (\n SELECT DISTINCT Source_File FROM \n audit.OPS_Incident_Error \n WHERE Source_File = '@{pipeline().parameters.WorkbookName}'\n)x",
-									"type": "Expression"
-								},
-								"queryTimeout": "02:00:00",
-								"partitionOption": "None"
-							},
-							"dataset": {
-								"referenceName": "SQLtableGeneric_ds",
-								"type": "DatasetReference",
-								"parameters": {}
-							}
-						}
-					},
-					{
-						"name": "CheckConditionIfErrorExist",
-						"type": "IfCondition",
-						"dependsOn": [
-							{
-								"activity": "GetTableErrorCount",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"expression": {
-								"value": "@Equals(int(activity('GetTableErrorCount').output.firstRow.ERROR_COUNT), 0)",
-								"type": "Expression"
-							},
-							"ifTrueActivities": [
-								{
-									"name": "LoadValidatedDataset",
-									"type": "ExecuteDataFlow",
-									"dependsOn": [
-										{
-											"activity": "DeleteExistingRowsForCurrentPeriod",
-											"dependencyConditions": [
-												"Succeeded"
-											]
-										}
-									],
-									"policy": {
-										"timeout": "7.00:00:00",
-										"retry": 0,
-										"retryIntervalInSeconds": 30,
-										"secureOutput": false,
-										"secureInput": false
-									},
-									"userProperties": [],
-									"typeProperties": {
-										"dataflow": {
-											"referenceName": "LoadXlsxMajorSevereIncidents_Step3_df",
-											"type": "DataFlowReference",
-											"parameters": {
-												"WorkbookName": {
-													"value": "'@{pipeline().parameters.WorkbookName}'",
-													"type": "Expression"
-												},
-												"TabName": {
-													"value": "'@{pipeline().parameters.MajorSevereIncidents}'",
-													"type": "Expression"
-												}
-											},
-											"datasetParameters": {
-												"SourceReadyLoad": {
-													"ParquetFile": {
-														"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.MajorSevereIncidents,'_',pipeline().parameters.CurrentQuarterDate,'_LoadReady')",
-														"type": "Expression"
-													}
-												},
-												"TargetRelational": {
-													"Schema": {
-														"value": "relational",
-														"type": "Expression"
-													},
-													"TableName": {
-														"value": "OPS_Incident",
-														"type": "Expression"
-													}
-												}
-											}
-										},
-										"staging": {},
-										"compute": {
-											"coreCount": 8,
-											"computeType": "General"
-										},
-										"traceLevel": "Fine"
-									}
-								},
-								{
-									"name": "UpdateValidatedDataset",
-									"type": "ExecuteDataFlow",
-									"dependsOn": [
-										{
-											"activity": "LoadValidatedDataset",
-											"dependencyConditions": [
-												"Succeeded"
-											]
-										}
-									],
-									"policy": {
-										"timeout": "7.00:00:00",
-										"retry": 0,
-										"retryIntervalInSeconds": 30,
-										"secureOutput": false,
-										"secureInput": false
-									},
-									"userProperties": [],
-									"typeProperties": {
-										"dataflow": {
-											"referenceName": "LoadXlsxMajorSevereIncidents_Step4_df",
-											"type": "DataFlowReference",
-											"parameters": {
-												"WorkbookName": {
-													"value": "'@{pipeline().parameters.WorkbookName}'",
-													"type": "Expression"
-												},
-												"TabName": {
-													"value": "'@{pipeline().parameters.MajorSevereIncidents}'",
-													"type": "Expression"
-												}
-											},
-											"datasetParameters": {
-												"SourceUpdate": {
-													"ParquetFile": {
-														"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.MajorSevereIncidents,'_',pipeline().parameters.CurrentQuarterDate,'_Update')",
-														"type": "Expression"
-													}
-												},
-												"TargetRelational": {
-													"Schema": {
-														"value": "relational",
-														"type": "Expression"
-													},
-													"TableName": {
-														"value": "OPS_Incident",
-														"type": "Expression"
-													}
-												}
-											}
-										},
-										"staging": {},
-										"compute": {
-											"coreCount": 8,
-											"computeType": "General"
-										},
-										"traceLevel": "Fine"
-									}
-								},
-								{
-									"name": "DeleteExistingRowsForCurrentPeriod",
-									"type": "ExecuteDataFlow",
-									"dependsOn": [],
-									"policy": {
-										"timeout": "7.00:00:00",
-										"retry": 0,
-										"retryIntervalInSeconds": 30,
-										"secureOutput": false,
-										"secureInput": false
-									},
-									"userProperties": [],
-									"typeProperties": {
-										"dataflow": {
-											"referenceName": "LoadXlsxMajorSevereIncidents_Step2_df",
-											"type": "DataFlowReference",
-											"parameters": {
-												"WorkbookName": {
-													"value": "'@{pipeline().parameters.WorkbookName}'",
-													"type": "Expression"
-												},
-												"TabName": {
-													"value": "'@{pipeline().parameters.MajorSevereIncidents}'",
-													"type": "Expression"
-												}
-											},
-											"datasetParameters": {
-												"SourceReadyLoad": {
-													"ParquetFile": {
-														"value": "@concat(pipeline().parameters.WorkbookName,'_',pipeline().parameters.MajorSevereIncidents,'_',pipeline().parameters.CurrentQuarterDate,'_LoadReady')",
-														"type": "Expression"
-													}
-												},
-												"TargetRelationalDelete": {
-													"Schema": {
-														"value": "relational",
-														"type": "Expression"
-													},
-													"TableName": {
-														"value": "OPS_Incident",
-														"type": "Expression"
-													}
-												}
-											}
-										},
-										"staging": {},
-										"compute": {
-											"coreCount": 8,
-											"computeType": "General"
-										},
-										"traceLevel": "Fine"
-									}
-								}
-							]
-						}
-					}
-				],
-				"policy": {
-					"elapsedTimeMetric": {},
-					"cancelAfter": {}
-				},
-				"parameters": {
-					"WorkbookName": {
-						"type": "string",
-						"defaultValue": "Wenita Forestry Products Q4 FY20 V2.xlsx"
-					},
-					"CurrentQuarterDate": {
-						"type": "string",
-						"defaultValue": "30/09/2020"
-					},
-					"MajorSevereIncidents": {
-						"type": "string",
-						"defaultValue": "Major Severe Incidents"
-					},
-					"CurrentRunDateTime": {
-						"type": "string",
-						"defaultValue": "2020-08-01"
-					},
-					"MasterUtcTag": {
-						"type": "string",
-						"defaultValue": "2020-08-28T06:05:53.4181322Z"
-					}
-				},
-				"annotations": []
+				"annotations": [],
+				"lastPublishTime": "2020-10-01T02:53:49Z"
 			},
 			"dependsOn": []
 		}
