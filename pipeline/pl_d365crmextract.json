@@ -3,141 +3,6 @@
 	"properties": {
 		"activities": [
 			{
-				"name": "ForEach1",
-				"type": "ForEach",
-				"dependsOn": [
-					{
-						"activity": "CRM_RegisterTable",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					},
-					{
-						"activity": "D365CRM_GetToken",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"userProperties": [],
-				"typeProperties": {
-					"items": {
-						"value": "@activity('CRM_RegisterTable').output.resultSets[0].rows",
-						"type": "Expression"
-					},
-					"isSequential": true,
-					"activities": [
-						{
-							"name": "Set variable1",
-							"type": "SetVariable",
-							"dependsOn": [],
-							"userProperties": [],
-							"typeProperties": {
-								"variableName": "test",
-								"value": {
-									"value": "@{concat('Authorization: Bearer ', activity('D365CRM_GetToken').output.access_token)}",
-									"type": "Expression"
-								}
-							}
-						},
-						{
-							"name": "D365APItoTable",
-							"type": "Copy",
-							"dependsOn": [],
-							"policy": {
-								"timeout": "7.00:00:00",
-								"retry": 0,
-								"retryIntervalInSeconds": 30,
-								"secureOutput": false,
-								"secureInput": false
-							},
-							"userProperties": [],
-							"typeProperties": {
-								"source": {
-									"type": "RestSource",
-									"httpRequestTimeout": "00:01:40",
-									"requestInterval": "00.00:00:00.010",
-									"requestMethod": "GET",
-									"additionalHeaders": {
-										"Authorization": {
-											"value": "@{concat(' Bearer ', activity('D365CRM_GetToken').output.access_token)}",
-											"type": "Expression"
-										}
-									},
-									"paginationRules": {
-										"supportRFC5988": "true"
-									}
-								},
-								"sink": {
-									"type": "AzureSqlSink",
-									"writeBehavior": "insert",
-									"sqlWriterUseTableLock": false,
-									"tableOption": "autoCreate",
-									"disableMetricsCollection": false
-								},
-								"enableStaging": false
-							},
-							"inputs": [
-								{
-									"referenceName": "API_D365CRM_Asset",
-									"type": "DatasetReference",
-									"parameters": {
-										"basesourcename": {
-											"value": "@item().Source_Object_Name",
-											"type": "Expression"
-										}
-									}
-								}
-							],
-							"outputs": [
-								{
-									"referenceName": "ds_SQLDynamicTable",
-									"type": "DatasetReference",
-									"parameters": {
-										"TableName": {
-											"value": "@item().Destination_Object_Table",
-											"type": "Expression"
-										},
-										"SchemaName": {
-											"value": "@item().Destination_Object_Schema",
-											"type": "Expression"
-										}
-									}
-								}
-							]
-						}
-					]
-				}
-			},
-			{
-				"name": "CRM_RegisterTable",
-				"type": "Script",
-				"dependsOn": [],
-				"policy": {
-					"timeout": "7.00:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"linkedServiceName": {
-					"referenceName": "SQLdbConnection",
-					"type": "LinkedServiceReference"
-				},
-				"typeProperties": {
-					"scripts": [
-						{
-							"type": "Query",
-							"text": {
-								"value": "SELECT * FROM log.D365CRM_ExtractRegister ",
-								"type": "Expression"
-							}
-						}
-					]
-				}
-			},
-			{
 				"name": "D365CRM_GetToken",
 				"type": "WebActivity",
 				"dependsOn": [],
@@ -166,6 +31,73 @@
 						"type": "Expression"
 					}
 				}
+			},
+			{
+				"name": "D365APItoTable",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "D365CRM_GetToken",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "RestSource",
+						"httpRequestTimeout": "00:01:40",
+						"requestInterval": "00.00:00:00.010",
+						"requestMethod": "GET",
+						"additionalHeaders": {
+							"Authorization": {
+								"value": "@{concat(' Bearer ', activity('D365CRM_GetToken').output.access_token)}",
+								"type": "Expression"
+							}
+						},
+						"paginationRules": {
+							"supportRFC5988": "true"
+						}
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"writeBehavior": "insert",
+						"sqlWriterUseTableLock": false,
+						"tableOption": "autoCreate",
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false
+				},
+				"inputs": [
+					{
+						"referenceName": "API_D365CRM_Asset",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "ds_SQLDynamicTable",
+						"type": "DatasetReference",
+						"parameters": {
+							"TableName": {
+								"value": "D365CRM_Asset",
+								"type": "Expression"
+							},
+							"SchemaName": {
+								"value": "raw",
+								"type": "Expression"
+							}
+						}
+					}
+				]
 			}
 		],
 		"variables": {
