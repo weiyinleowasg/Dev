@@ -53,7 +53,7 @@
 					"batchCount": 3,
 					"activities": [
 						{
-							"name": "D365APItoTable_Asset",
+							"name": "D365APItoBlob",
 							"type": "Copy",
 							"dependsOn": [],
 							"policy": {
@@ -109,7 +109,7 @@
 									"type": "DatasetReference",
 									"parameters": {
 										"FileName": {
-											"value": "@concat(item().Object_Name,formatDateTime(convertTimeZone(utcNow(),'utc','E. Australia Standard Time'),'yyyyDDmm'))",
+											"value": "@concat(item().Object_Name,formatDateTime(convertTimeZone(utcNow(),'utc','E. Australia Standard Time'),'yyyyMMdd'))",
 											"type": "Expression"
 										}
 									}
@@ -153,6 +153,125 @@
 						}
 					]
 				}
+			},
+			{
+				"name": "D365BlobtoTable",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "ForEachAPI",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "JsonSource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": true,
+							"enablePartitionDiscovery": false
+						},
+						"formatSettings": {
+							"type": "JsonReadSettings"
+						}
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"writeBehavior": "insert",
+						"sqlWriterUseTableLock": false,
+						"tableOption": "autoCreate",
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"path": "$['value'][0]['mcs_assetuniqueid']"
+								},
+								"sink": {
+									"name": "AssetId",
+									"type": "String"
+								}
+							},
+							{
+								"source": {
+									"path": "$['value'][0]['statecode']"
+								},
+								"sink": {
+									"name": "Status",
+									"type": "String"
+								}
+							},
+							{
+								"source": {
+									"path": "$['value'][0]['statuscode']"
+								},
+								"sink": {
+									"name": "Status Reason",
+									"type": "String"
+								}
+							},
+							{
+								"source": {
+									"path": "$['value'][0]['mcs_name']"
+								},
+								"sink": {
+									"name": "Name",
+									"type": "String"
+								}
+							},
+							{
+								"source": {
+									"path": "$['value'][0]['mcs_assetid']"
+								},
+								"sink": {
+									"name": "Asset Id",
+									"type": "String"
+								}
+							}
+						]
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "ds_D365Output_json_copy1",
+						"type": "DatasetReference",
+						"parameters": {
+							"FileName": {
+								"value": "@concat('Asset',formatDateTime(convertTimeZone(utcNow(),'utc','E. Australia Standard Time'),'yyyyMMdd'))",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "SQLtableGenericWithParam_ds",
+						"type": "DatasetReference",
+						"parameters": {
+							"Schema": {
+								"value": "raw",
+								"type": "Expression"
+							},
+							"TableName": {
+								"value": "D365CRM_Asset",
+								"type": "Expression"
+							}
+						}
+					}
+				]
 			}
 		],
 		"variables": {
