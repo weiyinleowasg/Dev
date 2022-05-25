@@ -699,6 +699,117 @@
 						}
 					}
 				]
+			},
+			{
+				"name": "D365BlobtoTableConsultant",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "ForEachAPI",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "JsonSource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": true,
+							"enablePartitionDiscovery": false
+						},
+						"formatSettings": {
+							"type": "JsonReadSettings"
+						}
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"writeBehavior": "insert",
+						"sqlWriterUseTableLock": false,
+						"tableOption": "autoCreate",
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"path": "$['value'][0]['statecode']"
+								},
+								"sink": {
+									"name": "Status",
+									"type": "String"
+								}
+							},
+							{
+								"source": {
+									"path": "$['value'][0]['name']"
+								},
+								"sink": {
+									"name": "Name",
+									"type": "String"
+								}
+							},
+							{
+								"source": {
+									"path": "$['value'][0]['statuscode']"
+								},
+								"sink": {
+									"name": "Status_Reason",
+									"type": "String"
+								}
+							},
+							{
+								"source": {
+									"path": "$['value'][0]['accountid']"
+								},
+								"sink": {
+									"name": "Account",
+									"type": "String"
+								}
+							}
+						],
+						"collectionReference": ""
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "ds_D365Output_json",
+						"type": "DatasetReference",
+						"parameters": {
+							"FileName": {
+								"value": "@concat('Consultant',formatDateTime(convertTimeZone(utcNow(),'utc','E. Australia Standard Time'),'yyyyMMdd'))",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "SQLtableGenericWithParam_ds",
+						"type": "DatasetReference",
+						"parameters": {
+							"Schema": {
+								"value": "raw",
+								"type": "Expression"
+							},
+							"TableName": {
+								"value": "D365CRM_Consultant",
+								"type": "Expression"
+							}
+						}
+					}
+				]
 			}
 		],
 		"annotations": []
