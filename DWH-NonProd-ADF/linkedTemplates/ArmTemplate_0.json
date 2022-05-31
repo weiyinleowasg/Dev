@@ -66,6 +66,10 @@
 		"NFDWHProdAKV_LS_properties_typeProperties_baseUrl": {
 			"type": "string",
 			"defaultValue": "https://NFDWHProdAKV.vault.azure.net/"
+		},
+		"REST_D365CRM_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "https://newforestsdev.api.crm6.dynamics.com/api/data/v9.2/"
 		}
 	},
 	"variables": {
@@ -489,6 +493,21 @@
 			"dependsOn": []
 		},
 		{
+			"name": "[concat(parameters('factoryName'), '/REST_D365CRM')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "RestService",
+				"typeProperties": {
+					"url": "[parameters('REST_D365CRM_properties_typeProperties_url')]",
+					"enableServerCertificateValidation": true,
+					"authenticationType": "Anonymous"
+				}
+			},
+			"dependsOn": []
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/IRVM1-SH-integrationRuntime')]",
 			"type": "Microsoft.DataFactory/factories/integrationRuntimes",
 			"apiVersion": "2018-06-01",
@@ -497,6 +516,34 @@
 				"typeProperties": {}
 			},
 			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/API_D365CRM')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "REST_D365CRM",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"ObjectSourceName": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "RestResource",
+				"typeProperties": {
+					"relativeUrl": {
+						"value": "@dataset().ObjectSourceName",
+						"type": "Expression"
+					}
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/REST_D365CRM')]"
+			]
 		},
 		{
 			"name": "[concat(parameters('factoryName'), '/BinaryDataSourceFileshareDirectory_MoveFile_ds')]",
@@ -647,91 +694,6 @@
 			},
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/linkedServices/FileStore_nfdwhsourcelandingraw')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/BinaryDataSoureFileShareErrorDump_ds')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "FileStore_nfdwhsource_errordump",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "Binary",
-				"typeProperties": {
-					"location": {
-						"type": "FileServerLocation"
-					}
-				}
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/linkedServices/FileStore_nfdwhsource_errordump')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/ExcelBudgetMapping')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "FileStore_nfdwhsourcelanding",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "Excel",
-				"typeProperties": {
-					"sheetName": "Budget Mapping",
-					"location": {
-						"type": "AzureFileStorageLocation",
-						"fileName": "Expense Mapping.xlsx",
-						"folderPath": "Corporate"
-					},
-					"range": "A8:H1000",
-					"firstRowAsHeader": true
-				},
-				"schema": [
-					{
-						"name": "View_Name",
-						"type": "String"
-					},
-					{
-						"name": "Category_Index",
-						"type": "String"
-					},
-					{
-						"name": "Category",
-						"type": "String"
-					},
-					{
-						"name": "Sub_Category_Index",
-						"type": "String"
-					},
-					{
-						"name": "record_deleted_flag",
-						"type": "String"
-					},
-					{
-						"name": "Sub_Category",
-						"type": "String"
-					},
-					{
-						"name": "Item_Index",
-						"type": "String"
-					},
-					{
-						"name": "Item",
-						"type": "String"
-					},
-					{
-						"name": "GL_Code",
-						"type": "String"
-					}
-				]
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/linkedServices/FileStore_nfdwhsourcelanding')]"
 			]
 		}
 	]
